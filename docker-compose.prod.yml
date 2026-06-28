@@ -16,7 +16,12 @@ services:
     build:
       context: ./apps/backend
       dockerfile: Dockerfile
-    volumes: []
+    # Re-declares only the persistent uploads volume — Compose overlays
+    # replace the base file's `volumes:` list rather than merging it, and the
+    # dev bind-mounts (src/prisma) must NOT carry over since prod runs the
+    # baked image from Dockerfile, not Dockerfile.dev.
+    volumes:
+      - backend_uploads:/app/uploads
     ports: []
     restart: always
     environment:

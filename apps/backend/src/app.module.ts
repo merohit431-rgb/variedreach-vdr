@@ -13,6 +13,9 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { DataRoomsModule } from './modules/data-rooms/data-rooms.module';
 import { DataRoomAccessModule } from './modules/data-room-access/data-room-access.module';
 import { FoldersModule } from './modules/folders/folders.module';
+import { StorageModule } from './modules/storage/storage.module';
+import { WatermarkModule } from './modules/watermark/watermark.module';
+import { FilesModule } from './modules/files/files.module';
 
 @Module({
   imports: [
@@ -26,8 +29,11 @@ import { FoldersModule } from './modules/folders/folders.module';
     MailModule,
     AuthModule,
     DataRoomAccessModule,
+    StorageModule,
+    WatermarkModule,
     DashboardModule,
     FoldersModule,
+    FilesModule,
     DataRoomsModule,
   ],
   controllers: [AppController],

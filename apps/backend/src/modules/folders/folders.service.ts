@@ -147,6 +147,53 @@ export class FoldersService {
     });
   }
 
+  // Resolves a relative folder path (e.g. from a browser folder-upload's
+  // webkitRelativePath, ["Subfolder", "Nested"]) into a Folder id, creating
+  // any segments that don't exist yet under the given parent. Used by the
+  // Files module so dragging a whole OS folder in recreates its structure.
+  async findOrCreateFolderPath(
+    dataRoomId: string,
+    parentId: string | null,
+    segments: string[],
+    createdBy: string,
+  ): Promise<string | null> {
+    let currentParentId = parentId;
+    let currentParent = parentId ? await this.getFolderOrThrow(dataRoomId, parentId) : null;
+
+    for (const name of segments) {
+      const existing = await this.prisma.folder.findFirst({
+        where: { dataRoomId, parentId: currentParentId, name, deletedAt: null },
+      });
+
+      if (existing) {
+        currentParent = existing;
+        currentParentId = existing.id;
+        continue;
+      }
+
+      const siblingCount = await this.prisma.folder.count({
+        where: { dataRoomId, parentId: currentParentId, deletedAt: null },
+      });
+
+      const created = await this.prisma.folder.create({
+        data: {
+          dataRoomId,
+          parentId: currentParentId,
+          name,
+          path: this.buildPath(currentParent, name),
+          depth: currentParent ? currentParent.depth + 1 : 0,
+          sortOrder: siblingCount,
+          createdBy,
+        },
+      });
+
+      currentParent = created;
+      currentParentId = created.id;
+    }
+
+    return currentParentId;
+  }
+
   private async getFolderOrThrow(dataRoomId: string, folderId: string): Promise<Folder> {
     const folder = await this.prisma.folder.findFirst({
       where: { id: folderId, dataRoomId, deletedAt: null },

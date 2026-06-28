@@ -3,7 +3,12 @@ import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
-import cookieParser from 'cookie-parser';
+// cookie-parser's default import miscompiles to `cookie_parser_1.default(...)`
+// under this tsconfig (no esModuleInterop) and throws "is not a function" at
+// runtime — the e2e smoke test never caught this because it builds a
+// TestingModule directly and never executes main.ts's bootstrap(). helmet
+// ships its own runtime `.default` shim so it isn't affected the same way.
+import cookieParser = require('cookie-parser');
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';

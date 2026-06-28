@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { AuditAction, Prisma } from '@prisma/client';
+import { AuditAction, AuditLog, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { stableChecksum } from '../../common/utils/crypto.util';
 
@@ -21,7 +21,7 @@ export interface RecordAuditLogInput {
 export class AuditLogService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async record(input: RecordAuditLogInput): Promise<void> {
+  async record(input: RecordAuditLogInput): Promise<AuditLog> {
     const createdAt = new Date();
     const checksum = stableChecksum({
       action: input.action,
@@ -35,7 +35,7 @@ export class AuditLogService {
       createdAt: createdAt.toISOString(),
     });
 
-    await this.prisma.auditLog.create({
+    return this.prisma.auditLog.create({
       data: {
         action: input.action,
         dataRoomId: input.dataRoomId,

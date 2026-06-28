@@ -2,6 +2,7 @@
 
 import { useMemo, useState, DragEvent } from 'react';
 import { useFolders, useCreateFolder, useUpdateFolder, useDeleteFolder, FolderNode } from '@/hooks/use-folders';
+import { useUpdateFile } from '@/hooks/use-files';
 
 interface TreeNode extends FolderNode {
   children: TreeNode[];
@@ -40,6 +41,7 @@ export function FolderTree({ dataRoomId, selectedFolderId, onSelect, canManage }
   const createFolder = useCreateFolder(dataRoomId);
   const updateFolder = useUpdateFolder(dataRoomId);
   const deleteFolder = useDeleteFolder(dataRoomId);
+  const updateFile = useUpdateFile(dataRoomId);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
@@ -82,9 +84,16 @@ export function FolderTree({ dataRoomId, selectedFolderId, onSelect, canManage }
   function handleDrop(event: DragEvent, targetId: string | null) {
     event.preventDefault();
     setDragOverId(null);
+
     const folderId = event.dataTransfer.getData('text/folder-id');
     if (folderId && folderId !== targetId) {
       updateFolder.mutate({ folderId, parentId: targetId });
+      return;
+    }
+
+    const fileId = event.dataTransfer.getData('text/file-id');
+    if (fileId) {
+      updateFile.mutate({ fileId, folderId: targetId });
     }
   }
 

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useFolders } from '@/hooks/use-folders';
 import { FolderTree } from '@/components/folders/FolderTree';
+import { FileBrowser } from '@/components/files/FileBrowser';
 import { isDataRoomManager } from '@variedreach-vdr/shared';
 
 export default function DataRoomFilesPage() {
@@ -12,6 +13,7 @@ export default function DataRoomFilesPage() {
   const { user } = useAuth();
   const { data: folders } = useFolders(id);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   const canManage = Boolean(user && isDataRoomManager(user.role));
   const selectedFolder = folders?.find((f) => f.id === selectedFolderId);
@@ -25,10 +27,17 @@ export default function DataRoomFilesPage() {
         canManage={canManage}
       />
       <div className="flex-1">
-        <p className="mb-3 text-sm text-slate-500">{selectedFolder ? selectedFolder.path : 'All files'}</p>
-        <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-400">
-          No files yet.
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm text-slate-500">{selectedFolder ? selectedFolder.path : 'All files'}</p>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search files in this data room"
+            className="w-64 rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          />
         </div>
+        <FileBrowser dataRoomId={id} folderId={selectedFolderId} search={search} canManage={canManage} />
       </div>
     </div>
   );
