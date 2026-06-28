@@ -1,0 +1,109 @@
+# Staging overlay. Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build
+#
+# Mirrors docker-compose.prod.yml's hardening (production Dockerfiles, no
+# host-published ports except via Nginx, NODE_ENV=production) but every
+# service gets an explicit container_name override -- the base
+# docker-compose.yml hardcodes container names (vdr_postgres, vdr_backend,
+# etc.) that would otherwise collide directly with the already-running
+# production containers of the same names on this same VPS. Postgres also
+# gets distinct credentials/DB name for defense-in-depth, even though the
+# separate container + separate Compose project (this directory's name)
+# already gives it a fully separate volume regardless of credentials.
+#
+# backend/frontend additionally join the external `vdr_edge` network so
+# production's Nginx container can reach them by the aliases below to proxy
+# staging.vdr.variedreach.com -- see infrastructure/nginx/nginx.conf and
+# STAGING.md. Run `docker network create vdr_edge` once before first use.
+
+services:
+  postgres:
+    container_name: vdr_staging_postgres
+    ports: !override []
+    environment:
+      POSTGRES_USER: vdr_staging_user
+      POSTGRES_PASSWORD: ${STAGING_POSTGRES_PASSWORD}
+      POSTGRES_DB: insolvency_vdr_staging
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  redis:
+    container_name: vdr_staging_redis
+    ports: !override []
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    container_name: vdr_staging_backend
+    volumes: !override
+      - backend_uploads:/app/uploads
+    ports: !override []
+    restart: always
+    environment:
+      NODE_ENV: production
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "require('http').get('http://localhost:4000/api/v1/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - vdr_network
+      - vdr_edge
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    container_name: vdr_staging_frontend
+    volumes: !override []
+    ports: !override []
+    restart: always
+    environment:
+      NODE_ENV: production
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "require('http').get('http://localhost:3000/login', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    networks:
+      - vdr_network
+      - vdr_edge
+
+  mailhog:
+    container_name: vdr_staging_mailhog
+    ports: !override []
+
+networks:
+  vdr_edge:
+    external: true
