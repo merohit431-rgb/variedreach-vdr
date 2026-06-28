@@ -115,6 +115,11 @@ services:
       - ./infrastructure/nginx/certbot-webroot:/var/www/certbot:ro
     networks:
       - vdr_network
+      # Lets this same Nginx also proxy staging.vdr.variedreach.com to the
+      # fully separate staging Compose project — see docker-compose.staging.yml
+      # and STAGING.md. Production's own backend/frontend are unaffected;
+      # they're never on this network.
+      - vdr_edge
     deploy:
       resources:
         limits:
@@ -133,3 +138,7 @@ services:
       - ./infrastructure/nginx/certbot-webroot:/var/www/certbot
     networks:
       - vdr_network
+
+networks:
+  vdr_edge:
+    external: true
