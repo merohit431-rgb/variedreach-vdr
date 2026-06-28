@@ -48,6 +48,16 @@ for _ in $(seq 1 30); do
   sleep 2
 done
 
+echo "==> Removing the dummy certificate so certbot will treat this as a fresh issuance..."
+# Certbot refuses to certonly into a live/$DOMAIN directory it doesn't already
+# manage (no matching non-empty renewal/$DOMAIN.conf) -- it can't tell our
+# throwaway openssl cert apart from a real one it ought to be renewing, and
+# errors out rather than guessing. Nginx is already up at this point (reading
+# the dummy cert from disk, not holding it open), so removing the files here
+# is safe; deleting volume-backed files that a running container has open
+# would not be otherwise.
+rm -rf "$LE_DIR/live/$DOMAIN" "$LE_DIR/archive/$DOMAIN" "$LE_DIR/renewal/$DOMAIN.conf"
+
 echo "==> Requesting the real certificate from Let's Encrypt..."
 $COMPOSE run --rm certbot certonly \
   --webroot --webroot-path=/var/www/certbot \
