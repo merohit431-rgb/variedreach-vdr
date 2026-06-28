@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.62.7",
     "@variedreach-vdr/shared": "*",
     "axios": "^1.7.9",
     "next": "^15.5.19",
