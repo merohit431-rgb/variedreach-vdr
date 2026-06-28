@@ -22,6 +22,7 @@ COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=build /app/apps/backend/dist ./apps/backend/dist
 COPY --from=build /app/apps/backend/prisma ./apps/backend/prisma
+COPY --from=build /app/apps/backend/tsconfig.json ./apps/backend/tsconfig.json
 
 EXPOSE 4000
 CMD ["node", "apps/backend/dist/main.js"]
