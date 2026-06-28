@@ -67,8 +67,10 @@ services:
         limits:
           memory: 512M
     networks:
-      - vdr_network
-      - vdr_edge
+      vdr_network: {}
+      vdr_edge:
+        aliases:
+          - staging-backend
 
   frontend:
     build:
@@ -97,8 +99,10 @@ services:
         limits:
           memory: 512M
     networks:
-      - vdr_network
-      - vdr_edge
+      vdr_network: {}
+      vdr_edge:
+        aliases:
+          - staging-frontend
 
   mailhog:
     container_name: vdr_staging_mailhog
