@@ -72,7 +72,7 @@ async function bootstrap() {
 
   if (nodeEnv !== 'production') {
     const swaggerConfig = new DocumentBuilder()
-      .setTitle('InsolvencyVDR API')
+      .setTitle('Varied Reach VDR API')
       .setDescription('Virtual Data Room platform for IBC insolvency professionals')
       .setVersion('1.0')
       .addBearerAuth(
@@ -93,7 +93,7 @@ async function bootstrap() {
   }
 
   await app.listen(port, '0.0.0.0');
-  console.log(`InsolvencyVDR backend running on http://localhost:${port}`);
+  console.log(`Varied Reach VDR backend running on http://localhost:${port}`);
   console.log(`Swagger docs: http://localhost:${port}/api/docs`);
 }
 

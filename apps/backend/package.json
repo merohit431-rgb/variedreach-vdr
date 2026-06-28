@@ -2,7 +2,7 @@
   "name": "@variedreach-vdr/backend",
   "version": "0.1.0",
   "private": true,
-  "description": "InsolvencyVDR API — NestJS backend",
+  "description": "Varied Reach Virtual Data Room API — NestJS backend",
   "scripts": {
     "postinstall": "prisma generate",
     "build": "nest build",

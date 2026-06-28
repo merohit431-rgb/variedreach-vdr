@@ -41,7 +41,7 @@ export class MailService {
   async sendPasswordResetEmail(to: string, resetUrl: string): Promise<void> {
     await this.sendMail(
       to,
-      'Reset your InsolvencyVDR password',
+      'Reset your Varied Reach password',
       `<p>We received a request to reset your password.</p>
        <p><a href="${resetUrl}">Click here to reset your password</a>. This link expires in 60 minutes.</p>
        <p>If you didn't request this, you can safely ignore this email.</p>`,
@@ -56,8 +56,8 @@ export class MailService {
   ): Promise<void> {
     await this.sendMail(
       to,
-      `You've been invited to "${dataRoomName}" on InsolvencyVDR`,
-      `<p>${inviterName} has invited you to the "${dataRoomName}" data room on InsolvencyVDR.</p>
+      `You've been invited to "${dataRoomName}" on Varied Reach`,
+      `<p>${inviterName} has invited you to the "${dataRoomName}" data room on Varied Reach.</p>
        <p><a href="${inviteUrl}">Click here to set your password and get started</a>. This link expires in 72 hours.</p>`,
     );
   }

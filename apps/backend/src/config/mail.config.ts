@@ -6,6 +6,6 @@ export default registerAs('mail', () => ({
   secure: process.env.MAIL_SECURE === 'true',
   user: process.env.MAIL_USER || '',
   password: process.env.MAIL_PASSWORD || '',
-  fromName: process.env.MAIL_FROM_NAME || 'InsolvencyVDR',
+  fromName: process.env.MAIL_FROM_NAME || 'Varied Reach',
   fromAddress: process.env.MAIL_FROM_ADDRESS || 'noreply@insolvencyvdr.local',
 }));

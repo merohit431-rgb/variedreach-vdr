@@ -4,6 +4,9 @@ import { useState, FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
+import { FormField } from '@/components/ui/FormField';
+import { Button } from '@/components/ui/Button';
+import { Alert } from '@/components/ui/Alert';
 
 const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{10,}$/;
 
@@ -51,57 +54,42 @@ export function ResetPasswordForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
-          {error}
-        </p>
-      )}
+    <div>
+      <h1 className="text-lg font-semibold text-slate-900">Reset password</h1>
+      <p className="mt-1 text-sm text-slate-500">Choose a new password for your account.</p>
 
-      <div>
-        <label htmlFor="newPassword" className="block text-sm font-medium text-slate-700">
-          New password
-        </label>
-        <input
+      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        {error && <Alert tone="danger">{error}</Alert>}
+
+        <FormField
+          label="New password"
           id="newPassword"
           type="password"
           autoComplete="new-password"
           required
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          hint="At least 10 characters, with uppercase, lowercase, a number, and a special character."
         />
-        <p className="mt-1 text-xs text-slate-500">
-          At least 10 characters, with uppercase, lowercase, a number, and a special character.
-        </p>
-      </div>
 
-      <div>
-        <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700">
-          Confirm new password
-        </label>
-        <input
+        <FormField
+          label="Confirm new password"
           id="confirmPassword"
           type="password"
           autoComplete="new-password"
           required
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
         />
-      </div>
 
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        className="w-full rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-      >
-        {isSubmitting ? 'Resetting...' : 'Reset password'}
-      </button>
+        <Button type="submit" className="w-full" size="lg" isLoading={isSubmitting}>
+          {isSubmitting ? 'Resetting…' : 'Reset password'}
+        </Button>
 
-      <Link href="/login" className="block text-center text-sm text-slate-600 hover:text-slate-900">
-        Back to sign in
-      </Link>
-    </form>
+        <Link href="/login" className="block text-center text-sm font-medium text-slate-500 hover:text-slate-700">
+          Back to sign in
+        </Link>
+      </form>
+    </div>
   );
 }
