@@ -1,6 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import type { DataRoomType } from '@variedreach-vdr/shared';
+import type { DataRoomType, UserRole } from '@variedreach-vdr/shared';
+
+export interface DataRoomAccess {
+  effectiveRole: UserRole;
+  canManageRoom: boolean;
+  canUploadContent: boolean;
+  canDeleteContent: boolean;
+  canDownload: boolean;
+}
 
 export interface DataRoom {
   id: string;
@@ -37,6 +45,17 @@ export function useDataRoom(id: string) {
     queryKey: ['data-rooms', id],
     queryFn: async () => {
       const response = await apiClient.get<{ data: DataRoom }>(`/data-rooms/${id}`);
+      return response.data.data;
+    },
+    enabled: Boolean(id),
+  });
+}
+
+export function useDataRoomAccess(id: string) {
+  return useQuery({
+    queryKey: ['data-rooms', id, 'access'],
+    queryFn: async () => {
+      const response = await apiClient.get<{ data: DataRoomAccess }>(`/data-rooms/${id}/access`);
       return response.data.data;
     },
     enabled: Boolean(id),

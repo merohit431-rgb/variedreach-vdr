@@ -2,7 +2,11 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
-import { CONTENT_MANAGER_ROLES } from '../../common/constants/content-roles';
+import {
+  CONTENT_DELETE_ROLES,
+  CONTENT_MANAGER_ROLES,
+  NO_DOWNLOAD_ROLES,
+} from '../../common/constants/content-roles';
 
 // Org-wide roles that can act on any data room in their organisation without
 // an explicit DataRoomMember row (mirrors DataRoomsService's ADMIN_ROLES).
@@ -48,6 +52,26 @@ export class DataRoomAccessService {
 
     if (!CONTENT_MANAGER_ROLES.includes(access.effectiveRole)) {
       throw new ForbiddenException('Your role does not allow managing content in this data room');
+    }
+
+    return access;
+  }
+
+  async assertContentDeleter(dataRoomId: string, actor: AuthenticatedUser) {
+    const access = await this.getAccess(dataRoomId, actor);
+
+    if (!CONTENT_DELETE_ROLES.includes(access.effectiveRole)) {
+      throw new ForbiddenException('Your role does not allow deleting content in this data room');
+    }
+
+    return access;
+  }
+
+  async assertCanDownload(dataRoomId: string, actor: AuthenticatedUser) {
+    const access = await this.getAccess(dataRoomId, actor);
+
+    if (NO_DOWNLOAD_ROLES.includes(access.effectiveRole)) {
+      throw new ForbiddenException('Your role is view-only and cannot download documents');
     }
 
     return access;

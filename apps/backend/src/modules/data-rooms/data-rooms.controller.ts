@@ -10,7 +10,6 @@ import {
   Post,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
 import { DataRoomsService } from './data-rooms.service';
 import { CreateDataRoomDto } from './dto/create-data-room.dto';
 import { UpdateDataRoomDto } from './dto/update-data-room.dto';
@@ -19,8 +18,7 @@ import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
-
-const MANAGER_ROLES = [UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN, UserRole.RP_LIQUIDATOR];
+import { DATA_ROOM_MANAGER_ROLES as MANAGER_ROLES } from '../../common/constants/content-roles';
 
 @ApiTags('Data Rooms')
 @Controller({ path: 'data-rooms', version: '1' })
@@ -41,6 +39,11 @@ export class DataRoomsController {
   @Get(':id')
   findOne(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.dataRoomsService.findOne(id, user);
+  }
+
+  @Get(':id/access')
+  getMyAccess(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.dataRoomsService.getMyAccess(id, user);
   }
 
   @Roles(...MANAGER_ROLES)

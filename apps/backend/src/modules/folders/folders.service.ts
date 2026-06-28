@@ -107,7 +107,7 @@ export class FoldersService {
   }
 
   async remove(dataRoomId: string, folderId: string, actor: AuthenticatedUser) {
-    await this.dataRoomAccess.assertContentManager(dataRoomId, actor);
+    await this.dataRoomAccess.assertContentDeleter(dataRoomId, actor);
 
     const folder = await this.getFolderOrThrow(dataRoomId, folderId);
 

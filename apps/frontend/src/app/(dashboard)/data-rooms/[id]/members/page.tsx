@@ -1,14 +1,13 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useAuth } from '@/hooks/use-auth';
+import { useDataRoomAccess } from '@/hooks/use-data-rooms';
 import { MembersPanel } from '@/components/data-rooms/MembersPanel';
-import { isDataRoomManager } from '@variedreach-vdr/shared';
 
 export default function DataRoomMembersPage() {
   const { id } = useParams<{ id: string }>();
-  const { user } = useAuth();
-  const canManage = Boolean(user && isDataRoomManager(user.role));
+  const { data: access } = useDataRoomAccess(id);
+  const canManage = Boolean(access?.canManageRoom);
 
   return (
     <div className="pt-4">

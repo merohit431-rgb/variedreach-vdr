@@ -3,22 +3,26 @@
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useState } from 'react';
-import { useAuth } from '@/hooks/use-auth';
-import { useDataRoom, useSetDataRoomArchived, useDeleteDataRoom } from '@/hooks/use-data-rooms';
-import { DATA_ROOM_TYPE_LABELS, isDataRoomManager } from '@variedreach-vdr/shared';
+import {
+  useDataRoom,
+  useDataRoomAccess,
+  useSetDataRoomArchived,
+  useDeleteDataRoom,
+} from '@/hooks/use-data-rooms';
+import { DATA_ROOM_TYPE_LABELS } from '@variedreach-vdr/shared';
 import { extractErrorMessage } from '@/lib/error-message';
 
 export default function DataRoomLayout({ children }: { children: React.ReactNode }) {
   const { id } = useParams<{ id: string }>();
   const pathname = usePathname();
   const router = useRouter();
-  const { user } = useAuth();
   const { data: dataRoom, isLoading } = useDataRoom(id);
+  const { data: access } = useDataRoomAccess(id);
   const setArchived = useSetDataRoomArchived(id);
   const deleteDataRoom = useDeleteDataRoom();
   const [error, setError] = useState<string | null>(null);
 
-  const canManage = Boolean(user && isDataRoomManager(user.role));
+  const canManage = Boolean(access?.canManageRoom);
 
   if (isLoading || !dataRoom) {
     return <p className="text-sm text-slate-400">Loading…</p>;

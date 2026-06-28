@@ -33,10 +33,17 @@ interface FolderTreeProps {
   dataRoomId: string;
   selectedFolderId: string | null;
   onSelect: (folderId: string | null) => void;
-  canManage: boolean;
+  canUpload: boolean;
+  canDelete: boolean;
 }
 
-export function FolderTree({ dataRoomId, selectedFolderId, onSelect, canManage }: FolderTreeProps) {
+export function FolderTree({
+  dataRoomId,
+  selectedFolderId,
+  onSelect,
+  canUpload,
+  canDelete,
+}: FolderTreeProps) {
   const { data: folders, isLoading } = useFolders(dataRoomId);
   const createFolder = useCreateFolder(dataRoomId);
   const updateFolder = useUpdateFolder(dataRoomId);
@@ -104,7 +111,7 @@ export function FolderTree({ dataRoomId, selectedFolderId, onSelect, canManage }
     return (
       <li key={node.id}>
         <div
-          draggable={canManage}
+          draggable={canUpload}
           onDragStart={(e) => e.dataTransfer.setData('text/folder-id', node.id)}
           onDragOver={(e) => {
             e.preventDefault();
@@ -126,29 +133,35 @@ export function FolderTree({ dataRoomId, selectedFolderId, onSelect, canManage }
           <button onClick={() => onSelect(node.id)} className="flex-1 truncate text-left">
             {node.name}
           </button>
-          {canManage && (
+          {(canUpload || canDelete) && (
             <span className="hidden gap-1 group-hover:flex">
-              <button
-                onClick={() => handleCreateChild(node.id)}
-                title="New subfolder"
-                className="text-xs text-slate-400 hover:text-slate-900"
-              >
-                +
-              </button>
-              <button
-                onClick={() => handleRename(node)}
-                title="Rename"
-                className="text-xs text-slate-400 hover:text-slate-900"
-              >
-                ✎
-              </button>
-              <button
-                onClick={() => handleDelete(node)}
-                title="Delete"
-                className="text-xs text-slate-400 hover:text-red-600"
-              >
-                ×
-              </button>
+              {canUpload && (
+                <button
+                  onClick={() => handleCreateChild(node.id)}
+                  title="New subfolder"
+                  className="text-xs text-slate-400 hover:text-slate-900"
+                >
+                  +
+                </button>
+              )}
+              {canUpload && (
+                <button
+                  onClick={() => handleRename(node)}
+                  title="Rename"
+                  className="text-xs text-slate-400 hover:text-slate-900"
+                >
+                  ✎
+                </button>
+              )}
+              {canDelete && (
+                <button
+                  onClick={() => handleDelete(node)}
+                  title="Delete"
+                  className="text-xs text-slate-400 hover:text-red-600"
+                >
+                  ×
+                </button>
+              )}
             </span>
           )}
         </div>
@@ -167,7 +180,7 @@ export function FolderTree({ dataRoomId, selectedFolderId, onSelect, canManage }
     <div className="w-64 flex-shrink-0">
       <div className="mb-2 flex items-center justify-between">
         <p className="text-xs font-medium uppercase text-slate-500">Folders</p>
-        {canManage && (
+        {canUpload && (
           <button onClick={handleCreateRoot} className="text-xs text-slate-500 hover:text-slate-900">
             + New
           </button>

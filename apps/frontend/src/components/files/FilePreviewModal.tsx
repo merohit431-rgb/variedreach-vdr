@@ -10,10 +10,12 @@ const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'tiff', 'webp'];
 export function FilePreviewModal({
   dataRoomId,
   file,
+  canDownload = true,
   onClose,
 }: {
   dataRoomId: string;
   file: FileRecord;
+  canDownload?: boolean;
   onClose: () => void;
 }) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
@@ -65,12 +67,14 @@ export function FilePreviewModal({
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <p className="truncate text-sm font-medium text-slate-900">{file.name}</p>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => downloadFile(dataRoomId, file.id, file.name)}
-              className="text-sm text-slate-600 hover:text-slate-900"
-            >
-              Download
-            </button>
+            {canDownload && (
+              <button
+                onClick={() => downloadFile(dataRoomId, file.id, file.name)}
+                className="text-sm text-slate-600 hover:text-slate-900"
+              >
+                Download
+              </button>
+            )}
             <button onClick={onClose} className="text-slate-400 hover:text-slate-700" aria-label="Close">
               ✕
             </button>
@@ -81,12 +85,14 @@ export function FilePreviewModal({
           {!previewable && (
             <div className="flex h-64 flex-col items-center justify-center gap-2 text-center text-sm text-slate-500">
               <p>Preview isn&apos;t available for this file type.</p>
-              <button
-                onClick={() => downloadFile(dataRoomId, file.id, file.name)}
-                className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
-              >
-                Download to view
-              </button>
+              {canDownload && (
+                <button
+                  onClick={() => downloadFile(dataRoomId, file.id, file.name)}
+                  className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+                >
+                  Download to view
+                </button>
+              )}
             </div>
           )}
 

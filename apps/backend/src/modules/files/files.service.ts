@@ -166,7 +166,7 @@ export class FilesService {
   }
 
   async remove(dataRoomId: string, fileId: string, actor: AuthenticatedUser) {
-    await this.dataRoomAccess.assertContentManager(dataRoomId, actor);
+    await this.dataRoomAccess.assertContentDeleter(dataRoomId, actor);
     const file = await this.getFileOrThrow(dataRoomId, fileId);
 
     await this.prisma.file.update({ where: { id: file.id }, data: { deletedAt: new Date() } });
@@ -263,7 +263,11 @@ export class FilesService {
     action: 'FILE_VIEWED' | 'FILE_DOWNLOADED',
     versionId?: string,
   ): Promise<WatermarkedContent> {
-    await this.dataRoomAccess.getAccess(dataRoomId, actor);
+    if (action === 'FILE_DOWNLOADED') {
+      await this.dataRoomAccess.assertCanDownload(dataRoomId, actor);
+    } else {
+      await this.dataRoomAccess.getAccess(dataRoomId, actor);
+    }
     const file = await this.getFileOrThrow(dataRoomId, fileId);
 
     const version = versionId

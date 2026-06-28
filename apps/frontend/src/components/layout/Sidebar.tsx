@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/data-rooms', label: 'Data Rooms' },
+  { href: '/roles', label: 'Roles & Permissions' },
 ];
 
 export function Sidebar() {

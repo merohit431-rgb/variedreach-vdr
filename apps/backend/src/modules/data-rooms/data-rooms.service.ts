@@ -12,13 +12,18 @@ import { AuditLogService } from '../audit/audit-log.service';
 import { MailService } from '../mail/mail.service';
 import { AuthService } from '../auth/auth.service';
 import { FoldersService } from '../folders/folders.service';
+import { DataRoomAccessService } from '../data-room-access/data-room-access.service';
 import { generateOpaqueToken } from '../../common/utils/crypto.util';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
+import {
+  CONTENT_DELETE_ROLES,
+  CONTENT_MANAGER_ROLES,
+  DATA_ROOM_MANAGER_ROLES as ADMIN_ROLES,
+  NO_DOWNLOAD_ROLES,
+} from '../../common/constants/content-roles';
 import { CreateDataRoomDto } from './dto/create-data-room.dto';
 import { UpdateDataRoomDto } from './dto/update-data-room.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
-
-const ADMIN_ROLES: UserRole[] = [UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN, UserRole.RP_LIQUIDATOR];
 
 @Injectable()
 export class DataRoomsService {
@@ -29,7 +34,20 @@ export class DataRoomsService {
     private readonly mailService: MailService,
     private readonly authService: AuthService,
     private readonly foldersService: FoldersService,
+    private readonly dataRoomAccess: DataRoomAccessService,
   ) {}
+
+  async getMyAccess(dataRoomId: string, actor: AuthenticatedUser) {
+    const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor);
+
+    return {
+      effectiveRole,
+      canManageRoom: ADMIN_ROLES.includes(effectiveRole),
+      canUploadContent: CONTENT_MANAGER_ROLES.includes(effectiveRole),
+      canDeleteContent: CONTENT_DELETE_ROLES.includes(effectiveRole),
+      canDownload: !NO_DOWNLOAD_ROLES.includes(effectiveRole),
+    };
+  }
 
   async create(dto: CreateDataRoomDto, actor: AuthenticatedUser) {
     const dataRoom = await this.prisma.dataRoom.create({

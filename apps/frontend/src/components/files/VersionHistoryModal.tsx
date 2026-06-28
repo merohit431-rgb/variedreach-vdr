@@ -9,11 +9,13 @@ export function VersionHistoryModal({
   dataRoomId,
   file,
   canManage,
+  canDownload = true,
   onClose,
 }: {
   dataRoomId: string;
   file: FileRecord;
   canManage: boolean;
+  canDownload?: boolean;
   onClose: () => void;
 }) {
   const { data: versions, isLoading } = useFileVersions(dataRoomId, file.id);
@@ -67,12 +69,14 @@ export function VersionHistoryModal({
                       {version.comment} · {new Date(version.createdAt).toLocaleString()}
                     </p>
                   </div>
-                  <button
-                    onClick={() => downloadFile(dataRoomId, file.id, file.name, version.id)}
-                    className="text-xs text-slate-600 hover:text-slate-900"
-                  >
-                    Download
-                  </button>
+                  {canDownload && (
+                    <button
+                      onClick={() => downloadFile(dataRoomId, file.id, file.name, version.id)}
+                      className="text-xs text-slate-600 hover:text-slate-900"
+                    >
+                      Download
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

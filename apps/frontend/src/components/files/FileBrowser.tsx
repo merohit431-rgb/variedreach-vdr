@@ -22,12 +22,16 @@ export function FileBrowser({
   dataRoomId,
   folderId,
   search,
-  canManage,
+  canUpload,
+  canDelete,
+  canDownload,
 }: {
   dataRoomId: string;
   folderId: string | null;
   search: string;
-  canManage: boolean;
+  canUpload: boolean;
+  canDelete: boolean;
+  canDownload: boolean;
 }) {
   const { data: files, isLoading } = useFiles(dataRoomId, { folderId, search });
   const uploadFiles = useUploadFiles(dataRoomId);
@@ -84,16 +88,16 @@ export function FileBrowser({
   return (
     <div
       onDragOver={(e) => {
-        if (canManage) {
+        if (canUpload) {
           e.preventDefault();
           setIsDragOver(true);
         }
       }}
       onDragLeave={() => setIsDragOver(false)}
-      onDrop={canManage ? handleDrop : undefined}
+      onDrop={canUpload ? handleDrop : undefined}
       className={`rounded-lg ${isDragOver ? 'ring-2 ring-slate-400' : ''}`}
     >
-      {canManage && (
+      {canUpload && (
         <div className="mb-3 flex gap-2">
           <input
             ref={multiInputRef}
@@ -131,7 +135,7 @@ export function FileBrowser({
         <p className="text-sm text-slate-400">Loading files…</p>
       ) : !files || files.length === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-400">
-          {canManage ? 'No files yet — drag files here or use Upload.' : 'No files yet.'}
+          {canUpload ? 'No files yet — drag files here or use Upload.' : 'No files yet.'}
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
@@ -148,7 +152,7 @@ export function FileBrowser({
               {files.map((file) => (
                 <tr
                   key={file.id}
-                  draggable={canManage}
+                  draggable={canUpload}
                   onDragStart={(e) => e.dataTransfer.setData('text/file-id', file.id)}
                   className="hover:bg-slate-50"
                 >
@@ -166,33 +170,35 @@ export function FileBrowser({
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-3 text-xs">
-                      <button
-                        onClick={() => downloadFile(dataRoomId, file.id, file.name)}
-                        className="text-slate-500 hover:text-slate-900"
-                      >
-                        Download
-                      </button>
+                      {canDownload && (
+                        <button
+                          onClick={() => downloadFile(dataRoomId, file.id, file.name)}
+                          className="text-slate-500 hover:text-slate-900"
+                        >
+                          Download
+                        </button>
+                      )}
                       <button
                         onClick={() => setVersionsFile(file)}
                         className="text-slate-500 hover:text-slate-900"
                       >
                         Versions
                       </button>
-                      {canManage && (
-                        <>
-                          <button
-                            onClick={() => handleRename(file)}
-                            className="text-slate-500 hover:text-slate-900"
-                          >
-                            Rename
-                          </button>
-                          <button
-                            onClick={() => handleDelete(file)}
-                            className="text-red-500 hover:text-red-700"
-                          >
-                            Delete
-                          </button>
-                        </>
+                      {canUpload && (
+                        <button
+                          onClick={() => handleRename(file)}
+                          className="text-slate-500 hover:text-slate-900"
+                        >
+                          Rename
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          onClick={() => handleDelete(file)}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          Delete
+                        </button>
                       )}
                     </div>
                   </td>
@@ -204,13 +210,19 @@ export function FileBrowser({
       )}
 
       {previewFile && (
-        <FilePreviewModal dataRoomId={dataRoomId} file={previewFile} onClose={() => setPreviewFile(null)} />
+        <FilePreviewModal
+          dataRoomId={dataRoomId}
+          file={previewFile}
+          canDownload={canDownload}
+          onClose={() => setPreviewFile(null)}
+        />
       )}
       {versionsFile && (
         <VersionHistoryModal
           dataRoomId={dataRoomId}
           file={versionsFile}
-          canManage={canManage}
+          canManage={canUpload}
+          canDownload={canDownload}
           onClose={() => setVersionsFile(null)}
         />
       )}
