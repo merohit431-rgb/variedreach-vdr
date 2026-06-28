@@ -4,12 +4,14 @@
 # lockfile and every workspace's package.json to install correctly.
 FROM node:20-alpine AS build
 WORKDIR /app
+RUN apk add --no-cache openssl
 COPY . .
 RUN npm ci
 RUN npm run build --workspace=apps/backend
 
 FROM node:20-alpine AS production
 WORKDIR /app
+RUN apk add --no-cache openssl
 ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 COPY apps/backend/package.json ./apps/backend/package.json
