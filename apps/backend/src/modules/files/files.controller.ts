@@ -27,6 +27,7 @@ import { AddVersionDto } from './dto/add-version.dto';
 import { ListFilesQueryDto } from './dto/list-files-query.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
+import { sendFileResponse } from '../../common/utils/http-file-response.util';
 
 const MAX_FILES_PER_UPLOAD = 50;
 
@@ -112,7 +113,7 @@ export class FilesController {
       { ipAddress: req.ip ?? '0.0.0.0', userAgent: req.headers['user-agent'] },
       'FILE_VIEWED',
     );
-    this.send(res, content, 'inline');
+    sendFileResponse(res, content, 'inline');
   }
 
   @Get(':fileId/download')
@@ -130,7 +131,7 @@ export class FilesController {
       { ipAddress: req.ip ?? '0.0.0.0', userAgent: req.headers['user-agent'] },
       'FILE_DOWNLOADED',
     );
-    this.send(res, content, 'attachment');
+    sendFileResponse(res, content, 'attachment');
   }
 
   @Get(':fileId/versions/:versionId/download')
@@ -150,17 +151,7 @@ export class FilesController {
       'FILE_DOWNLOADED',
       versionId,
     );
-    this.send(res, content, 'attachment');
-  }
-
-  private send(res: Response, content: { buffer: Buffer; filename: string; mimeType: string }, disposition: 'inline' | 'attachment') {
-    const asciiFallback = content.filename.replace(/[^\x20-\x7E]/g, '_');
-    res.set({
-      'Content-Type': content.mimeType,
-      'Content-Disposition': `${disposition}; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(content.filename)}`,
-      'Content-Length': content.buffer.length,
-    });
-    res.send(content.buffer);
+    sendFileResponse(res, content, 'attachment');
   }
 
   private parseRelativePaths(raw: string | undefined, fileCount: number): string[] | undefined {

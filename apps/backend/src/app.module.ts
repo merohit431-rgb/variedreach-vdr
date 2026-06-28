@@ -17,6 +17,7 @@ import { StorageModule } from './modules/storage/storage.module';
 import { WatermarkModule } from './modules/watermark/watermark.module';
 import { FilesModule } from './modules/files/files.module';
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
     FilesModule,
     DataRoomsModule,
     AuditLogsModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
