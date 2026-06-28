@@ -43,6 +43,12 @@ cp apps/frontend/.env.local.example apps/frontend/.env.local
 docker compose up --build
 ```
 
+Once Postgres is up, run the initial migration (first time only):
+
+```bash
+docker compose exec backend npx prisma migrate dev --name init
+```
+
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:4000/api/v1/health
 - Swagger docs: http://localhost:4000/api/docs

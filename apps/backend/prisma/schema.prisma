@@ -1,0 +1,406 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════════════════════
+// ENUMS
+// ═══════════════════════════════════════════════════════════
+
+// 8 roles per the PRD permission matrix (section 2.1). Permissions cascade:
+// higher roles inherit lower-role access unless explicitly restricted.
+enum UserRole {
+  SUPER_ADMIN
+  ORG_ADMIN
+  RP_LIQUIDATOR
+  PRA
+  COC_MEMBER
+  AUDITOR
+  LEGAL_ADVISOR
+  GUEST
+}
+
+enum UserStatus {
+  PENDING_INVITE
+  ACTIVE
+  LOCKED
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum DataRoomType {
+  CIRP
+  LIQUIDATION
+  MA_DUE_DILIGENCE
+  OTHER
+}
+
+enum DataRoomStatus {
+  ACTIVE
+  ARCHIVED
+  SUSPENDED
+}
+
+// Lean V1.0 action set. Postgres enums can have values appended later
+// without breaking existing rows.
+enum AuditAction {
+  USER_LOGGED_IN
+  USER_LOGGED_OUT
+  USER_LOGIN_FAILED
+  USER_ACCOUNT_LOCKED
+  USER_PASSWORD_RESET_REQUESTED
+  USER_PASSWORD_RESET_COMPLETED
+  USER_INVITED
+  USER_INVITE_ACCEPTED
+  USER_ROLE_CHANGED
+  USER_SUSPENDED
+  USER_REACTIVATED
+  USER_REMOVED
+  DATA_ROOM_CREATED
+  DATA_ROOM_UPDATED
+  DATA_ROOM_DELETED
+  FOLDER_CREATED
+  FOLDER_RENAMED
+  FOLDER_MOVED
+  FOLDER_DELETED
+  FILE_UPLOADED
+  FILE_VERSION_UPLOADED
+  FILE_VIEWED
+  FILE_DOWNLOADED
+  FILE_RENAMED
+  FILE_MOVED
+  FILE_DELETED
+  REPORT_EXPORTED
+}
+
+enum PermissionScope {
+  DATA_ROOM
+  FOLDER
+  FILE
+}
+
+enum PermissionPrincipal {
+  USER
+  ROLE
+}
+
+// ═══════════════════════════════════════════════════════════
+// ORGANISATION (tenant) & USERS
+// ═══════════════════════════════════════════════════════════
+
+model Organisation {
+  id             String    @id @default(uuid())
+  name           String
+  slug           String    @unique
+  logoUrl        String?
+  storageLimitGb Int       @default(25)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  users     User[]
+  dataRooms DataRoom[]
+
+  @@map("organisations")
+}
+
+model User {
+  id                  String     @id @default(uuid())
+  organisationId      String
+  email               String     @unique
+  password            String
+  firstName           String
+  lastName            String
+  role                UserRole
+  status              UserStatus @default(PENDING_INVITE)
+  failedLoginAttempts Int        @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+  lastLoginIp         String?
+  // bcrypt hashes of the last 5 passwords, oldest first — enforces no-reuse policy
+  previousPasswords   Json       @default("[]")
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  deletedAt           DateTime?
+
+  organisation        Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  dataRoomMemberships DataRoomMember[]
+  sessions            Session[]
+  inviteToken         InviteToken?
+  passwordResetTokens PasswordResetToken[]
+  auditLogs           AuditLog[]
+  uploadedFiles       File[]               @relation("FileUploader")
+  uploadedVersions    FileVersion[]        @relation("FileVersionUploader")
+  watermarkEvents     Watermark[]
+
+  @@index([organisationId])
+  @@map("users")
+}
+
+// Single-use, time-limited invite link (72-hour expiry per PRD 3.1.1).
+// tokenHash stores SHA-256 of the raw token; the raw token only ever
+// appears in the emailed URL, never persisted.
+model InviteToken {
+  id         String    @id @default(uuid())
+  userId     String    @unique
+  tokenHash  String    @unique
+  invitedBy  String
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("invite_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("password_reset_tokens")
+}
+
+// Refresh-token session record. Enables concurrent-session limiting (PRD:
+// max 3 by default) and remote revocation. tokenHash, never the raw token.
+model Session {
+  id         String    @id @default(uuid())
+  userId     String
+  tokenHash  String    @unique
+  userAgent  String?
+  ipAddress  String?
+  rememberMe Boolean   @default(false)
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@map("sessions")
+}
+
+// ═══════════════════════════════════════════════════════════
+// DATA ROOMS (engagements: CIRP case / liquidation / M&A project)
+// ═══════════════════════════════════════════════════════════
+
+model DataRoom {
+  id                    String         @id @default(uuid())
+  organisationId        String
+  name                  String
+  type                  DataRoomType   @default(OTHER)
+  caseNumber            String?
+  status                DataRoomStatus @default(ACTIVE)
+  startDate             DateTime?
+  endDate               DateTime?
+  storageLimitGb        Int            @default(25)
+  storageUsedBytes      BigInt         @default(0)
+  sessionTimeoutMinutes Int            @default(30)
+  maxLoginAttempts      Int            @default(5)
+  // Watermark appearance — tokens: {{name}} {{email}} {{date}} {{time}} {{ip}}
+  watermarkTemplate     String         @default("{{name}} | {{email}} | {{date}} | {{ip}} | CONFIDENTIAL")
+  watermarkOpacity      Float          @default(0.25)
+  watermarkPosition     String         @default("diagonal")
+  createdBy             String
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  deletedAt             DateTime?
+
+  organisation Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  members      DataRoomMember[]
+  folders      Folder[]
+  files        File[]
+  auditLogs    AuditLog[]
+
+  @@index([organisationId, deletedAt])
+  @@map("data_rooms")
+}
+
+// Junction: a user's membership + optional role override within one data room.
+model DataRoomMember {
+  id           String    @id @default(uuid())
+  dataRoomId   String
+  userId       String
+  roleOverride UserRole?
+  invitedBy    String?
+  invitedAt    DateTime  @default(now())
+  joinedAt     DateTime?
+  removedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  dataRoom DataRoom @relation(fields: [dataRoomId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([dataRoomId, userId])
+  @@map("data_room_members")
+}
+
+// ═══════════════════════════════════════════════════════════
+// FOLDERS & FILES
+// ═══════════════════════════════════════════════════════════
+
+// Self-referencing tree. parentId null = root of the data room.
+// path is materialised (e.g. "/Legal/Contracts") for fast breadcrumb/tree queries.
+model Folder {
+  id         String    @id @default(uuid())
+  dataRoomId String
+  parentId   String?
+  name       String
+  path       String
+  depth      Int       @default(0)
+  sortOrder  Int       @default(0)
+  createdBy  String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  dataRoom DataRoom @relation(fields: [dataRoomId], references: [id], onDelete: Cascade)
+  parent   Folder?  @relation("FolderTree", fields: [parentId], references: [id])
+  children Folder[] @relation("FolderTree")
+  files    File[]
+
+  @@index([dataRoomId, parentId])
+  @@index([dataRoomId, path])
+  @@map("folders")
+}
+
+// File metadata. Binary content lives in storage (local disk for V1.0,
+// behind IStorageService so S3/R2 can slot in later without touching this model).
+// currentVersionId is nullable to break the circular FK — set after the first
+// FileVersion is created.
+model File {
+  id               String    @id @default(uuid())
+  dataRoomId       String
+  folderId         String?
+  name             String
+  description      String?
+  mimeType         String
+  extension        String
+  sizeBytes        BigInt    @default(0)
+  currentVersionId String?   @unique
+  uploadedBy       String
+  isLocked         Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  dataRoom        DataRoom      @relation(fields: [dataRoomId], references: [id], onDelete: Cascade)
+  folder          Folder?       @relation(fields: [folderId], references: [id])
+  uploader        User          @relation("FileUploader", fields: [uploadedBy], references: [id])
+  currentVersion  FileVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  versions        FileVersion[] @relation("FileVersions")
+  watermarkEvents Watermark[]
+
+  @@index([dataRoomId, folderId])
+  @@index([dataRoomId, name])
+  @@index([dataRoomId, deletedAt])
+  @@map("files")
+}
+
+// Immutable — a new row is inserted on every re-upload, never updated.
+model FileVersion {
+  id            String   @id @default(uuid())
+  fileId        String
+  versionNumber Int
+  storagePath   String
+  sizeBytes     BigInt
+  mimeType      String
+  checksum      String
+  uploadedBy    String
+  comment       String?
+  createdAt     DateTime @default(now())
+
+  file            File        @relation("FileVersions", fields: [fileId], references: [id], onDelete: Cascade)
+  currentForFile  File?       @relation("CurrentVersion")
+  uploader        User        @relation("FileVersionUploader", fields: [uploadedBy], references: [id])
+  watermarkEvents Watermark[]
+
+  @@unique([fileId, versionNumber])
+  @@index([fileId, createdAt])
+  @@map("file_versions")
+}
+
+// ═══════════════════════════════════════════════════════════
+// AUDIT TRAIL & WATERMARKING (append-only — see migration trigger
+// added in the Audit Logs module; never call .update()/.delete() on these)
+// ═══════════════════════════════════════════════════════════
+
+model AuditLog {
+  id           String      @id @default(uuid())
+  dataRoomId   String
+  userId       String?
+  action       AuditAction
+  resourceType String?
+  resourceId   String?
+  metadata     Json?
+  ipAddress    String?
+  userAgent    String?
+  // SHA-256 of the row's logical content, computed at insert time — tamper detection
+  checksum     String
+  createdAt    DateTime    @default(now())
+
+  dataRoom  DataRoom   @relation(fields: [dataRoomId], references: [id], onDelete: Cascade)
+  user      User?      @relation(fields: [userId], references: [id])
+  watermark Watermark?
+
+  @@index([dataRoomId, createdAt])
+  @@index([dataRoomId, action])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}
+
+// One row per watermarked view/download — enables reverse lookup ("who
+// downloaded this copy?") for leak investigations. Immutable like AuditLog.
+model Watermark {
+  id            String   @id @default(uuid())
+  auditLogId    String   @unique
+  fileId        String
+  fileVersionId String
+  userId        String?
+  watermarkId   String   @unique
+  elements      Json
+  createdAt     DateTime @default(now())
+
+  auditLog    AuditLog    @relation(fields: [auditLogId], references: [id], onDelete: Cascade)
+  file        File        @relation(fields: [fileId], references: [id])
+  fileVersion FileVersion @relation(fields: [fileVersionId], references: [id])
+  user        User?       @relation(fields: [userId], references: [id])
+
+  @@index([fileId, createdAt])
+  @@map("watermarks")
+}
+
+// ═══════════════════════════════════════════════════════════
+// PERMISSIONS (granular override table — schema-ready; enforcement
+// beyond role-based guards is a stretch goal, not required for V1.0)
+// ═══════════════════════════════════════════════════════════
+
+model Permission {
+  id            String              @id @default(uuid())
+  scopeType     PermissionScope
+  scopeId       String
+  principalType PermissionPrincipal
+  principalId   String
+  // { view, download, upload, delete, print }
+  flags         Json
+  createdBy     String
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  deletedAt     DateTime?
+
+  @@index([scopeType, scopeId])
+  @@index([principalType, principalId])
+  @@map("permissions")
+}
