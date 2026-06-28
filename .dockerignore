@@ -14,6 +14,14 @@ coverage
 **/.env
 **/.env.*
 !**/.env.example
+# Frontend env files contain only NEXT_PUBLIC_* values, which Next.js
+# inlines into the client bundle at build time and are therefore already
+# public/visible to anyone using the app — unlike the backend's .env
+# (real secrets), there's nothing to protect by excluding this one, and
+# excluding it left NEXT_PUBLIC_API_URL undefined in every production
+# build, silently breaking every browser-side API call.
+!apps/frontend/.env.local
+!apps/frontend/.env.production.local
 npm-debug.log*
 .DS_Store
 
