@@ -77,10 +77,6 @@ services:
         limits:
           memory: 512M
 
-  mailhog:
-    deploy:
-      replicas: 0
-
   nginx:
     build:
       context: ./infrastructure/nginx
@@ -95,10 +91,25 @@ services:
       - '80:80'
       - '443:443'
     volumes:
-      - ./infrastructure/nginx/certs:/etc/nginx/certs:ro
+      - ./infrastructure/nginx/letsencrypt:/etc/letsencrypt:ro
+      - ./infrastructure/nginx/certbot-webroot:/var/www/certbot:ro
     networks:
       - vdr_network
     deploy:
       resources:
         limits:
           memory: 128M
+
+  # Not a long-running service — run on demand via
+  # infrastructure/scripts/init-letsencrypt.sh (first issuance) or the
+  # renewal cron job (see DEPLOYMENT.md). Shares the same two volumes as
+  # nginx: the webroot for the HTTP-01 challenge, and the certificate
+  # directory nginx reads from.
+  certbot:
+    image: certbot/certbot:latest
+    container_name: vdr_certbot
+    volumes:
+      - ./infrastructure/nginx/letsencrypt:/etc/letsencrypt
+      - ./infrastructure/nginx/certbot-webroot:/var/www/certbot
+    networks:
+      - vdr_network

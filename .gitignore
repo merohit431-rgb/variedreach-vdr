@@ -48,6 +48,12 @@ uploads/
 # Docker
 docker-compose.override.yml
 
+# Let's Encrypt — real private keys and certificates live here on a deployed
+# VPS once infrastructure/scripts/init-letsencrypt.sh has run. Never commit.
+infrastructure/nginx/letsencrypt/
+infrastructure/nginx/certbot-webroot/
+infrastructure/nginx/certs/
+
 # Misc unrelated local files
 *.dmg
 *.zip

@@ -81,10 +81,17 @@ services:
     networks:
       - vdr_network
 
+  # profiles, not deploy.replicas, is the correct way to keep a service out of
+  # production: deploy.replicas is a Swarm-only construct that plain `docker
+  # compose up` doesn't reliably honor, while profiles are a first-class
+  # Compose V2 feature — a service with a profile only starts when that
+  # profile is explicitly requested (see the `dev` profile flag below and in
+  # the README), so the prod overlay needs no override for this at all.
   mailhog:
     image: mailhog/mailhog:latest
     container_name: vdr_mailhog
     restart: unless-stopped
+    profiles: ['dev']
     ports:
       - '1025:1025'
       - '8025:8025'

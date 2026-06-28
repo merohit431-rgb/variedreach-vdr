@@ -40,8 +40,11 @@ variedreach-vdr/
 ```bash
 cp apps/backend/.env.example apps/backend/.env
 cp apps/frontend/.env.local.example apps/frontend/.env.local
-docker compose up --build
+docker compose --profile dev up --build
 ```
+
+(The `dev` profile brings up MailHog alongside the app — it's excluded from the production overlay
+below via Compose's `profiles:` rather than the dev/prod overlay merge.)
 
 Once Postgres is up, run the initial migration and seed a bootstrap admin (first time only):
 
@@ -86,10 +89,20 @@ npm run dev:frontend    # terminal 2
 ## Production deployment
 
 ```bash
+git clone https://github.com/merohit431-rgb/variedreach-vdr.git
+cd variedreach-vdr
+git checkout sprint-1-auth   # main hasn't caught up yet — the real app lives on this branch
 cp apps/backend/.env.example apps/backend/.env       # then fill in real values, see below
 cp apps/frontend/.env.local.example apps/frontend/.env.local
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-docker compose exec backend npx prisma migrate deploy
+
+# First deploy only — no migration files exist in the repo yet, so there's
+# nothing for `migrate deploy` to apply. This generates the initial migration
+# from schema.prisma against the real database and applies it in one step.
+# Commit the generated apps/backend/prisma/migrations/ folder back to the repo
+# afterward so future deploys can use `migrate deploy` instead.
+docker compose exec backend npx prisma migrate dev --name init
+
 docker compose exec backend npm run prisma:triggers
 ```
 
@@ -101,6 +114,9 @@ Before going further than local dev, in `apps/backend/.env`:
 - Change `SEED_ADMIN_PASSWORD` away from the documented default before running `prisma db seed`
   against production data.
 - Point `DATABASE_URL` at your production Postgres and `APP_URL`/`FRONTEND_URL` at your real domain.
+- Set `MAIL_HOST`/`MAIL_PORT`/`MAIL_USER`/`MAIL_PASSWORD` to a real SMTP provider — MailHog is
+  dev-only and is disabled in `docker-compose.prod.yml`. Password-reset and invite emails won't
+  send without this. See the commented example for Resend in `.env.example`.
 
 Notes on the production stack:
 - The Nginx config (`infrastructure/nginx/nginx.conf`) terminates plain HTTP only; put your TLS
@@ -112,6 +128,10 @@ Notes on the production stack:
   `/login` respectively; Nginx won't route to either until they report healthy.
 - File uploads persist in the `backend_uploads` named volume — back this up; there is no S3/object
   storage migration in V1.0.
+- MailHog is gated behind Compose's `dev` profile (`docker-compose.yml`), not a `deploy.replicas`
+  override — `deploy.replicas` is a Swarm-only construct that plain `docker compose up` doesn't
+  reliably honor, while profiles are a first-class Compose V2 feature. The production command
+  below never passes `--profile dev`, so MailHog is never started.
 
 ## Development workflow
 

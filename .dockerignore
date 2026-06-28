@@ -16,3 +16,9 @@ coverage
 !**/.env.example
 npm-debug.log*
 .DS_Store
+
+# Real private keys/certs on a deployed VPS — must never enter any build
+# context, even a discarded intermediate stage.
+infrastructure/nginx/letsencrypt
+infrastructure/nginx/certbot-webroot
+infrastructure/nginx/certs
