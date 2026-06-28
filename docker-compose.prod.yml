@@ -1,19 +1,30 @@
 # Production overlay. Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 # Hardened further in the "Deployment Ready" milestone (health checks, resource limits, secrets).
 #
-# IMPORTANT: Compose merges `ports:` lists ADDITIVELY across -f files — an
-# empty list here does NOT clear entries from docker-compose.yml's base
-# `ports:`, it just contributes nothing to the union. A plain `ports: []`
-# silently left every service's dev-file port exposed on 0.0.0.0 in
-# "production" mode, completely bypassing Nginx as the intended sole public
-# entry point. The `!reset` tag is required to actually clear the merged
-# list before this file's (empty) value applies. Verified empirically via
-# `docker compose ... config` after this fix — confirmed the resolved ports
-# list comes out genuinely empty for all four services.
+# IMPORTANT: Compose merges `ports:`/`volumes:` lists ADDITIVELY across -f
+# files — a plain `ports: []` here does NOT clear entries from
+# docker-compose.yml's base `ports:`, it just contributes nothing to the
+# union, silently leaving every service's dev-file port exposed on 0.0.0.0 in
+# "production" mode and completely bypassing Nginx as the intended sole
+# public entry point.
+#
+# The fix is the Compose Specification's `!override` tag, NOT `!reset`.
+# `!reset` only correctly clears a field to empty -- giving it a non-empty
+# replacement value (e.g. the backend's real uploads volume below) made
+# Compose silently drop the key entirely rather than apply the new value, so
+# `volumes: !reset [backend_uploads:/app/uploads]` resolved to NO volume
+# mount at all. That went undetected through several rebuilds because
+# `ports: !reset []` "worked" by coincidence -- resetting-to-empty and
+# dropping-the-key-entirely both produce zero published ports, so the bug
+# was invisible until uploaded files silently stopped persisting across
+# container recreations. `!override` replaces the value outright regardless
+# of whether it's empty or not; verified empirically via
+# `docker compose ... config --format json` after this fix for both the
+# empty-ports and non-empty-volumes cases.
 
 services:
   postgres:
-    ports: !reset []
+    ports: !override []
     restart: always
     deploy:
       resources:
@@ -21,7 +32,7 @@ services:
           memory: 512M
 
   redis:
-    ports: !reset []
+    ports: !override []
     restart: always
     deploy:
       resources:
@@ -34,12 +45,12 @@ services:
       dockerfile: apps/backend/Dockerfile
     # Re-declares only the persistent uploads volume. Compose merges `volumes:`
     # ADDITIVELY across -f files just like `ports:` (see note above) — the
-    # !reset tag is required here too, or the dev file's src/prisma
+    # !override tag is required here too, or the dev file's src/prisma
     # bind-mounts would carry into prod and overlay the baked image's
     # contents with whatever (or nothing) exists at those host paths.
-    volumes: !reset
+    volumes: !override
       - backend_uploads:/app/uploads
-    ports: !reset []
+    ports: !override []
     restart: always
     environment:
       NODE_ENV: production
@@ -64,8 +75,8 @@ services:
     build:
       context: .
       dockerfile: apps/frontend/Dockerfile
-    volumes: !reset []
-    ports: !reset []
+    volumes: !override []
+    ports: !override []
     restart: always
     environment:
       NODE_ENV: production
