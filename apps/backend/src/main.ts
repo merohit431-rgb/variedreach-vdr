@@ -17,6 +17,10 @@ async function bootstrap() {
   const frontendUrl = configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
 
+  // Behind Nginx, trust X-Forwarded-For so req.ip reflects the real client —
+  // audit logs and watermarks depend on an accurate IP address.
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
+
   app.use(
     helmet({
       contentSecurityPolicy: nodeEnv === 'production',

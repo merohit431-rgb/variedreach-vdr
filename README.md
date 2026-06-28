@@ -43,16 +43,22 @@ cp apps/frontend/.env.local.example apps/frontend/.env.local
 docker compose up --build
 ```
 
-Once Postgres is up, run the initial migration (first time only):
+Once Postgres is up, run the initial migration and seed a bootstrap admin (first time only):
 
 ```bash
 docker compose exec backend npx prisma migrate dev --name init
+docker compose exec backend npx prisma db seed
 ```
 
-- Frontend: http://localhost:3000
+- Frontend: http://localhost:3000 — log in at `/login` with the seeded admin below
 - Backend API: http://localhost:4000/api/v1/health
 - Swagger docs: http://localhost:4000/api/docs
-- MailHog UI: http://localhost:8025
+- MailHog UI: http://localhost:8025 (password-reset emails land here in dev)
+
+**Seeded admin login** (from `apps/backend/.env.example` defaults — change `SEED_ADMIN_PASSWORD`
+before going further than local dev):
+- Email: `admin@insolvencyvdr.local`
+- Password: `ChangeMe123!`
 
 ### Option B — Manual (without Docker)
 
@@ -64,6 +70,7 @@ cp apps/backend/.env.example apps/backend/.env   # edit DATABASE_URL to point at
 cp apps/frontend/.env.local.example apps/frontend/.env.local
 npm run prisma:generate
 npm run prisma:migrate
+npm run prisma:seed
 npm run dev:backend     # terminal 1
 npm run dev:frontend    # terminal 2
 ```

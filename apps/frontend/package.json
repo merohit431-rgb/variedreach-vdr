@@ -9,9 +9,12 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@variedreach-vdr/shared": "*",
+    "axios": "^1.7.9",
     "next": "^15.5.19",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "zustand": "^5.0.2"
   },
   "devDependencies": {
     "@types/node": "^20.17.9",

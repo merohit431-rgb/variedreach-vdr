@@ -1,8 +1,17 @@
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/use-auth';
+
 export default function Home() {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-2">
-      <h1 className="text-3xl font-semibold">InsolvencyVDR</h1>
-      <p className="text-slate-500">Virtual Data Room platform — under construction.</p>
-    </main>
-  );
+  const router = useRouter();
+  const { user, isInitializing } = useAuth();
+
+  useEffect(() => {
+    if (isInitializing) return;
+    router.replace(user ? '/dashboard' : '/login');
+  }, [isInitializing, user, router]);
+
+  return null;
 }

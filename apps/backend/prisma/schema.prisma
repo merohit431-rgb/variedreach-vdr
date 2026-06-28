@@ -24,10 +24,11 @@ enum UserRole {
   GUEST
 }
 
+// Note: there is no LOCKED status. Failed-login lockout is time-based
+// (User.lockedUntil) and self-expires — it doesn't need a status of its own.
 enum UserStatus {
   PENDING_INVITE
   ACTIVE
-  LOCKED
   SUSPENDED
   DEACTIVATED
 }
@@ -196,26 +197,24 @@ model Session {
 // ═══════════════════════════════════════════════════════════
 
 model DataRoom {
-  id                    String         @id @default(uuid())
-  organisationId        String
-  name                  String
-  type                  DataRoomType   @default(OTHER)
-  caseNumber            String?
-  status                DataRoomStatus @default(ACTIVE)
-  startDate             DateTime?
-  endDate               DateTime?
-  storageLimitGb        Int            @default(25)
-  storageUsedBytes      BigInt         @default(0)
-  sessionTimeoutMinutes Int            @default(30)
-  maxLoginAttempts      Int            @default(5)
+  id                String         @id @default(uuid())
+  organisationId    String
+  name              String
+  type              DataRoomType   @default(OTHER)
+  caseNumber        String?
+  status            DataRoomStatus @default(ACTIVE)
+  startDate         DateTime?
+  endDate           DateTime?
+  storageLimitGb    Int            @default(25)
+  storageUsedBytes  BigInt         @default(0)
   // Watermark appearance — tokens: {{name}} {{email}} {{date}} {{time}} {{ip}}
-  watermarkTemplate     String         @default("{{name}} | {{email}} | {{date}} | {{ip}} | CONFIDENTIAL")
-  watermarkOpacity      Float          @default(0.25)
-  watermarkPosition     String         @default("diagonal")
-  createdBy             String
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
-  deletedAt             DateTime?
+  watermarkTemplate String         @default("{{name}} | {{email}} | {{date}} | {{ip}} | CONFIDENTIAL")
+  watermarkOpacity  Float          @default(0.25)
+  watermarkPosition String         @default("diagonal")
+  createdBy         String
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  deletedAt         DateTime?
 
   organisation Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   members      DataRoomMember[]
@@ -337,9 +336,11 @@ model FileVersion {
 // added in the Audit Logs module; never call .update()/.delete() on these)
 // ═══════════════════════════════════════════════════════════
 
+// dataRoomId is nullable: account-level events (login, logout, invite) aren't
+// scoped to any one data room. Resource-level events (file/folder ops) set it.
 model AuditLog {
   id           String      @id @default(uuid())
-  dataRoomId   String
+  dataRoomId   String?
   userId       String?
   action       AuditAction
   resourceType String?
@@ -351,7 +352,7 @@ model AuditLog {
   checksum     String
   createdAt    DateTime    @default(now())
 
-  dataRoom  DataRoom   @relation(fields: [dataRoomId], references: [id], onDelete: Cascade)
+  dataRoom  DataRoom?  @relation(fields: [dataRoomId], references: [id], onDelete: Cascade)
   user      User?      @relation(fields: [userId], references: [id])
   watermark Watermark?
 
