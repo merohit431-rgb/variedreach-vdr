@@ -29,8 +29,14 @@ full variable list). Production-critical values:
   - `FRONTEND_URL` — the real public HTTPS URL (e.g. `https://vdr.variedreach.com`). Drives both
     the CORS allow-list in `main.ts` and the links generated in invite/password-reset emails. Get
     this wrong and login breaks with a CORS error, and invite emails contain dead links.
-  - `MAIL_HOST`/`MAIL_PORT`/etc. — real SMTP credentials. (As of this runbook, the VPS still uses
-    MailHog as a stand-in — real SMTP is a known open item, not yet configured.)
+  - `MAIL_HOST`/`MAIL_PORT`/etc. — real SMTP credentials. The live VPS uses Resend's SMTP relay:
+    `MAIL_HOST=smtp.resend.com`, `MAIL_PORT=465`, `MAIL_SECURE=true`, `MAIL_USER=resend`,
+    `MAIL_PASSWORD=<resend API key>`. `MAIL_FROM_ADDRESS` must be on a domain verified in Resend's
+    dashboard (resend.com/domains) — sending from an unverified domain fails outright, even with a
+    valid API key. On this deployment the verified domain is the `vdr.variedreach.com` subdomain
+    specifically, not the bare `variedreach.com` apex — verify which one before assuming either.
+    MailHog remains available (`docker compose --profile dev up -d mailhog`) for local/dev testing
+    without spending real sends, but production traffic goes through Resend.
 - `apps/frontend/.env.local`:
   - `NEXT_PUBLIC_API_URL` — the same public HTTPS URL as `FRONTEND_URL` above. This is baked into
     the client bundle at **build time**, not read at runtime — changing it requires rebuilding the
@@ -155,9 +161,6 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend sh 
 
 ## 9. Known gaps (as of this runbook)
 
-- **Real SMTP is not configured** — the VPS uses MailHog as an internal stand-in for invite/
-  password-reset emails. They work for testing but don't reach real inboxes. Needs a real SMTP
-  provider's credentials in `apps/backend/.env` before onboarding a real client.
 - **No object storage** — uploaded files live on the VPS's local disk (`backend_uploads` volume).
   Fine for V1.0 scale; revisit if storage needs outgrow a single VPS's disk.
 - **Multi-tenancy / Super Admin / per-data-room storage quotas** are explicitly deferred to a V1.1
