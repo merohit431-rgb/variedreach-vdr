@@ -16,6 +16,7 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { AcceptInviteDto } from './dto/accept-invite.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { AuthenticatedUser } from './types/jwt-payload.interface';
@@ -94,6 +95,13 @@ export class AuthController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async resetPassword(@Body() dto: ResetPasswordDto) {
     await this.authService.resetPassword(dto.token, dto.newPassword);
+  }
+
+  @Public()
+  @Post('accept-invite')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async acceptInvite(@Body() dto: AcceptInviteDto) {
+    await this.authService.acceptInvite(dto.token, dto.password);
   }
 
   private setRefreshCookie(res: Response, token: string, expiresAt: Date) {

@@ -23,3 +23,11 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   LEGAL_ADVISOR: 'Legal Advisor',
   GUEST: 'Guest User',
 };
+
+// Mirrors MANAGER_ROLES / ADMIN_ROLES in the backend's data-rooms.service.ts —
+// the roles allowed to manage a data room (create/edit/archive, invite/remove members).
+export const DATA_ROOM_MANAGER_ROLES: UserRole[] = ['SUPER_ADMIN', 'ORG_ADMIN', 'RP_LIQUIDATOR'];
+
+export function isDataRoomManager(role: UserRole): boolean {
+  return DATA_ROOM_MANAGER_ROLES.includes(role);
+}

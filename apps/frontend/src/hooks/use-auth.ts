@@ -55,5 +55,23 @@ export function useAuth() {
     }
   }, []);
 
-  return { user, accessToken, isInitializing, login, logout, forgotPassword, resetPassword };
+  const acceptInvite = useCallback(async (token: string, password: string) => {
+    try {
+      await apiClient.post('/auth/accept-invite', { token, password });
+      return { success: true as const };
+    } catch (error) {
+      return { success: false as const, message: extractErrorMessage(error) };
+    }
+  }, []);
+
+  return {
+    user,
+    accessToken,
+    isInitializing,
+    login,
+    logout,
+    forgotPassword,
+    resetPassword,
+    acceptInvite,
+  };
 }

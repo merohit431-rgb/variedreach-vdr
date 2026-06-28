@@ -47,4 +47,18 @@ export class MailService {
        <p>If you didn't request this, you can safely ignore this email.</p>`,
     );
   }
+
+  async sendInviteEmail(
+    to: string,
+    inviteUrl: string,
+    dataRoomName: string,
+    inviterName: string,
+  ): Promise<void> {
+    await this.sendMail(
+      to,
+      `You've been invited to "${dataRoomName}" on InsolvencyVDR`,
+      `<p>${inviterName} has invited you to the "${dataRoomName}" data room on InsolvencyVDR.</p>
+       <p><a href="${inviteUrl}">Click here to set your password and get started</a>. This link expires in 72 hours.</p>`,
+    );
+  }
 }

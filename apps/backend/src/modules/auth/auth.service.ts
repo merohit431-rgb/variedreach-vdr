@@ -233,6 +233,36 @@ export class AuthService {
     await this.auditLogService.record({ action: 'USER_PASSWORD_RESET_COMPLETED', userId: user.id });
   }
 
+  async acceptInvite(token: string, password: string): Promise<void> {
+    const tokenHash = sha256Hex(token);
+    const inviteToken = await this.prisma.inviteToken.findUnique({
+      where: { tokenHash },
+      include: { user: true },
+    });
+
+    if (!inviteToken || inviteToken.acceptedAt || inviteToken.expiresAt < new Date()) {
+      throw new BadRequestException('Invite link is invalid or has expired');
+    }
+
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: inviteToken.userId },
+        data: { password: passwordHash, status: 'ACTIVE' },
+      }),
+      this.prisma.inviteToken.update({
+        where: { id: inviteToken.id },
+        data: { acceptedAt: new Date() },
+      }),
+    ]);
+
+    await this.auditLogService.record({
+      action: 'USER_INVITE_ACCEPTED',
+      userId: inviteToken.userId,
+    });
+  }
+
   private async handleFailedLogin(
     userId: string,
     currentAttempts: number,
