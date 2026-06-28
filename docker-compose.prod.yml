@@ -1,0 +1,53 @@
+version: '3.9'
+
+# Production overlay. Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Hardened further in the "Deployment Ready" milestone (health checks, resource limits, secrets).
+
+services:
+  postgres:
+    ports: []
+    restart: always
+
+  redis:
+    ports: []
+    restart: always
+
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    volumes: []
+    ports: []
+    restart: always
+    environment:
+      NODE_ENV: production
+
+  frontend:
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile
+    volumes: []
+    ports: []
+    restart: always
+    environment:
+      NODE_ENV: production
+
+  mailhog:
+    deploy:
+      replicas: 0
+
+  nginx:
+    build:
+      context: ./infrastructure/nginx
+    container_name: vdr_nginx
+    restart: always
+    depends_on:
+      - backend
+      - frontend
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./infrastructure/nginx/certs:/etc/nginx/certs:ro
+    networks:
+      - vdr_network

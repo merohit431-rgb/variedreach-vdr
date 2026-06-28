@@ -1,0 +1,98 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: vdr_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vdr_user
+      POSTGRES_PASSWORD: vdr_password
+      POSTGRES_DB: insolvency_vdr
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U vdr_user -d insolvency_vdr']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vdr_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: vdr_redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vdr_network
+
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile.dev
+    container_name: vdr_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - ./apps/backend/.env
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+    volumes:
+      - ./apps/backend/src:/app/src
+      - ./apps/backend/prisma:/app/prisma
+      - backend_uploads:/app/uploads
+    ports:
+      - '4000:4000'
+    networks:
+      - vdr_network
+
+  frontend:
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile.dev
+    container_name: vdr_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    env_file:
+      - ./apps/frontend/.env.local
+    volumes:
+      - ./apps/frontend/src:/app/src
+      - ./apps/frontend/public:/app/public
+    ports:
+      - '3000:3000'
+    networks:
+      - vdr_network
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: vdr_mailhog
+    restart: unless-stopped
+    ports:
+      - '1025:1025'
+      - '8025:8025'
+    networks:
+      - vdr_network
+
+volumes:
+  postgres_data:
+  backend_uploads:
+
+networks:
+  vdr_network:
+    driver: bridge
