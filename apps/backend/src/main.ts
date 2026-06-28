@@ -18,6 +18,16 @@ import { validateProductionEnv } from './config/validate-production-env';
 async function bootstrap() {
   validateProductionEnv();
 
+  // Prisma maps BigInt columns (storageUsedBytes, sizeBytes) to native JS
+  // bigint, which JSON.stringify cannot serialize on its own -- every
+  // endpoint returning a DataRoom, File, or FileVersion would 500 on the
+  // response, even though the underlying operation succeeded. Express's
+  // res.json() respects toJSON() if present, so this fixes it globally
+  // rather than transforming these fields in every DTO individually.
+  (BigInt.prototype as unknown as { toJSON(): string }).toJSON = function (this: bigint) {
+    return this.toString();
+  };
+
   const app = await NestFactory.create(AppModule);
 
   const configService = app.get(ConfigService);
