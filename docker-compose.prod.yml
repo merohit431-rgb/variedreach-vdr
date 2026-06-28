@@ -1,9 +1,19 @@
 # Production overlay. Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 # Hardened further in the "Deployment Ready" milestone (health checks, resource limits, secrets).
+#
+# IMPORTANT: Compose merges `ports:` lists ADDITIVELY across -f files — an
+# empty list here does NOT clear entries from docker-compose.yml's base
+# `ports:`, it just contributes nothing to the union. A plain `ports: []`
+# silently left every service's dev-file port exposed on 0.0.0.0 in
+# "production" mode, completely bypassing Nginx as the intended sole public
+# entry point. The `!reset` tag is required to actually clear the merged
+# list before this file's (empty) value applies. Verified empirically via
+# `docker compose ... config` after this fix — confirmed the resolved ports
+# list comes out genuinely empty for all four services.
 
 services:
   postgres:
-    ports: []
+    ports: !reset []
     restart: always
     deploy:
       resources:
@@ -11,7 +21,7 @@ services:
           memory: 512M
 
   redis:
-    ports: []
+    ports: !reset []
     restart: always
     deploy:
       resources:
@@ -22,13 +32,14 @@ services:
     build:
       context: .
       dockerfile: apps/backend/Dockerfile
-    # Re-declares only the persistent uploads volume — Compose overlays
-    # replace the base file's `volumes:` list rather than merging it, and the
-    # dev bind-mounts (src/prisma) must NOT carry over since prod runs the
-    # baked image from Dockerfile, not Dockerfile.dev.
-    volumes:
+    # Re-declares only the persistent uploads volume. Compose merges `volumes:`
+    # ADDITIVELY across -f files just like `ports:` (see note above) — the
+    # !reset tag is required here too, or the dev file's src/prisma
+    # bind-mounts would carry into prod and overlay the baked image's
+    # contents with whatever (or nothing) exists at those host paths.
+    volumes: !reset
       - backend_uploads:/app/uploads
-    ports: []
+    ports: !reset []
     restart: always
     environment:
       NODE_ENV: production
@@ -53,8 +64,8 @@ services:
     build:
       context: .
       dockerfile: apps/frontend/Dockerfile
-    volumes: []
-    ports: []
+    volumes: !reset []
+    ports: !reset []
     restart: always
     environment:
       NODE_ENV: production
