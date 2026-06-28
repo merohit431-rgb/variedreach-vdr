@@ -13,8 +13,11 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { validateProductionEnv } from './config/validate-production-env';
 
 async function bootstrap() {
+  validateProductionEnv();
+
   const app = await NestFactory.create(AppModule);
 
   const configService = app.get(ConfigService);

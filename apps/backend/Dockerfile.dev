@@ -1,14 +1,12 @@
+# Build context is the repo root (see docker-compose.yml) — npm workspaces
+# needs the root lockfile and every workspace's package.json to install.
 FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
-COPY prisma ./prisma
-
-RUN npm install
-
 COPY . .
+RUN npm ci
 
 EXPOSE 4000
 
-CMD ["npm", "run", "start:dev"]
+CMD ["npm", "run", "start:dev", "--workspace=apps/backend"]

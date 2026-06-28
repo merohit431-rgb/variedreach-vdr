@@ -83,6 +83,36 @@ npm run dev:backend     # terminal 1
 npm run dev:frontend    # terminal 2
 ```
 
+## Production deployment
+
+```bash
+cp apps/backend/.env.example apps/backend/.env       # then fill in real values, see below
+cp apps/frontend/.env.local.example apps/frontend/.env.local
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+docker compose exec backend npx prisma migrate deploy
+docker compose exec backend npm run prisma:triggers
+```
+
+Before going further than local dev, in `apps/backend/.env`:
+- Set `JWT_ACCESS_SECRET` and `COOKIE_SECRET` to real random values, at least 32 characters each
+  (e.g. `openssl rand -base64 48`). The backend refuses to start with `NODE_ENV=production` if
+  either is missing, still the documented dev placeholder, or under 32 characters — see
+  `apps/backend/src/config/validate-production-env.ts`.
+- Change `SEED_ADMIN_PASSWORD` away from the documented default before running `prisma db seed`
+  against production data.
+- Point `DATABASE_URL` at your production Postgres and `APP_URL`/`FRONTEND_URL` at your real domain.
+
+Notes on the production stack:
+- The Nginx config (`infrastructure/nginx/nginx.conf`) terminates plain HTTP only; put your TLS
+  certificates at `infrastructure/nginx/certs` and extend the `server` block for port 443, or run
+  this behind a managed load balancer/TLS terminator instead.
+- `client_max_body_size` is set to 100MB to match the largest upload category — raise it if you
+  raise `STORAGE_MAX_FILE_SIZE_BYTES`.
+- Backend and frontend containers expose a Docker healthcheck against `/api/v1/health` and
+  `/login` respectively; Nginx won't route to either until they report healthy.
+- File uploads persist in the `backend_uploads` named volume — back this up; there is no S3/object
+  storage migration in V1.0.
+
 ## Development workflow
 
 This repository is built sprint-by-sprint, with one commit per completed module:

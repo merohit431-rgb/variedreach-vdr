@@ -1,12 +1,12 @@
+# Build context is the repo root (see docker-compose.yml) — this app depends on
+# the @variedreach-vdr/shared workspace package.
 FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install
-
 COPY . .
+RUN npm ci
 
 EXPOSE 3000
 
-CMD ["npm", "run", "dev"]
+CMD ["npm", "run", "dev", "--workspace=apps/frontend"]
