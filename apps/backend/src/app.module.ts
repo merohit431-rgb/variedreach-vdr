@@ -11,6 +11,8 @@ import { MailModule } from './modules/mail/mail.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { DataRoomsModule } from './modules/data-rooms/data-rooms.module';
+import { DataRoomAccessModule } from './modules/data-room-access/data-room-access.module';
+import { FoldersModule } from './modules/folders/folders.module';
 
 @Module({
   imports: [
@@ -23,7 +25,9 @@ import { DataRoomsModule } from './modules/data-rooms/data-rooms.module';
     AuditModule,
     MailModule,
     AuthModule,
+    DataRoomAccessModule,
     DashboardModule,
+    FoldersModule,
     DataRoomsModule,
   ],
   controllers: [AppController],

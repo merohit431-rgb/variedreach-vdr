@@ -11,6 +11,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { MailService } from '../mail/mail.service';
 import { AuthService } from '../auth/auth.service';
+import { FoldersService } from '../folders/folders.service';
 import { generateOpaqueToken } from '../../common/utils/crypto.util';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { CreateDataRoomDto } from './dto/create-data-room.dto';
@@ -27,6 +28,7 @@ export class DataRoomsService {
     private readonly auditLogService: AuditLogService,
     private readonly mailService: MailService,
     private readonly authService: AuthService,
+    private readonly foldersService: FoldersService,
   ) {}
 
   async create(dto: CreateDataRoomDto, actor: AuthenticatedUser) {
@@ -44,6 +46,10 @@ export class DataRoomsService {
         },
       },
     });
+
+    if (dataRoom.type === 'CIRP') {
+      await this.foldersService.seedCirpTemplate(dataRoom.id, actor.id);
+    }
 
     await this.auditLogService.record({
       action: 'DATA_ROOM_CREATED',
