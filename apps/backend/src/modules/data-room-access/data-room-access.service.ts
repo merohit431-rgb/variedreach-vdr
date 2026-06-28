@@ -5,6 +5,7 @@ import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import {
   CONTENT_DELETE_ROLES,
   CONTENT_MANAGER_ROLES,
+  DATA_ROOM_MANAGER_ROLES,
   NO_DOWNLOAD_ROLES,
 } from '../../common/constants/content-roles';
 
@@ -72,6 +73,16 @@ export class DataRoomAccessService {
 
     if (NO_DOWNLOAD_ROLES.includes(access.effectiveRole)) {
       throw new ForbiddenException('Your role is view-only and cannot download documents');
+    }
+
+    return access;
+  }
+
+  async assertRoomManager(dataRoomId: string, actor: AuthenticatedUser) {
+    const access = await this.getAccess(dataRoomId, actor);
+
+    if (!DATA_ROOM_MANAGER_ROLES.includes(access.effectiveRole)) {
+      throw new ForbiddenException('Your role does not allow this action in this data room');
     }
 
     return access;

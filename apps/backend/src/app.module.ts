@@ -16,6 +16,7 @@ import { FoldersModule } from './modules/folders/folders.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { WatermarkModule } from './modules/watermark/watermark.module';
 import { FilesModule } from './modules/files/files.module';
+import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { FilesModule } from './modules/files/files.module';
     FoldersModule,
     FilesModule,
     DataRoomsModule,
+    AuditLogsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

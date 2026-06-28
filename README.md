@@ -47,8 +47,15 @@ Once Postgres is up, run the initial migration and seed a bootstrap admin (first
 
 ```bash
 docker compose exec backend npx prisma migrate dev --name init
+docker compose exec backend npm run prisma:triggers
 docker compose exec backend npx prisma db seed
 ```
+
+`prisma:triggers` adds database-level triggers that block UPDATE/DELETE on the audit_logs,
+watermarks, and file_versions tables — these are append-only by design and the application never
+writes to them that way, but the trigger means that holds even against a stray manual query. It's
+not part of the Prisma migration history (triggers aren't representable in schema.prisma) so it's
+a separate, idempotent step — safe to re-run any time, including after `prisma migrate reset`.
 
 - Frontend: http://localhost:3000 — log in at `/login` with the seeded admin below
 - Backend API: http://localhost:4000/api/v1/health
@@ -70,6 +77,7 @@ cp apps/backend/.env.example apps/backend/.env   # edit DATABASE_URL to point at
 cp apps/frontend/.env.local.example apps/frontend/.env.local
 npm run prisma:generate
 npm run prisma:migrate
+npm run prisma:triggers
 npm run prisma:seed
 npm run dev:backend     # terminal 1
 npm run dev:frontend    # terminal 2

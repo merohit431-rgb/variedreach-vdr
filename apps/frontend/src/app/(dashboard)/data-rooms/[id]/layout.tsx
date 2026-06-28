@@ -41,6 +41,7 @@ export default function DataRoomLayout({ children }: { children: React.ReactNode
   const tabs = [
     { href: `/data-rooms/${id}`, label: 'Files' },
     { href: `/data-rooms/${id}/members`, label: 'Members' },
+    ...(canManage ? [{ href: `/data-rooms/${id}/activity`, label: 'Activity' }] : []),
   ];
 
   return (
