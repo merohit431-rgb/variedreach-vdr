@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useSidebarCollapsed } from '@/hooks/use-sidebar-collapsed';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopNav } from '@/components/layout/TopNav';
+import { EnvironmentBanner } from '@/components/layout/EnvironmentBanner';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -28,16 +29,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex bg-slate-50">
-      <Sidebar
-        isCollapsed={isCollapsed}
-        onToggleCollapse={toggle}
-        isMobileOpen={isMobileOpen}
-        onCloseMobile={() => setIsMobileOpen(false)}
-      />
-      <div className="flex min-h-screen flex-1 flex-col">
-        <TopNav onOpenMobileMenu={() => setIsMobileOpen(true)} />
-        <main className="flex-1 animate-fade-in p-4 lg:p-6">{children}</main>
+    <div className="flex min-h-screen flex-col bg-slate-50">
+      <EnvironmentBanner />
+      <div className="flex flex-1">
+        <Sidebar
+          isCollapsed={isCollapsed}
+          onToggleCollapse={toggle}
+          isMobileOpen={isMobileOpen}
+          onCloseMobile={() => setIsMobileOpen(false)}
+        />
+        <div className="flex flex-1 flex-col">
+          <TopNav onOpenMobileMenu={() => setIsMobileOpen(true)} />
+          <main className="flex-1 animate-fade-in p-4 lg:p-6">{children}</main>
+        </div>
       </div>
     </div>
   );

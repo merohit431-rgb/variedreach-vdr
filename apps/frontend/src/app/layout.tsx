@@ -10,8 +10,10 @@ const inter = Inter({
   display: 'swap',
 });
 
+const TITLE_PREFIX = process.env.NEXT_PUBLIC_ENVIRONMENT === 'staging' ? '[STAGING] ' : '';
+
 export const metadata: Metadata = {
-  title: 'Varied Reach | Virtual Data Room',
+  title: `${TITLE_PREFIX}Varied Reach | Virtual Data Room`,
   description: 'Virtual Data Room platform for IBC insolvency professionals',
 };
 

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, LogOut, Menu } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { Avatar } from '@/components/ui/Avatar';
+import { EnvironmentBadge } from '@/components/layout/EnvironmentBanner';
 
 export function TopNav({ onOpenMobileMenu }: { onOpenMobileMenu: () => void }) {
   const { user, logout } = useAuth();
@@ -37,6 +38,7 @@ export function TopNav({ onOpenMobileMenu }: { onOpenMobileMenu: () => void }) {
         <Menu className="h-5 w-5" />
       </button>
 
+      <EnvironmentBadge />
       <div className="flex-1" />
 
       {user && (
