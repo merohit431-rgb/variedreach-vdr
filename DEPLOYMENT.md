@@ -3,6 +3,10 @@
 Operational runbook for running InsolvencyVDR in production. Reflects exactly what was set up and
 verified on the live VPS (Ubuntu 24.04, Hostinger) at `vdr.variedreach.com` — not a generic guide.
 
+See [STAGING.md](STAGING.md) for the staging environment at `staging.vdr.variedreach.com` and the
+branch workflow changes now follow (`development` → staging review → `main` → production) before
+landing here.
+
 ## 1. Prerequisites
 
 - Ubuntu 24.04 VPS with Docker, Docker Compose v2, and Git installed.
@@ -59,13 +63,15 @@ that script runs.
 ```bash
 cd apps/backend
 docker compose -f ../../docker-compose.yml -f ../../docker-compose.prod.yml exec backend sh -c \
-  "cd apps/backend && npx prisma migrate deploy"
+  "cd apps/backend && npx prisma db push"
 docker compose -f ../../docker-compose.yml -f ../../docker-compose.prod.yml exec backend sh -c \
   "cd apps/backend && npx prisma db seed"
 ```
 
 (The `cd apps/backend` inside the exec is required — the container's WORKDIR is `/app`, but the
-Prisma schema lives at `apps/backend/prisma/`.)
+Prisma schema lives at `apps/backend/prisma/`. Use `db push`, not `migrate deploy` — there is no
+`prisma/migrations` directory in this repo at all, so `migrate deploy` runs as a silent no-op and
+leaves the database schema-less. The schema has always been synced with `db push`.)
 
 ## 4. SSL (Let's Encrypt)
 
@@ -152,12 +158,15 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
 Compose only recreates containers whose image or config actually changed — this is safe to run
-even when only one app changed. If a migration shipped with the change:
+even when only one app changed. If the Prisma schema changed:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend sh -c \
-  "cd apps/backend && npx prisma migrate deploy"
+  "cd apps/backend && npx prisma db push"
 ```
+
+As of this version, all changes land on production through the staging promotion flow — see
+[STAGING.md](STAGING.md) — rather than `git pull`+rebuild directly against `main` on the VPS.
 
 ## 9. Known gaps (as of this runbook)
 
