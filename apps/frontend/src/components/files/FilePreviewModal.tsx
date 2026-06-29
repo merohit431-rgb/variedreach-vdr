@@ -1,21 +1,67 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { isPreviewable, isOfficeConvertible, getPreviewFilename } from '@variedreach-vdr/shared';
-import { fetchFileBlob, downloadFile, FileRecord } from '@/hooks/use-files';
+import { isPreviewable, isOfficeConvertible } from '@variedreach-vdr/shared';
+import { fetchFileBlob, downloadFile, resolveDownloadFilename, FileRecord } from '@/hooks/use-files';
 import { extractErrorMessage } from '@/lib/error-message';
 
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'tiff', 'webp'];
 
+// Renders 0/1/2 download actions depending on what the room's download
+// policy + the viewer's role actually allow (see availableDownloadFormats).
+function DownloadButtons({
+  dataRoomId,
+  file,
+  availableDownloadFormats,
+  className,
+}: {
+  dataRoomId: string;
+  file: FileRecord;
+  availableDownloadFormats: ('original' | 'watermarked')[];
+  className: string;
+}) {
+  if (availableDownloadFormats.length === 1) {
+    const format = availableDownloadFormats[0];
+    return (
+      <button
+        onClick={() => downloadFile(dataRoomId, file.id, resolveDownloadFilename(file, format), undefined, format)}
+        className={className}
+      >
+        Download
+      </button>
+    );
+  }
+
+  if (availableDownloadFormats.length === 2) {
+    return (
+      <>
+        <button onClick={() => downloadFile(dataRoomId, file.id, file.name, undefined, 'original')} className={className}>
+          Download Original
+        </button>
+        <button
+          onClick={() =>
+            downloadFile(dataRoomId, file.id, resolveDownloadFilename(file, 'watermarked'), undefined, 'watermarked')
+          }
+          className={className}
+        >
+          Download Watermarked
+        </button>
+      </>
+    );
+  }
+
+  return null;
+}
+
 export function FilePreviewModal({
   dataRoomId,
   file,
-  canDownload = true,
+  availableDownloadFormats = [],
   onClose,
 }: {
   dataRoomId: string;
   file: FileRecord;
-  canDownload?: boolean;
+  availableDownloadFormats?: ('original' | 'watermarked')[];
   onClose: () => void;
 }) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
@@ -67,14 +113,12 @@ export function FilePreviewModal({
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <p className="truncate text-sm font-medium text-slate-900">{file.name}</p>
           <div className="flex items-center gap-3">
-            {canDownload && (
-              <button
-                onClick={() => downloadFile(dataRoomId, file.id, getPreviewFilename(file.name, file.extension))}
-                className="text-sm text-slate-600 hover:text-slate-900"
-              >
-                Download
-              </button>
-            )}
+            <DownloadButtons
+              dataRoomId={dataRoomId}
+              file={file}
+              availableDownloadFormats={availableDownloadFormats}
+              className="text-sm text-slate-600 hover:text-slate-900"
+            />
             <button onClick={onClose} className="text-slate-400 hover:text-slate-700" aria-label="Close">
               ✕
             </button>
@@ -85,14 +129,12 @@ export function FilePreviewModal({
           {!previewable && (
             <div className="flex h-64 flex-col items-center justify-center gap-2 text-center text-sm text-slate-500">
               <p>Preview isn&apos;t available for this file type.</p>
-              {canDownload && (
-                <button
-                  onClick={() => downloadFile(dataRoomId, file.id, getPreviewFilename(file.name, file.extension))}
-                  className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
-                >
-                  Download to view
-                </button>
-              )}
+              <DownloadButtons
+                dataRoomId={dataRoomId}
+                file={file}
+                availableDownloadFormats={availableDownloadFormats}
+                className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+              />
             </div>
           )}
 

@@ -14,6 +14,7 @@ import { AuthService } from '../auth/auth.service';
 import { FoldersService } from '../folders/folders.service';
 import { DataRoomAccessService } from '../data-room-access/data-room-access.service';
 import { generateOpaqueToken } from '../../common/utils/crypto.util';
+import { resolveAvailableFormats } from '../../common/utils/download-policy.util';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import {
   CONTENT_DELETE_ROLES,
@@ -38,7 +39,7 @@ export class DataRoomsService {
   ) {}
 
   async getMyAccess(dataRoomId: string, actor: AuthenticatedUser) {
-    const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor);
+    const { dataRoom, effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor);
 
     return {
       effectiveRole,
@@ -46,6 +47,8 @@ export class DataRoomsService {
       canUploadContent: CONTENT_MANAGER_ROLES.includes(effectiveRole),
       canDeleteContent: CONTENT_DELETE_ROLES.includes(effectiveRole),
       canDownload: !NO_DOWNLOAD_ROLES.includes(effectiveRole),
+      downloadPolicy: dataRoom.downloadPolicy,
+      availableDownloadFormats: resolveAvailableFormats(dataRoom.downloadPolicy, effectiveRole),
     };
   }
 
@@ -115,6 +118,7 @@ export class DataRoomsService {
         caseNumber: dto.caseNumber,
         startDate: dto.startDate ? new Date(dto.startDate) : undefined,
         endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+        downloadPolicy: dto.downloadPolicy,
       },
     });
 
@@ -124,6 +128,7 @@ export class DataRoomsService {
       userId: actor.id,
       resourceType: 'DataRoom',
       resourceId: id,
+      metadata: dto.downloadPolicy !== undefined ? { downloadPolicy: dto.downloadPolicy } : undefined,
     });
 
     return dataRoom;

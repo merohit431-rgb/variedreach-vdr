@@ -25,6 +25,7 @@ import { UpdateFileDto } from './dto/update-file.dto';
 import { UploadFilesDto } from './dto/upload-files.dto';
 import { AddVersionDto } from './dto/add-version.dto';
 import { ListFilesQueryDto } from './dto/list-files-query.dto';
+import { DownloadQueryDto } from './dto/download-query.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { sendFileResponse } from '../../common/utils/http-file-response.util';
@@ -120,6 +121,7 @@ export class FilesController {
   async download(
     @Param('dataRoomId') dataRoomId: string,
     @Param('fileId') fileId: string,
+    @Query() query: DownloadQueryDto,
     @CurrentUser() user: AuthenticatedUser,
     @Req() req: Request,
     @Res() res: Response,
@@ -130,6 +132,8 @@ export class FilesController {
       user,
       { ipAddress: req.ip ?? '0.0.0.0', userAgent: req.headers['user-agent'] },
       'FILE_DOWNLOADED',
+      undefined,
+      query.format ?? 'watermarked',
     );
     sendFileResponse(res, content, 'attachment');
   }
@@ -139,6 +143,7 @@ export class FilesController {
     @Param('dataRoomId') dataRoomId: string,
     @Param('fileId') fileId: string,
     @Param('versionId') versionId: string,
+    @Query() query: DownloadQueryDto,
     @CurrentUser() user: AuthenticatedUser,
     @Req() req: Request,
     @Res() res: Response,
@@ -150,6 +155,7 @@ export class FilesController {
       { ipAddress: req.ip ?? '0.0.0.0', userAgent: req.headers['user-agent'] },
       'FILE_DOWNLOADED',
       versionId,
+      query.format ?? 'watermarked',
     );
     sendFileResponse(res, content, 'attachment');
   }

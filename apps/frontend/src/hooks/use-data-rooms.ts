@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import type { DataRoomType, UserRole } from '@variedreach-vdr/shared';
+import type { DataRoomType, UserRole, DownloadPolicy } from '@variedreach-vdr/shared';
 
 export interface DataRoomAccess {
   effectiveRole: UserRole;
@@ -8,6 +8,8 @@ export interface DataRoomAccess {
   canUploadContent: boolean;
   canDeleteContent: boolean;
   canDownload: boolean;
+  downloadPolicy: DownloadPolicy;
+  availableDownloadFormats: ('original' | 'watermarked')[];
 }
 
 export interface DataRoom {
@@ -28,6 +30,7 @@ export interface CreateDataRoomInput {
   caseNumber?: string;
   startDate?: string;
   endDate?: string;
+  downloadPolicy?: DownloadPolicy;
 }
 
 export function useDataRooms() {

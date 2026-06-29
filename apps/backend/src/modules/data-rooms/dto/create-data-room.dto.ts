@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { DataRoomType } from '@prisma/client';
+import { DataRoomType, DownloadPolicy } from '@prisma/client';
 import { IsDateString, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreateDataRoomDto {
@@ -26,4 +26,9 @@ export class CreateDataRoomDto {
   @IsOptional()
   @IsDateString()
   endDate?: string;
+
+  @ApiPropertyOptional({ enum: DownloadPolicy })
+  @IsOptional()
+  @IsEnum(DownloadPolicy)
+  downloadPolicy?: DownloadPolicy;
 }

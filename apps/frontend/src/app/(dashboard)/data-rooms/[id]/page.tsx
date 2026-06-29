@@ -16,7 +16,7 @@ export default function DataRoomFilesPage() {
 
   const canUpload = Boolean(access?.canUploadContent);
   const canDelete = Boolean(access?.canDeleteContent);
-  const canDownload = Boolean(access?.canDownload);
+  const availableDownloadFormats = access?.availableDownloadFormats ?? [];
   const selectedFolder = folders?.find((f) => f.id === selectedFolderId);
 
   return (
@@ -45,7 +45,7 @@ export default function DataRoomFilesPage() {
           search={search}
           canUpload={canUpload}
           canDelete={canDelete}
-          canDownload={canDownload}
+          availableDownloadFormats={availableDownloadFormats}
         />
       </div>
     </div>

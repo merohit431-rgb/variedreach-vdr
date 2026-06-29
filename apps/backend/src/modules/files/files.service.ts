@@ -1,7 +1,8 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { File, UserRole } from '@prisma/client';
 import { getFileTypeRule, isOfficeConvertible, getPreviewFilename } from '../../common/constants/file-type-rules';
+import { resolveDownloadDecision, RequestedFormat } from '../../common/utils/download-policy.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { DataRoomAccessService } from '../data-room-access/data-room-access.service';
@@ -277,12 +278,21 @@ export class FilesService {
     context: { ipAddress: string; userAgent?: string },
     action: 'FILE_VIEWED' | 'FILE_DOWNLOADED',
     versionId?: string,
+    requestedFormat: RequestedFormat = 'watermarked',
   ): Promise<WatermarkedContent> {
+    let format: RequestedFormat = 'watermarked';
+
     if (action === 'FILE_DOWNLOADED') {
-      await this.dataRoomAccess.assertCanDownload(dataRoomId, actor);
+      const access = await this.dataRoomAccess.assertCanDownload(dataRoomId, actor);
+      const decision = resolveDownloadDecision(access.dataRoom.downloadPolicy, access.effectiveRole, requestedFormat);
+      if (!decision.allowed) {
+        throw new ForbiddenException(decision.reason);
+      }
+      format = decision.format;
     } else {
       await this.dataRoomAccess.getAccess(dataRoomId, actor);
     }
+
     const file = await this.getFileOrThrow(dataRoomId, fileId);
 
     const version = versionId
@@ -291,6 +301,30 @@ export class FilesService {
 
     if (!version) {
       throw new NotFoundException('This file has no content to retrieve');
+    }
+
+    if (format === 'original') {
+      // Skip the office-conversion/watermark pipeline entirely -- literally
+      // the uploaded bytes, in their native format, no trace embedded. The
+      // AuditLog row below is the only record of who requested this and when.
+      const originalBuffer = await this.storage.read(version.storagePath);
+
+      await this.auditLogService.record({
+        action,
+        dataRoomId,
+        userId: actor.id,
+        resourceType: 'File',
+        resourceId: file.id,
+        metadata: { name: file.name, versionNumber: version.versionNumber, format: 'original' },
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+      });
+
+      return {
+        buffer: originalBuffer,
+        filename: file.name,
+        mimeType: file.mimeType,
+      };
     }
 
     const isOffice = isOfficeConvertible(file.extension);
@@ -308,7 +342,7 @@ export class FilesService {
       userId: actor.id,
       resourceType: 'File',
       resourceId: file.id,
-      metadata: { name: file.name, versionNumber: version.versionNumber },
+      metadata: { name: file.name, versionNumber: version.versionNumber, format: 'watermarked' },
       ipAddress: context.ipAddress,
       userAgent: context.userAgent,
     });

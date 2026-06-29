@@ -7,9 +7,9 @@ import {
   useUpdateFile,
   useDeleteFile,
   downloadFile,
+  resolveDownloadFilename,
   FileRecord,
 } from '@/hooks/use-files';
-import { getPreviewFilename } from '@variedreach-vdr/shared';
 import { formatBytes } from '@/lib/format';
 import { extractErrorMessage } from '@/lib/error-message';
 import { FilePreviewModal } from './FilePreviewModal';
@@ -25,14 +25,14 @@ export function FileBrowser({
   search,
   canUpload,
   canDelete,
-  canDownload,
+  availableDownloadFormats,
 }: {
   dataRoomId: string;
   folderId: string | null;
   search: string;
   canUpload: boolean;
   canDelete: boolean;
-  canDownload: boolean;
+  availableDownloadFormats: ('original' | 'watermarked')[];
 }) {
   const { data: files, isLoading } = useFiles(dataRoomId, { folderId, search });
   const uploadFiles = useUploadFiles(dataRoomId);
@@ -171,13 +171,45 @@ export function FileBrowser({
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-3 text-xs">
-                      {canDownload && (
+                      {availableDownloadFormats.length === 1 && (
                         <button
-                          onClick={() => downloadFile(dataRoomId, file.id, getPreviewFilename(file.name, file.extension))}
+                          onClick={() =>
+                            downloadFile(
+                              dataRoomId,
+                              file.id,
+                              resolveDownloadFilename(file, availableDownloadFormats[0]),
+                              undefined,
+                              availableDownloadFormats[0],
+                            )
+                          }
                           className="text-slate-500 hover:text-slate-900"
                         >
                           Download
                         </button>
+                      )}
+                      {availableDownloadFormats.length === 2 && (
+                        <>
+                          <button
+                            onClick={() => downloadFile(dataRoomId, file.id, file.name, undefined, 'original')}
+                            className="text-slate-500 hover:text-slate-900"
+                          >
+                            Original
+                          </button>
+                          <button
+                            onClick={() =>
+                              downloadFile(
+                                dataRoomId,
+                                file.id,
+                                resolveDownloadFilename(file, 'watermarked'),
+                                undefined,
+                                'watermarked',
+                              )
+                            }
+                            className="text-slate-500 hover:text-slate-900"
+                          >
+                            Watermarked
+                          </button>
+                        </>
                       )}
                       <button
                         onClick={() => setVersionsFile(file)}
@@ -214,7 +246,7 @@ export function FileBrowser({
         <FilePreviewModal
           dataRoomId={dataRoomId}
           file={previewFile}
-          canDownload={canDownload}
+          availableDownloadFormats={availableDownloadFormats}
           onClose={() => setPreviewFile(null)}
         />
       )}
@@ -223,7 +255,7 @@ export function FileBrowser({
           dataRoomId={dataRoomId}
           file={versionsFile}
           canManage={canUpload}
-          canDownload={canDownload}
+          availableDownloadFormats={availableDownloadFormats}
           onClose={() => setVersionsFile(null)}
         />
       )}

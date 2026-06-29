@@ -1,8 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { getPreviewFilename } from '@variedreach-vdr/shared';
-import { useFileVersions, useAddFileVersion, downloadFile, FileRecord } from '@/hooks/use-files';
+import { useFileVersions, useAddFileVersion, downloadFile, resolveDownloadFilename, FileRecord } from '@/hooks/use-files';
 import { formatBytes } from '@/lib/format';
 import { extractErrorMessage } from '@/lib/error-message';
 
@@ -10,13 +9,13 @@ export function VersionHistoryModal({
   dataRoomId,
   file,
   canManage,
-  canDownload = true,
+  availableDownloadFormats = [],
   onClose,
 }: {
   dataRoomId: string;
   file: FileRecord;
   canManage: boolean;
-  canDownload?: boolean;
+  availableDownloadFormats?: ('original' | 'watermarked')[];
   onClose: () => void;
 }) {
   const { data: versions, isLoading } = useFileVersions(dataRoomId, file.id);
@@ -70,15 +69,45 @@ export function VersionHistoryModal({
                       {version.comment} · {new Date(version.createdAt).toLocaleString()}
                     </p>
                   </div>
-                  {canDownload && (
+                  {availableDownloadFormats.length === 1 && (
                     <button
                       onClick={() =>
-                        downloadFile(dataRoomId, file.id, getPreviewFilename(file.name, file.extension), version.id)
+                        downloadFile(
+                          dataRoomId,
+                          file.id,
+                          resolveDownloadFilename(file, availableDownloadFormats[0]),
+                          version.id,
+                          availableDownloadFormats[0],
+                        )
                       }
                       className="text-xs text-slate-600 hover:text-slate-900"
                     >
                       Download
                     </button>
+                  )}
+                  {availableDownloadFormats.length === 2 && (
+                    <span className="flex gap-2">
+                      <button
+                        onClick={() => downloadFile(dataRoomId, file.id, file.name, version.id, 'original')}
+                        className="text-xs text-slate-600 hover:text-slate-900"
+                      >
+                        Original
+                      </button>
+                      <button
+                        onClick={() =>
+                          downloadFile(
+                            dataRoomId,
+                            file.id,
+                            resolveDownloadFilename(file, 'watermarked'),
+                            version.id,
+                            'watermarked',
+                          )
+                        }
+                        className="text-xs text-slate-600 hover:text-slate-900"
+                      >
+                        Watermarked
+                      </button>
+                    </span>
                   )}
                 </li>
               ))}

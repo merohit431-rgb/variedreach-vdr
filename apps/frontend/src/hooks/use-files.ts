@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { getPreviewFilename } from '@variedreach-vdr/shared';
 import { apiClient } from '@/lib/api-client';
 
 export interface FileVersionSummary {
@@ -160,11 +161,27 @@ export async function fetchFileBlob(path: string): Promise<Blob> {
   return response.data;
 }
 
-export async function downloadFile(dataRoomId: string, fileId: string, filename: string, versionId?: string) {
-  const path = versionId
+// Original downloads keep the file's real extension (.docx stays .docx);
+// watermarked downloads swap Office formats to .pdf since that's what's
+// actually served for those (see getPreviewFilename / files.service.ts).
+export function resolveDownloadFilename(
+  file: { name: string; extension: string },
+  format: 'original' | 'watermarked',
+): string {
+  return format === 'original' ? file.name : getPreviewFilename(file.name, file.extension);
+}
+
+export async function downloadFile(
+  dataRoomId: string,
+  fileId: string,
+  filename: string,
+  versionId?: string,
+  format: 'original' | 'watermarked' = 'watermarked',
+) {
+  const basePath = versionId
     ? `/data-rooms/${dataRoomId}/files/${fileId}/versions/${versionId}/download`
     : `/data-rooms/${dataRoomId}/files/${fileId}/download`;
-  const blob = await fetchFileBlob(path);
+  const blob = await fetchFileBlob(`${basePath}?format=${format}`);
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

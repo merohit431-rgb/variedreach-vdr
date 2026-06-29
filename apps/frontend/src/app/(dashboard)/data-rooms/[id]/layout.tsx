@@ -45,6 +45,7 @@ export default function DataRoomLayout({ children }: { children: React.ReactNode
       ? [
           { href: `/data-rooms/${id}/members`, label: 'Members' },
           { href: `/data-rooms/${id}/reports`, label: 'Reports' },
+          { href: `/data-rooms/${id}/settings`, label: 'Settings' },
         ]
       : []),
   ];

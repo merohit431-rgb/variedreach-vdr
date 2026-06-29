@@ -90,6 +90,18 @@ enum PermissionPrincipal {
   ROLE
 }
 
+// Per-room download policy. Preview is never gated by this -- it only
+// controls the act of downloading. EXTERNAL_ROLES (see content-roles.ts)
+// are hard-floored to watermarked-only regardless of this value; see
+// resolveDownloadDecision() in common/utils/download-policy.util.ts for
+// the full combination logic.
+enum DownloadPolicy {
+  PREVIEW_ONLY // no downloads at all, of any format
+  ORIGINAL_ONLY // unwatermarked original only
+  WATERMARKED_ONLY // watermarked PDF/image only (today's exact behavior)
+  BOTH // requester's choice of original or watermarked
+}
+
 // ═══════════════════════════════════════════════════════════
 // ORGANISATION (tenant) & USERS
 // ═══════════════════════════════════════════════════════════
@@ -217,6 +229,11 @@ model DataRoom {
   watermarkTemplate String         @default("{{name}} | {{email}} | {{date}} | {{ip}} | CONFIDENTIAL")
   watermarkOpacity  Float          @default(0.25)
   watermarkPosition String         @default("diagonal")
+  // Governs whether/which download formats are available to users who
+  // already have base download permission in this room (assertCanDownload).
+  // Default preserves today's only-ever-watermarked behavior for every
+  // existing room. Preview is unaffected by this field in all cases.
+  downloadPolicy    DownloadPolicy @default(WATERMARKED_ONLY)
   createdBy         String
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
