@@ -26,3 +26,32 @@ export function getFileTypeRule(extension: string): FileTypeRule | undefined {
   const normalized = extension.toLowerCase().replace(/^\./, '');
   return FILE_TYPE_RULES.find((rule) => rule.extensions.includes(normalized));
 }
+
+// Office formats converted to PDF (via Gotenberg/LibreOffice) before preview/
+// watermarking — mirrors packages/shared's OFFICE_CONVERTIBLE_EXTENSIONS for
+// the same require()-at-runtime reason as the rest of this file. csv is
+// deliberately excluded: it's plain text, handled like .txt instead of a
+// full document conversion.
+export const OFFICE_CONVERTIBLE_EXTENSIONS = [
+  'doc',
+  'docx',
+  'odt',
+  'xls',
+  'xlsx',
+  'ods',
+  'ppt',
+  'pptx',
+  'odp',
+];
+
+export function isOfficeConvertible(extension: string): boolean {
+  return OFFICE_CONVERTIBLE_EXTENSIONS.includes(extension.toLowerCase().replace(/^\./, ''));
+}
+
+export function getPreviewFilename(name: string, extension: string): string {
+  if (!isOfficeConvertible(extension)) {
+    return name;
+  }
+  const withoutExtension = name.replace(/\.[^./\\]+$/, '');
+  return `${withoutExtension}.pdf`;
+}

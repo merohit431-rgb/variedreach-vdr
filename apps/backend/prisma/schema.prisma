@@ -327,6 +327,10 @@ model FileVersion {
   uploadedBy    String
   comment       String?
   createdAt     DateTime @default(now())
+  // Cached Office->PDF conversion (Word/Excel/PowerPoint only), populated on
+  // first preview/download and reused after — set once, never invalidated,
+  // since a given version's bytes never change.
+  convertedPdfPath String?
 
   file            File        @relation("FileVersions", fields: [fileId], references: [id], onDelete: Cascade)
   currentForFile  File?       @relation("CurrentVersion")

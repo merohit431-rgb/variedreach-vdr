@@ -1,12 +1,13 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { File, UserRole } from '@prisma/client';
-import { getFileTypeRule } from '../../common/constants/file-type-rules';
+import { getFileTypeRule, isOfficeConvertible, getPreviewFilename } from '../../common/constants/file-type-rules';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { DataRoomAccessService } from '../data-room-access/data-room-access.service';
 import { FoldersService } from '../folders/folders.service';
 import { WatermarkService } from '../watermark/watermark.service';
+import { OfficeConversionService } from '../office-conversion/office-conversion.service';
 import { MailService } from '../mail/mail.service';
 import { IStorageService, STORAGE_SERVICE } from '../storage/storage.interface';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
@@ -30,6 +31,7 @@ export class FilesService {
     private readonly foldersService: FoldersService,
     private readonly auditLogService: AuditLogService,
     private readonly watermarkService: WatermarkService,
+    private readonly officeConversionService: OfficeConversionService,
     private readonly mailService: MailService,
     private readonly configService: ConfigService,
     @Inject(STORAGE_SERVICE) private readonly storage: IStorageService,
@@ -291,9 +293,14 @@ export class FilesService {
       throw new NotFoundException('This file has no content to retrieve');
     }
 
-    const rawBuffer = await this.storage.read(version.storagePath);
+    const isOffice = isOfficeConvertible(file.extension);
+    const sourceBuffer = isOffice
+      ? await this.getOrCreateConvertedPdf(dataRoomId, file, version)
+      : await this.storage.read(version.storagePath);
+    const sourceExtension = isOffice ? 'pdf' : file.extension;
+
     const elements = this.watermarkService.buildElements(actor, context.ipAddress);
-    const watermarkedBuffer = await this.watermarkService.apply(rawBuffer, file.extension, elements);
+    const watermarkedBuffer = await this.watermarkService.apply(sourceBuffer, sourceExtension, elements);
 
     const auditLog = await this.auditLogService.record({
       action,
@@ -314,7 +321,38 @@ export class FilesService {
       elements,
     });
 
-    return { buffer: watermarkedBuffer, filename: file.name, mimeType: file.mimeType };
+    return {
+      buffer: watermarkedBuffer,
+      filename: getPreviewFilename(file.name, file.extension),
+      mimeType: isOffice ? 'application/pdf' : file.mimeType,
+    };
+  }
+
+  // Office files (Word/Excel/PowerPoint) get converted to PDF once per
+  // version, then reused on every subsequent preview/download — conversion
+  // is a real subprocess call (much slower than the in-memory PDF watermark
+  // stamp), but the converted-but-unwatermarked PDF is identical for every
+  // viewer, so there's no reason to redo it per-request like the watermark
+  // itself.
+  private async getOrCreateConvertedPdf(
+    dataRoomId: string,
+    file: File,
+    version: { id: string; storagePath: string; convertedPdfPath: string | null },
+  ): Promise<Buffer> {
+    if (version.convertedPdfPath) {
+      return this.storage.read(version.convertedPdfPath);
+    }
+
+    const originalBuffer = await this.storage.read(version.storagePath);
+    const pdfBuffer = await this.officeConversionService.convertToPdf(originalBuffer, file.name);
+    const saved = await this.storage.save(dataRoomId, `${file.name}.pdf`, pdfBuffer);
+
+    await this.prisma.fileVersion.update({
+      where: { id: version.id },
+      data: { convertedPdfPath: saved.storagePath },
+    });
+
+    return pdfBuffer;
   }
 
   private async getFileOrThrow(dataRoomId: string, fileId: string): Promise<File> {
