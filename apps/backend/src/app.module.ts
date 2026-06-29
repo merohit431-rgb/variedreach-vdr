@@ -12,6 +12,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { EmailLogModule } from './modules/email-log/email-log.module';
 import { MailModule } from './modules/mail/mail.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { RegistrationModule } from './modules/registration/registration.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { DataRoomsModule } from './modules/data-rooms/data-rooms.module';
 import { DataRoomAccessModule } from './modules/data-room-access/data-room-access.module';
@@ -36,6 +37,7 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module';
     EmailLogModule,
     MailModule,
     AuthModule,
+    RegistrationModule,
     DataRoomAccessModule,
     StorageModule,
     WatermarkModule,

@@ -175,6 +175,32 @@ model PasswordResetToken {
   @@map("password_reset_tokens")
 }
 
+// Pre-payment self-service signup. Deliberately NOT a User/Organisation --
+// per the V2.0 funnel, the real Organisation+User only get created once
+// payment succeeds (a later phase). One row per registrant; unlike User
+// (which accumulates invite/reset tokens over a long lifetime), a
+// Registration is short-lived and only ever needs one active verification
+// token, so a resend just overwrites the hash/expiry in place.
+model Registration {
+  id                    String    @id @default(uuid())
+  fullName              String
+  companyName           String
+  email                 String    @unique
+  mobileNumber          String
+  passwordHash          String
+  gstNumber             String?
+  companyAddress        String?
+  selectedPlan          String
+  selectedStorageGb     Int
+  verificationTokenHash String?   @unique
+  verificationExpiresAt DateTime?
+  verifiedAt            DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("registrations")
+}
+
 // Refresh-token session record. Enables concurrent-session limiting (PRD:
 // max 3 by default) and remote revocation. tokenHash, never the raw token.
 model Session {

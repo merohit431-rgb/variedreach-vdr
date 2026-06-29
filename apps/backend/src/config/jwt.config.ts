@@ -13,4 +13,8 @@ export default registerAs('jwt', () => ({
   maxConcurrentSessions: parseInt(process.env.MAX_CONCURRENT_SESSIONS || '3', 10),
   passwordResetExpiresMinutes: parseInt(process.env.PASSWORD_RESET_EXPIRES_MINUTES || '60', 10),
   inviteExpiresHours: parseInt(process.env.INVITE_EXPIRES_HOURS || '72', 10),
+  registrationVerificationExpiresHours: parseInt(
+    process.env.REGISTRATION_VERIFICATION_EXPIRES_HOURS || '24',
+    10,
+  ),
 }));
