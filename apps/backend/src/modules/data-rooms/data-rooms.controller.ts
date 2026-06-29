@@ -75,6 +75,7 @@ export class DataRoomsController {
     return this.dataRoomsService.setArchived(id, false, user);
   }
 
+  @Roles(...MANAGER_ROLES)
   @Get(':id/members')
   listMembers(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.dataRoomsService.listMembers(id, user);
@@ -121,5 +122,15 @@ export class DataRoomsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.dataRoomsService.resetMemberPassword(id, userId, user);
+  }
+
+  @Roles(...MANAGER_ROLES)
+  @Post(':id/members/:userId/resend-invite')
+  resendInvite(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.dataRoomsService.resendInvite(id, userId, user);
   }
 }

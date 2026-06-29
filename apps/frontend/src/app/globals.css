@@ -3,11 +3,28 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
+  --background: #f8fafc;
   --foreground: #0f172a;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
+}
+
+/* Shimmer loading skeletons (Skeleton primitive) */
+.skeleton {
+  background-image: linear-gradient(
+    90deg,
+    rgb(226 232 240) 0px,
+    rgb(241 245 249) 40px,
+    rgb(226 232 240) 80px
+  );
+  background-size: 800px 100%;
+}
+
+/* Visible, brand-colored focus rings everywhere instead of the browser default */
+:focus-visible {
+  outline: 2px solid #0a4da3;
+  outline-offset: 2px;
 }

@@ -33,10 +33,25 @@ export function useInviteMember(dataRoomId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: { email: string; role: UserRole }) => {
-      await apiClient.post(`/data-rooms/${dataRoomId}/members/invite`, input);
+      const response = await apiClient.post<{ data: { emailSent: boolean } }>(
+        `/data-rooms/${dataRoomId}/members/invite`,
+        input,
+      );
+      return response.data.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['data-rooms', dataRoomId, 'members'] });
+    },
+  });
+}
+
+export function useResendInvite(dataRoomId: string) {
+  return useMutation({
+    mutationFn: async (userId: string) => {
+      const response = await apiClient.post<{ data: { emailSent: boolean } }>(
+        `/data-rooms/${dataRoomId}/members/${userId}/resend-invite`,
+      );
+      return response.data.data;
     },
   });
 }

@@ -9,6 +9,7 @@ import {
   downloadFile,
   FileRecord,
 } from '@/hooks/use-files';
+import { getPreviewFilename } from '@variedreach-vdr/shared';
 import { formatBytes } from '@/lib/format';
 import { extractErrorMessage } from '@/lib/error-message';
 import { FilePreviewModal } from './FilePreviewModal';
@@ -172,7 +173,7 @@ export function FileBrowser({
                     <div className="flex justify-end gap-3 text-xs">
                       {canDownload && (
                         <button
-                          onClick={() => downloadFile(dataRoomId, file.id, file.name)}
+                          onClick={() => downloadFile(dataRoomId, file.id, getPreviewFilename(file.name, file.extension))}
                           className="text-slate-500 hover:text-slate-900"
                         >
                           Download

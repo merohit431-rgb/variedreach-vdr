@@ -2,7 +2,10 @@
 
 import { useState, FormEvent } from 'react';
 import Link from 'next/link';
+import { MailCheck } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { FormField } from '@/components/ui/FormField';
+import { Button } from '@/components/ui/Button';
 
 export function ForgotPasswordForm() {
   const { forgotPassword } = useAuth();
@@ -20,12 +23,15 @@ export function ForgotPasswordForm() {
 
   if (isSubmitted) {
     return (
-      <div className="space-y-4 text-sm text-slate-600">
-        <p>
-          If an account exists for <strong>{email}</strong>, we&apos;ve sent a password reset
-          link to that address.
+      <div className="text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50">
+          <MailCheck className="h-6 w-6 text-emerald-600" />
+        </div>
+        <p className="mt-4 text-sm text-slate-600">
+          If an account exists for <strong className="text-slate-900">{email}</strong>, we&apos;ve
+          sent a password reset link to that address.
         </p>
-        <Link href="/login" className="text-slate-900 underline">
+        <Link href="/login" className="mt-4 inline-block text-sm font-medium text-brand-600 hover:text-brand-700">
           Back to sign in
         </Link>
       </div>
@@ -33,37 +39,29 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <p className="text-sm text-slate-600">
-        Enter your email and we&apos;ll send you a link to reset your password.
-      </p>
+    <div>
+      <h1 className="text-lg font-semibold text-slate-900">Forgot password?</h1>
+      <p className="mt-1 text-sm text-slate-500">We&apos;ll email you a link to reset it.</p>
 
-      <div>
-        <label htmlFor="email" className="block text-sm font-medium text-slate-700">
-          Email
-        </label>
-        <input
+      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        <FormField
+          label="Email"
           id="email"
           type="email"
           autoComplete="email"
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
         />
-      </div>
 
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        className="w-full rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-      >
-        {isSubmitting ? 'Sending...' : 'Send reset link'}
-      </button>
+        <Button type="submit" className="w-full" size="lg" isLoading={isSubmitting}>
+          {isSubmitting ? 'Sending…' : 'Send reset link'}
+        </Button>
 
-      <Link href="/login" className="block text-center text-sm text-slate-600 hover:text-slate-900">
-        Back to sign in
-      </Link>
-    </form>
+        <Link href="/login" className="block text-center text-sm font-medium text-slate-500 hover:text-slate-700">
+          Back to sign in
+        </Link>
+      </form>
+    </div>
   );
 }

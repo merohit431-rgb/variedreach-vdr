@@ -2,7 +2,7 @@
   "name": "@variedreach-vdr/backend",
   "version": "0.1.0",
   "private": true,
-  "description": "InsolvencyVDR API — NestJS backend",
+  "description": "Varied Reach Virtual Data Room API — NestJS backend",
   "scripts": {
     "postinstall": "prisma generate",
     "build": "nest build",
@@ -48,6 +48,7 @@
     "pdfkit": "^0.19.1",
     "prisma": "^5.22.0",
     "reflect-metadata": "^0.2.2",
+    "resend": "^6.16.0",
     "rxjs": "^7.8.1",
     "sharp": "^0.34.5",
     "ts-node": "^10.9.2",

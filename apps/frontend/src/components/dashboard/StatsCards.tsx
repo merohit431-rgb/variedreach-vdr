@@ -1,11 +1,13 @@
 import { DashboardStats } from '@/hooks/use-dashboard';
 
 export function StatsCards({ stats }: { stats: DashboardStats }) {
-  const cards = [
-    { label: 'Active Data Rooms', value: stats.activeDataRooms },
-    { label: 'Total Users', value: stats.totalUsers },
-    { label: 'Storage Used', value: `${stats.storage.usedGb} GB` },
-  ];
+  const cards = 'activeDataRooms' in stats
+    ? [
+        { label: 'Active Data Rooms', value: stats.activeDataRooms },
+        { label: 'Total Users', value: stats.totalUsers },
+        { label: 'Storage Used', value: `${stats.storage.usedGb} GB` },
+      ]
+    : [{ label: 'Your Data Rooms', value: stats.assignedDataRooms }];
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

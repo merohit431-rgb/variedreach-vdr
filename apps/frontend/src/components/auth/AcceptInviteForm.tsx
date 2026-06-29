@@ -3,7 +3,11 @@
 import { useState, FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { FormField } from '@/components/ui/FormField';
+import { Button } from '@/components/ui/Button';
+import { Alert } from '@/components/ui/Alert';
 
 const STRONG_PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{10,}$/;
 
@@ -53,72 +57,55 @@ export function AcceptInviteForm() {
 
   if (isDone) {
     return (
-      <div className="space-y-4 text-sm text-slate-600">
-        <p>Your account is ready. You can now sign in.</p>
-        <button
-          onClick={() => router.push('/login')}
-          className="w-full rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700"
-        >
+      <div className="text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50">
+          <CheckCircle2 className="h-6 w-6 text-emerald-600" />
+        </div>
+        <p className="mt-4 text-sm text-slate-600">Your account is ready. You can now sign in.</p>
+        <Button onClick={() => router.push('/login')} className="mt-4 w-full" size="lg">
           Go to sign in
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <p className="text-sm text-slate-600">Set a password to activate your account.</p>
+    <div>
+      <h1 className="text-lg font-semibold text-slate-900">Activate your account</h1>
+      <p className="mt-1 text-sm text-slate-500">Set a password to get started.</p>
 
-      {error && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
-          {error}
-        </p>
-      )}
+      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        {error && <Alert tone="danger">{error}</Alert>}
 
-      <div>
-        <label htmlFor="password" className="block text-sm font-medium text-slate-700">
-          Password
-        </label>
-        <input
+        <FormField
+          label="Password"
           id="password"
           type="password"
           autoComplete="new-password"
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          hint="At least 10 characters, with uppercase, lowercase, a number, and a special character."
         />
-        <p className="mt-1 text-xs text-slate-500">
-          At least 10 characters, with uppercase, lowercase, a number, and a special character.
-        </p>
-      </div>
 
-      <div>
-        <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700">
-          Confirm password
-        </label>
-        <input
+        <FormField
+          label="Confirm password"
           id="confirmPassword"
           type="password"
           autoComplete="new-password"
           required
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
         />
-      </div>
 
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        className="w-full rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-50"
-      >
-        {isSubmitting ? 'Activating...' : 'Activate account'}
-      </button>
+        <Button type="submit" className="w-full" size="lg" isLoading={isSubmitting}>
+          {isSubmitting ? 'Activating…' : 'Activate account'}
+        </Button>
 
-      <Link href="/login" className="block text-center text-sm text-slate-600 hover:text-slate-900">
-        Back to sign in
-      </Link>
-    </form>
+        <Link href="/login" className="block text-center text-sm font-medium text-slate-500 hover:text-slate-700">
+          Back to sign in
+        </Link>
+      </form>
+    </div>
   );
 }

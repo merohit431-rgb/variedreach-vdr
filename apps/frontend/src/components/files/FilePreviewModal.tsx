@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { isPreviewable } from '@variedreach-vdr/shared';
+import { isPreviewable, isOfficeConvertible, getPreviewFilename } from '@variedreach-vdr/shared';
 import { fetchFileBlob, downloadFile, FileRecord } from '@/hooks/use-files';
 import { extractErrorMessage } from '@/lib/error-message';
 
@@ -69,7 +69,7 @@ export function FilePreviewModal({
           <div className="flex items-center gap-3">
             {canDownload && (
               <button
-                onClick={() => downloadFile(dataRoomId, file.id, file.name)}
+                onClick={() => downloadFile(dataRoomId, file.id, getPreviewFilename(file.name, file.extension))}
                 className="text-sm text-slate-600 hover:text-slate-900"
               >
                 Download
@@ -87,7 +87,7 @@ export function FilePreviewModal({
               <p>Preview isn&apos;t available for this file type.</p>
               {canDownload && (
                 <button
-                  onClick={() => downloadFile(dataRoomId, file.id, file.name)}
+                  onClick={() => downloadFile(dataRoomId, file.id, getPreviewFilename(file.name, file.extension))}
                   className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
                 >
                   Download to view
@@ -99,9 +99,13 @@ export function FilePreviewModal({
           {previewable && isLoading && <p className="text-sm text-slate-400">Loading preview…</p>}
           {previewable && error && <p className="text-sm text-red-600">{error}</p>}
 
-          {previewable && !isLoading && !error && file.extension.toLowerCase() === 'pdf' && objectUrl && (
-            <iframe src={objectUrl} title={file.name} className="h-[75vh] w-full rounded-md border-0" />
-          )}
+          {previewable &&
+            !isLoading &&
+            !error &&
+            (file.extension.toLowerCase() === 'pdf' || isOfficeConvertible(file.extension)) &&
+            objectUrl && (
+              <iframe src={objectUrl} title={file.name} className="h-[75vh] w-full rounded-md border-0" />
+            )}
 
           {previewable &&
             !isLoading &&

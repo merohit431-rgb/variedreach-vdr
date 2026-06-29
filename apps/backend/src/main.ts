@@ -28,7 +28,10 @@ async function bootstrap() {
     return this.toString();
   };
 
-  const app = await NestFactory.create(AppModule);
+  // rawBody: true keeps the unparsed request bytes available (req.rawBody)
+  // alongside the normal parsed req.body -- needed by the Resend webhook
+  // handler, which must verify a signature over the exact raw payload.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 4000);
@@ -72,7 +75,7 @@ async function bootstrap() {
 
   if (nodeEnv !== 'production') {
     const swaggerConfig = new DocumentBuilder()
-      .setTitle('InsolvencyVDR API')
+      .setTitle('Varied Reach VDR API')
       .setDescription('Virtual Data Room platform for IBC insolvency professionals')
       .setVersion('1.0')
       .addBearerAuth(
@@ -93,7 +96,7 @@ async function bootstrap() {
   }
 
   await app.listen(port, '0.0.0.0');
-  console.log(`InsolvencyVDR backend running on http://localhost:${port}`);
+  console.log(`Varied Reach VDR backend running on http://localhost:${port}`);
   console.log(`Swagger docs: http://localhost:${port}/api/docs`);
 }
 

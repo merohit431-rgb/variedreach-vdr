@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { getPreviewFilename } from '@variedreach-vdr/shared';
 import { useFileVersions, useAddFileVersion, downloadFile, FileRecord } from '@/hooks/use-files';
 import { formatBytes } from '@/lib/format';
 import { extractErrorMessage } from '@/lib/error-message';
@@ -71,7 +72,9 @@ export function VersionHistoryModal({
                   </div>
                   {canDownload && (
                     <button
-                      onClick={() => downloadFile(dataRoomId, file.id, file.name, version.id)}
+                      onClick={() =>
+                        downloadFile(dataRoomId, file.id, getPreviewFilename(file.name, file.extension), version.id)
+                      }
                       className="text-xs text-slate-600 hover:text-slate-900"
                     >
                       Download

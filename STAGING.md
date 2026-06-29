@@ -38,12 +38,12 @@ application-level resource is fully separate.
 | Git checkout | `/opt/variedreach-vdr` (branch `main`) | `/opt/variedreach-vdr-staging` (branch `development`) |
 | Compose project | `variedreach-vdr` | `variedreach-vdr-staging` |
 | Compose files | `docker-compose.yml` + `docker-compose.prod.yml` | `docker-compose.yml` + `docker-compose.staging.yml` |
-| Containers | `vdr_postgres`, `vdr_redis`, `vdr_backend`, `vdr_frontend`, `vdr_nginx`, `vdr_mailhog` | `vdr_staging_postgres`, `vdr_staging_redis`, `vdr_staging_backend`, `vdr_staging_frontend`, `vdr_staging_mailhog` (no separate Nginx — see below) |
+| Containers | `vdr_postgres`, `vdr_redis`, `vdr_backend`, `vdr_frontend`, `vdr_nginx`, `vdr_gotenberg` | `vdr_staging_postgres`, `vdr_staging_redis`, `vdr_staging_backend`, `vdr_staging_frontend`, `vdr_staging_gotenberg` (no separate Nginx — see below) |
 | Database | `insolvency_vdr` (user `vdr_user`) | `insolvency_vdr_staging` (user `vdr_staging_user`) — separate Postgres container, separate volume, separate credentials |
 | Redis | separate container, separate volume | separate container, separate volume |
 | Uploads | volume `variedreach-vdr_backend_uploads` | volume `variedreach-vdr-staging_backend_uploads` |
 | `.env` files | `apps/backend/.env`, `apps/frontend/.env.local` under `/opt/variedreach-vdr` | own copies under `/opt/variedreach-vdr-staging` — different secrets, different `FRONTEND_URL`/`NEXT_PUBLIC_API_URL` |
-| Mail | real transactional email via Resend | MailHog (captured locally, nothing actually sent) — see §6 |
+| Mail | real transactional email via Resend, `noreply@vdr.variedreach.com` | also real Resend, same address, `[STAGING] ` subject prefix — see §6 |
 | SSL certificate | `/etc/letsencrypt/live/vdr.variedreach.com/` | `/etc/letsencrypt/live/staging.vdr.variedreach.com/` — separate Let's Encrypt certificate, separate renewal record |
 | Backups | `/var/backups/insolvency-vdr/`, cron at 2am | `/var/backups/insolvency-vdr-staging/`, cron at 2am (same time, fully independent files) |
 
@@ -76,8 +76,8 @@ docker network create vdr_edge
 #    (STAGING_POSTGRES_PASSWORD=...) with staging-specific secrets/credentials —
 #    never copy production's .env files verbatim.
 
-# 4. Bring up the stack (the `dev` profile starts MailHog too)
-COMPOSE_PROFILES=dev docker compose -p variedreach-vdr-staging \
+# 4. Bring up the stack
+docker compose -p variedreach-vdr-staging \
   -f docker-compose.yml -f docker-compose.staging.yml up -d --build
 
 # 5. Schema + seed data
@@ -120,7 +120,7 @@ outage. Do this kind of Nginx-image change at a quiet time if it's ever repeated
 ssh vdr
 cd /opt/variedreach-vdr-staging
 git pull origin development
-COMPOSE_PROFILES=dev docker compose -p variedreach-vdr-staging \
+docker compose -p variedreach-vdr-staging \
   -f docker-compose.yml -f docker-compose.staging.yml up -d --build
 # if the Prisma schema changed:
 docker exec vdr_staging_backend npx prisma db push --schema=apps/backend/prisma/schema.prisma
@@ -154,12 +154,23 @@ continues on it and goes through the same staging review before its turn to merg
 
 ## 6. Staging email
 
-Staging's `MAIL_HOST` points at its own MailHog container (`vdr_staging_mailhog`), not Resend —
-password-reset and invite emails sent on staging are captured locally, not actually delivered, so
-testing those flows never spams a real inbox or consumes production's Resend quota. MailHog's web
-UI isn't published to a host port (matching the no-exposed-ports hardening every other service
-follows); view captured mail with `docker exec vdr_staging_mailhog wget -qO- http://localhost:8025/api/v2/messages`,
-or temporarily `docker port vdr_staging_mailhog` / publish 8025 if a visual inbox is needed.
+Staging sends real email through Resend (`MAIL_PROVIDER=resend` in its `.env`), the same
+`noreply@vdr.variedreach.com` sending identity as production — there's no separate staging sending
+domain. Every subject line gets a `[STAGING] ` prefix (`APP_ENVIRONMENT=staging` in the `.env`
+drives this) so staging mail is never mistaken for the real thing in an inbox. This means staging
+testing does consume the real Resend quota and lands in real inboxes — invite real test addresses
+deliberately, not production users' actual emails.
+
+Local dev still uses MailHog (`MAIL_PROVIDER=nodemailer`, the default) — only staging and
+production talk to the real Resend API. Every send, on either provider, is logged to the
+`email_logs` table (`status`: `SENT`/`FAILED`/`DELIVERED`/`BOUNCED`) for troubleshooting.
+
+Resend's delivery/bounce webhook (`POST /api/v1/webhooks/resend`) needs a one-time manual step in
+the Resend dashboard per environment: add a webhook endpoint pointing at
+`https://staging.vdr.variedreach.com/api/v1/webhooks/resend`, select at least
+`email.delivered`/`email.bounced`, then copy the signing secret into that environment's
+`RESEND_WEBHOOK_SECRET`. Until that's done, sends still work — `email_logs` rows just stay `SENT`
+forever instead of advancing to `DELIVERED`.
 
 ## 7. Verifying isolation
 

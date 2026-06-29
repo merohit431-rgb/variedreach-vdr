@@ -7,6 +7,7 @@ import {
   useUpdateMemberRole,
   useRemoveMember,
   useResetMemberPassword,
+  useResendInvite,
 } from '@/hooks/use-members';
 import { USER_ROLES, ROLE_LABELS, type UserRole } from '@variedreach-vdr/shared';
 import { extractErrorMessage } from '@/lib/error-message';
@@ -17,6 +18,7 @@ export function MembersPanel({ dataRoomId, canManage }: { dataRoomId: string; ca
   const updateRole = useUpdateMemberRole(dataRoomId);
   const removeMember = useRemoveMember(dataRoomId);
   const resetPassword = useResetMemberPassword(dataRoomId);
+  const resendInvite = useResendInvite(dataRoomId);
 
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<UserRole>('PRA');
@@ -28,9 +30,13 @@ export function MembersPanel({ dataRoomId, canManage }: { dataRoomId: string; ca
     setError(null);
     setNotice(null);
     try {
-      await inviteMember.mutateAsync({ email, role });
+      const result = await inviteMember.mutateAsync({ email, role });
       setEmail('');
-      setNotice(`Invitation sent to ${email}`);
+      setNotice(
+        result.emailSent
+          ? `Invitation sent to ${email}`
+          : `Member added, but the invitation email failed to send to ${email}. Use "Resend invite" to try again.`,
+      );
     } catch (err) {
       setError(extractErrorMessage(err));
     }
@@ -40,6 +46,19 @@ export function MembersPanel({ dataRoomId, canManage }: { dataRoomId: string; ca
     try {
       await resetPassword.mutateAsync(userId);
       setNotice(`Password reset email sent to ${userEmail}`);
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    }
+  }
+
+  async function handleResendInvite(userId: string, userEmail: string) {
+    try {
+      const result = await resendInvite.mutateAsync(userId);
+      setNotice(
+        result.emailSent
+          ? `Invitation resent to ${userEmail}`
+          : `Could not resend the invitation email to ${userEmail}. Try again shortly.`,
+      );
     } catch (err) {
       setError(extractErrorMessage(err));
     }
@@ -135,6 +154,14 @@ export function MembersPanel({ dataRoomId, canManage }: { dataRoomId: string; ca
                   <td className="px-4 py-3 text-slate-600">{member.user.status}</td>
                   {canManage && (
                     <td className="px-4 py-3 text-right">
+                      {member.user.status === 'PENDING_INVITE' && (
+                        <button
+                          onClick={() => handleResendInvite(member.userId, member.user.email)}
+                          className="mr-3 text-xs text-slate-500 hover:text-slate-900"
+                        >
+                          Resend invite
+                        </button>
+                      )}
                       <button
                         onClick={() => handleResetPassword(member.userId, member.user.email)}
                         className="mr-3 text-xs text-slate-500 hover:text-slate-900"

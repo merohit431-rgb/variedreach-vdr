@@ -79,6 +79,23 @@ services:
     networks:
       - vdr_network
 
+  # Headless LibreOffice behind an HTTP API — converts Word/Excel/PowerPoint
+  # uploads to PDF so they can go through the same watermark/preview pipeline
+  # PDFs already use. No `profiles:` restriction: unlike mailhog this needs
+  # to run in dev, staging, and prod alike. No published port — only the
+  # backend talks to it, over the internal vdr_network by service name.
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: vdr_gotenberg
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vdr_network
+
   # profiles, not deploy.replicas, is the correct way to keep a service out of
   # production: deploy.replicas is a Swarm-only construct that plain `docker
   # compose up` doesn't reliably honor, while profiles are a first-class
