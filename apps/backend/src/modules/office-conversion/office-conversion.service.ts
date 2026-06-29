@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
@@ -32,7 +32,7 @@ export class OfficeConversionService {
       return Buffer.from(await response.arrayBuffer());
     } catch (error) {
       this.logger.error(`Failed to convert "${filename}" to PDF: ${(error as Error).message}`);
-      throw new Error('Unable to prepare this file for secure viewing right now');
+      throw new ServiceUnavailableException('Unable to prepare this file for secure viewing right now');
     } finally {
       clearTimeout(timeout);
     }
