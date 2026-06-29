@@ -19,12 +19,30 @@ function LogoMark({ className, variant }: { className?: string; variant: 'defaul
 }
 
 interface LogoProps {
-  size?: 'sm' | 'lg';
+  size?: 'sm' | 'lg' | 'xl';
   showSubtitle?: boolean;
   iconOnly?: boolean;
   variant?: 'default' | 'light';
   className?: string;
 }
+
+const MARK_SIZE: Record<NonNullable<LogoProps['size']>, string> = {
+  sm: 'h-8 w-8',
+  lg: 'h-11 w-11',
+  xl: 'h-[3.25rem] w-[3.25rem]',
+};
+
+const WORDMARK_SIZE: Record<NonNullable<LogoProps['size']>, string> = {
+  sm: 'text-base',
+  lg: 'text-xl',
+  xl: 'text-2xl',
+};
+
+const SUBTITLE_SIZE: Record<NonNullable<LogoProps['size']>, string> = {
+  sm: 'text-xs',
+  lg: 'text-xs',
+  xl: 'text-sm',
+};
 
 export function Logo({
   size = 'sm',
@@ -34,24 +52,30 @@ export function Logo({
   className,
 }: LogoProps) {
   if (iconOnly) {
-    return <LogoMark variant={variant} className={cn(size === 'lg' ? 'h-11 w-11' : 'h-8 w-8', className)} />;
+    return <LogoMark variant={variant} className={cn(MARK_SIZE[size], className)} />;
   }
 
   return (
     <div className={cn('flex items-center gap-2.5', className)}>
-      <LogoMark variant={variant} className={size === 'lg' ? 'h-11 w-11' : 'h-8 w-8'} />
+      <LogoMark variant={variant} className={MARK_SIZE[size]} />
       <div>
         <p
           className={cn(
             'font-bold italic leading-none tracking-tight',
             variant === 'light' ? 'text-white' : 'text-brand-700',
-            size === 'lg' ? 'text-xl' : 'text-base',
+            WORDMARK_SIZE[size],
           )}
         >
           VARIED REACH
         </p>
         {showSubtitle && (
-          <p className={cn('mt-0.5 text-xs font-medium', variant === 'light' ? 'text-white/70' : 'text-slate-500')}>
+          <p
+            className={cn(
+              'mt-0.5 font-medium',
+              variant === 'light' ? 'text-white/70' : 'text-slate-500',
+              SUBTITLE_SIZE[size],
+            )}
+          >
             Virtual Data Room
           </p>
         )}

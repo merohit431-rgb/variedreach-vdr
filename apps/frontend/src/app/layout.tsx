@@ -14,7 +14,7 @@ const TITLE_PREFIX = process.env.NEXT_PUBLIC_ENVIRONMENT === 'staging' ? '[STAGI
 
 export const metadata: Metadata = {
   title: `${TITLE_PREFIX}Varied Reach | Virtual Data Room`,
-  description: 'Virtual Data Room platform for IBC insolvency professionals',
+  description: 'Secure document collaboration for every critical transaction',
 };
 
 export default function RootLayout({
