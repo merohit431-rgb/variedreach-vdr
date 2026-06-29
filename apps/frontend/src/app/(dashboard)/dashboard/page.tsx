@@ -19,7 +19,7 @@ export default function DashboardPage() {
       ) : (
         <>
           <StatsCards stats={stats} />
-          <StorageWidget storage={stats.storage} />
+          {'storage' in stats && <StorageWidget storage={stats.storage} />}
         </>
       )}
 

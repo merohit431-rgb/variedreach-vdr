@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { isAxiosError } from 'axios';
 import { useAuditLogs } from '@/hooks/use-audit-logs';
 import { AUDIT_ACTIONS, AUDIT_ACTION_LABELS, type AuditActionType } from '@variedreach-vdr/shared';
 import { extractErrorMessage } from '@/lib/error-message';
+import { NotAuthorized } from '@/components/shared/NotAuthorized';
 
 function describeResource(entry: { resourceType: string | null; metadata: Record<string, unknown> | null }) {
   if (!entry.resourceType) return '—';
@@ -30,6 +32,12 @@ export function AuditLogTable({ dataRoomId }: { dataRoomId: string }) {
   }
 
   if (error) {
+    if (isAxiosError(error) && error.response?.status === 403) {
+      // Only reachable for actual non-members now — external-but-member
+      // roles get a scoped 200 (their own activity) from the backend,
+      // never a 403, so this is a real "you're not in this room" case.
+      return <NotAuthorized description="You don't have access to this data room's activity." />;
+    }
     return <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{extractErrorMessage(error)}</p>;
   }
 

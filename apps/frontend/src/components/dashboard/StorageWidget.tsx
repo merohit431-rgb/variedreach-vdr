@@ -1,6 +1,6 @@
-import { DashboardStats } from '@/hooks/use-dashboard';
+import { DashboardStorage } from '@/hooks/use-dashboard';
 
-export function StorageWidget({ storage }: { storage: DashboardStats['storage'] }) {
+export function StorageWidget({ storage }: { storage: DashboardStorage }) {
   const barColor =
     storage.percentUsed >= 95 ? 'bg-red-500' : storage.percentUsed >= 80 ? 'bg-amber-500' : 'bg-slate-900';
 
