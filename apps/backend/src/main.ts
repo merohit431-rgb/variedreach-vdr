@@ -28,7 +28,10 @@ async function bootstrap() {
     return this.toString();
   };
 
-  const app = await NestFactory.create(AppModule);
+  // rawBody: true keeps the unparsed request bytes available (req.rawBody)
+  // alongside the normal parsed req.body -- needed by the Resend webhook
+  // handler, which must verify a signature over the exact raw payload.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 4000);

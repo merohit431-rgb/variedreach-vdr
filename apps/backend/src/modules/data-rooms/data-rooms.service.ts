@@ -182,6 +182,10 @@ export class DataRoomsService {
       throw new ConflictException('This email is already registered to a different organisation');
     }
 
+    const inviterName = `${actor.firstName} ${actor.lastName}`;
+    const frontendUrl = this.configService.get<string>('app.frontendUrl');
+    let emailSent: boolean;
+
     if (!user) {
       user = await this.prisma.user.create({
         data: {
@@ -207,13 +211,27 @@ export class DataRoomsService {
         },
       });
 
-      const frontendUrl = this.configService.get<string>('app.frontendUrl');
-      await this.mailService.sendInviteEmail(
+      const result = await this.mailService.sendUserInvitationEmail(
         user.email,
         `${frontendUrl}/accept-invite?token=${raw}`,
         dataRoom.name,
-        `${actor.firstName} ${actor.lastName}`,
+        inviterName,
+        inviteHours,
+        { userId: user.id, dataRoomId },
       );
+      emailSent = result.sent;
+    } else {
+      // Existing, already-active user added to a different room -- no
+      // password setup needed, just let them know it's there.
+      const result = await this.mailService.sendDataRoomInvitationEmail(
+        user.email,
+        user.firstName,
+        `${frontendUrl}/login`,
+        dataRoom.name,
+        inviterName,
+        { userId: user.id, dataRoomId },
+      );
+      emailSent = result.sent;
     }
 
     const member = await this.prisma.dataRoomMember.upsert({
@@ -236,7 +254,65 @@ export class DataRoomsService {
       metadata: { invitedEmail: user.email, role: dto.role },
     });
 
-    return member;
+    return { ...member, emailSent };
+  }
+
+  async resendInvite(dataRoomId: string, userId: string, actor: AuthenticatedUser) {
+    const dataRoom = await this.assertManager(dataRoomId, actor);
+
+    const member = await this.prisma.dataRoomMember.findUnique({
+      where: { dataRoomId_userId: { dataRoomId, userId } },
+      include: { user: true },
+    });
+
+    if (!member || member.removedAt) {
+      throw new NotFoundException('Member not found in this data room');
+    }
+    if (member.user.status !== 'PENDING_INVITE') {
+      throw new BadRequestException('This user has already accepted their invite');
+    }
+
+    const previousLog = await this.prisma.emailLog.findFirst({
+      where: { userId, template: 'USER_INVITATION' },
+      orderBy: { sentAt: 'desc' },
+    });
+
+    const { raw, hash } = generateOpaqueToken();
+    const inviteHours = this.configService.get<number>('jwt.inviteExpiresHours')!;
+
+    // userId is @unique on InviteToken -- delete+recreate rather than
+    // update-in-place, so the new row is guaranteed fresh state (no risk of
+    // a stale acceptedAt carrying over).
+    await this.prisma.inviteToken.deleteMany({ where: { userId } });
+    await this.prisma.inviteToken.create({
+      data: {
+        userId,
+        tokenHash: hash,
+        invitedBy: actor.id,
+        expiresAt: new Date(Date.now() + inviteHours * 60 * 60_000),
+      },
+    });
+
+    const frontendUrl = this.configService.get<string>('app.frontendUrl');
+    const result = await this.mailService.sendUserInvitationEmail(
+      member.user.email,
+      `${frontendUrl}/accept-invite?token=${raw}`,
+      dataRoom.name,
+      `${actor.firstName} ${actor.lastName}`,
+      inviteHours,
+      { userId, dataRoomId, resentFromId: previousLog?.id },
+    );
+
+    await this.auditLogService.record({
+      action: 'USER_INVITED',
+      dataRoomId,
+      userId: actor.id,
+      resourceType: 'User',
+      resourceId: userId,
+      metadata: { invitedEmail: member.user.email, resent: true },
+    });
+
+    return { emailSent: result.sent };
   }
 
   async updateMemberRole(dataRoomId: string, userId: string, role: UserRole, actor: AuthenticatedUser) {

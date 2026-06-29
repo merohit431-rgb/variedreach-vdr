@@ -104,10 +104,6 @@ services:
         aliases:
           - staging-frontend
 
-  mailhog:
-    container_name: vdr_staging_mailhog
-    ports: !override []
-
 networks:
   vdr_edge:
     external: true

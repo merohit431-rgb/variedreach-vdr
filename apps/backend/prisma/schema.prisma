@@ -138,6 +138,7 @@ model User {
   uploadedFiles       File[]               @relation("FileUploader")
   uploadedVersions    FileVersion[]        @relation("FileVersionUploader")
   watermarkEvents     Watermark[]
+  emailLogs           EmailLog[]
 
   @@index([organisationId])
   @@map("users")
@@ -208,6 +209,10 @@ model DataRoom {
   endDate           DateTime?
   storageLimitGb    Int            @default(25)
   storageUsedBytes  BigInt         @default(0)
+  // Highest storage-warning threshold (0/80/95/100) already emailed for —
+  // crossing upward past this fires the next warning once; dropping back
+  // below it (e.g. after deletions) resets it so a future re-crossing alerts again.
+  highestStorageThresholdNotified Int @default(0)
   // Watermark appearance — tokens: {{name}} {{email}} {{date}} {{time}} {{ip}}
   watermarkTemplate String         @default("{{name}} | {{email}} | {{date}} | {{ip}} | CONFIDENTIAL")
   watermarkOpacity  Float          @default(0.25)
@@ -222,6 +227,7 @@ model DataRoom {
   folders      Folder[]
   files        File[]
   auditLogs    AuditLog[]
+  emailLogs    EmailLog[]
 
   @@index([organisationId, deletedAt])
   @@map("data_rooms")
@@ -405,4 +411,61 @@ model Permission {
   @@index([scopeType, scopeId])
   @@index([principalType, principalId])
   @@map("permissions")
+}
+
+// ═══════════════════════════════════════════════════════════
+// EMAIL ACTIVITY (Resend integration — every send attempt logged here,
+// regardless of provider, for troubleshooting and the future reporting
+// requirement)
+// ═══════════════════════════════════════════════════════════
+
+enum EmailStatus {
+  SENT
+  FAILED
+  DELIVERED // webhook-confirmed; Resend only, nodemailer/dev never reaches this
+  BOUNCED   // webhook-confirmed; Resend only
+}
+
+enum EmailTemplate {
+  USER_INVITATION
+  DATA_ROOM_INVITATION
+  PASSWORD_RESET
+  WELCOME_EMAIL
+  EMAIL_VERIFICATION // template built, no trigger wired yet
+  ACCOUNT_CREATED // template built, no trigger wired yet
+  STORAGE_WARNING_80
+  STORAGE_CRITICAL_95
+  STORAGE_FULL_100
+  SUBSCRIPTION_ACTIVATED // future — no billing system exists yet
+  SUBSCRIPTION_RENEWAL_REMINDER // future — no billing system exists yet
+}
+
+// userId/dataRoomId are both optional since not every email has either
+// context (password reset has no data room; a future subscription email
+// may have no single data room either). resentFromId links a resend
+// attempt back to the original row it's resending, rather than adding a
+// separate "RESENT" status that would collide with the real
+// provider-reported terminal states.
+model EmailLog {
+  id                String        @id @default(uuid())
+  template          EmailTemplate
+  status            EmailStatus
+  recipientEmail    String
+  subject           String
+  userId            String?
+  dataRoomId        String?
+  providerMessageId String?
+  errorMessage      String?
+  resentFromId      String?
+  sentAt            DateTime      @default(now())
+  deliveredAt       DateTime?
+  bouncedAt         DateTime?
+
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  dataRoom DataRoom? @relation(fields: [dataRoomId], references: [id], onDelete: SetNull)
+
+  @@index([providerMessageId])
+  @@index([userId, sentAt])
+  @@index([dataRoomId])
+  @@map("email_logs")
 }

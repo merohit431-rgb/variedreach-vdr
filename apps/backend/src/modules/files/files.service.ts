@@ -1,15 +1,20 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { File } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
+import { File, UserRole } from '@prisma/client';
 import { getFileTypeRule } from '../../common/constants/file-type-rules';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { DataRoomAccessService } from '../data-room-access/data-room-access.service';
 import { FoldersService } from '../folders/folders.service';
 import { WatermarkService } from '../watermark/watermark.service';
+import { MailService } from '../mail/mail.service';
 import { IStorageService, STORAGE_SERVICE } from '../storage/storage.interface';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { UpdateFileDto } from './dto/update-file.dto';
 import { ListFilesQueryDto } from './dto/list-files-query.dto';
+import { StorageWarningLevel } from '../mail/templates/storage-warning.template';
+
+const STORAGE_ALERT_ORG_WIDE_ROLES: UserRole[] = [UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN];
 
 export interface WatermarkedContent {
   buffer: Buffer;
@@ -25,6 +30,8 @@ export class FilesService {
     private readonly foldersService: FoldersService,
     private readonly auditLogService: AuditLogService,
     private readonly watermarkService: WatermarkService,
+    private readonly mailService: MailService,
+    private readonly configService: ConfigService,
     @Inject(STORAGE_SERVICE) private readonly storage: IStorageService,
   ) {}
 
@@ -133,6 +140,8 @@ export class FilesService {
       created.push(file);
     }
 
+    await this.checkStorageThreshold(dataRoomId);
+
     return created;
   }
 
@@ -183,6 +192,8 @@ export class FilesService {
       resourceId: file.id,
       metadata: { name: file.name },
     });
+
+    await this.checkStorageThreshold(dataRoomId);
   }
 
   async addVersion(
@@ -244,6 +255,8 @@ export class FilesService {
       resourceId: file.id,
       metadata: { versionNumber: nextVersionNumber },
     });
+
+    await this.checkStorageThreshold(dataRoomId);
 
     return version;
   }
@@ -322,5 +335,89 @@ export class FilesService {
   private extractExtension(fileName: string): string {
     const parts = fileName.split('.');
     return parts.length > 1 ? parts.pop()!.toLowerCase() : '';
+  }
+
+  // Event-driven off upload/delete/version changes -- no cron involved.
+  // Fires exactly once per upward threshold crossing (highestStorageThresholdNotified
+  // tracks the last one emailed) and resets on a downward crossing (e.g.
+  // after cleanup) so a future re-crossing alerts again.
+  private async checkStorageThreshold(dataRoomId: string): Promise<void> {
+    const room = await this.prisma.dataRoom.findUnique({ where: { id: dataRoomId } });
+    if (!room) return;
+
+    const limitBytes = BigInt(room.storageLimitGb) * 1024n * 1024n * 1024n;
+    const percentUsed = limitBytes > 0n ? Number((room.storageUsedBytes * 100n) / limitBytes) : 0;
+
+    const warningPct = this.configService.get<number>('storage.warningPercent')!;
+    const criticalPct = this.configService.get<number>('storage.criticalPercent')!;
+
+    const crossedThreshold =
+      percentUsed >= 100 ? 100 : percentUsed >= criticalPct ? criticalPct : percentUsed >= warningPct ? warningPct : 0;
+
+    if (crossedThreshold === room.highestStorageThresholdNotified) {
+      return;
+    }
+
+    await this.prisma.dataRoom.update({
+      where: { id: dataRoomId },
+      data: { highestStorageThresholdNotified: crossedThreshold },
+    });
+
+    if (crossedThreshold > room.highestStorageThresholdNotified && crossedThreshold > 0) {
+      const level: StorageWarningLevel = crossedThreshold === 100 ? 'FULL' : crossedThreshold === criticalPct ? 'CRITICAL' : 'WARNING';
+      await this.notifyStorageThreshold(room.id, room.organisationId, room.name, level, percentUsed);
+    }
+    // Dropping below a threshold (crossedThreshold < previous) just resets
+    // the tracker, quietly -- no email for usage going back down.
+  }
+
+  private async notifyStorageThreshold(
+    dataRoomId: string,
+    organisationId: string,
+    dataRoomName: string,
+    level: StorageWarningLevel,
+    percentUsed: number,
+  ): Promise<void> {
+    const frontendUrl = this.configService.get<string>('app.frontendUrl');
+    const manageUrl = `${frontendUrl}/data-rooms/${dataRoomId}`;
+    const recipients = await this.resolveStorageAlertRecipients(dataRoomId, organisationId);
+
+    for (const recipient of recipients) {
+      await this.mailService.sendStorageWarningEmail(recipient.email, level, dataRoomName, percentUsed, manageUrl, {
+        userId: recipient.id,
+        dataRoomId,
+      });
+    }
+  }
+
+  // Org-wide Org Admins (and Super Admin) + this room's own RP/Liquidator
+  // members -- i.e. exactly DATA_ROOM_MANAGER_ROLES, scoped the same way
+  // DataRoomAccessService already scopes "manager": org-wide roles see
+  // every room, RP_LIQUIDATOR is scoped to rooms they're actually a member of.
+  private async resolveStorageAlertRecipients(
+    dataRoomId: string,
+    organisationId: string,
+  ): Promise<Array<{ id: string; email: string }>> {
+    const [orgWideUsers, roomMembers] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { organisationId, role: { in: STORAGE_ALERT_ORG_WIDE_ROLES }, deletedAt: null },
+        select: { id: true, email: true },
+      }),
+      this.prisma.dataRoomMember.findMany({
+        where: { dataRoomId, removedAt: null },
+        include: { user: { select: { id: true, email: true, role: true } } },
+      }),
+    ]);
+
+    const rpLiquidatorMembers = roomMembers
+      .filter((member) => (member.roleOverride ?? member.user.role) === UserRole.RP_LIQUIDATOR)
+      .map((member) => ({ id: member.user.id, email: member.user.email }));
+
+    const byId = new Map<string, { id: string; email: string }>();
+    for (const recipient of [...orgWideUsers, ...rpLiquidatorMembers]) {
+      byId.set(recipient.id, recipient);
+    }
+
+    return Array.from(byId.values());
   }
 }

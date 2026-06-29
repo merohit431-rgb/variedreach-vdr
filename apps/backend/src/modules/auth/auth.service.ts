@@ -182,7 +182,7 @@ export class AuthService {
     const frontendUrl = this.configService.get<string>('app.frontendUrl');
     const resetUrl = `${frontendUrl}/reset-password?token=${raw}`;
 
-    await this.mailService.sendPasswordResetEmail(user.email, resetUrl);
+    await this.mailService.sendPasswordResetEmail(user.email, resetUrl, expiresMinutes, { userId: user.id });
     await this.auditLogService.record({ action: 'USER_PASSWORD_RESET_REQUESTED', userId: user.id });
   }
 
@@ -261,6 +261,14 @@ export class AuthService {
       action: 'USER_INVITE_ACCEPTED',
       userId: inviteToken.userId,
     });
+
+    const frontendUrl = this.configService.get<string>('app.frontendUrl');
+    await this.mailService.sendWelcomeEmail(
+      inviteToken.user.email,
+      inviteToken.user.firstName,
+      `${frontendUrl}/login`,
+      { userId: inviteToken.userId },
+    );
   }
 
   private async handleFailedLogin(
