@@ -12,7 +12,7 @@ export class DashboardController {
 
   @Get('stats')
   getStats(@CurrentUser() user: AuthenticatedUser) {
-    return this.dashboardService.getStats(user.organisationId);
+    return this.dashboardService.getStats(user);
   }
 
   @Get('activity')
@@ -20,6 +20,6 @@ export class DashboardController {
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: RecentActivityQueryDto,
   ) {
-    return this.dashboardService.getRecentActivity(user.organisationId, query);
+    return this.dashboardService.getRecentActivity(user, query);
   }
 }

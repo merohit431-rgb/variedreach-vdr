@@ -75,6 +75,7 @@ export class DataRoomsController {
     return this.dataRoomsService.setArchived(id, false, user);
   }
 
+  @Roles(...MANAGER_ROLES)
   @Get(':id/members')
   listMembers(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.dataRoomsService.listMembers(id, user);

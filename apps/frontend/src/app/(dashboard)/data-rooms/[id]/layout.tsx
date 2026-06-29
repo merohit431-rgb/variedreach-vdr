@@ -40,10 +40,10 @@ export default function DataRoomLayout({ children }: { children: React.ReactNode
 
   const tabs = [
     { href: `/data-rooms/${id}`, label: 'Files' },
-    { href: `/data-rooms/${id}/members`, label: 'Members' },
+    { href: `/data-rooms/${id}/activity`, label: 'Activity' },
     ...(canManage
       ? [
-          { href: `/data-rooms/${id}/activity`, label: 'Activity' },
+          { href: `/data-rooms/${id}/members`, label: 'Members' },
           { href: `/data-rooms/${id}/reports`, label: 'Reports' },
         ]
       : []),

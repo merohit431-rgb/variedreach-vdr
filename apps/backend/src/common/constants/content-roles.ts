@@ -46,3 +46,19 @@ export const ASSIGNABLE_MEMBER_ROLES: UserRole[] = [
   UserRole.LEGAL_ADVISOR,
   UserRole.GUEST,
 ];
+
+// Roles with no organisation-wide or room-administration visibility — the
+// complement of DATA_ROOM_MANAGER_ROLES. Drives Members/Dashboard/Activity/
+// Reports visibility per the V1.1 RBAC requirements. Hand-written rather
+// than derived (e.g. "everything not in DATA_ROOM_MANAGER_ROLES") so a
+// future role addition can't silently land in the wrong bucket. Mirrored in
+// packages/shared/src/constants/roles.constants.ts for frontend conditional
+// rendering only — that copy is never the actual security boundary, this
+// one is.
+export const EXTERNAL_ROLES: UserRole[] = [
+  UserRole.PRA,
+  UserRole.COC_MEMBER,
+  UserRole.AUDITOR,
+  UserRole.LEGAL_ADVISOR,
+  UserRole.GUEST,
+];
