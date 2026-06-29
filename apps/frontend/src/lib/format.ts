@@ -8,3 +8,8 @@ export function formatBytes(bytes: number | string): string {
 
   return `${exponent === 0 ? size : size.toFixed(1)} ${units[exponent]}`;
 }
+
+export function truncateFilename(name: string, maxLength: number): string {
+  if (name.length <= maxLength) return name;
+  return `${name.slice(0, maxLength)}...`;
+}

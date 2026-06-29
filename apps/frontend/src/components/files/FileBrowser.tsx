@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, DragEvent } from 'react';
+import { FolderOpen, Upload, FolderPlus } from 'lucide-react';
 import {
   useFiles,
   useUploadFiles,
@@ -10,10 +11,16 @@ import {
   FileRecord,
 } from '@/hooks/use-files';
 import { getPreviewFilename } from '@variedreach-vdr/shared';
-import { formatBytes } from '@/lib/format';
+import { useCreateFolder } from '@/hooks/use-folders';
+import { formatBytes, truncateFilename } from '@/lib/format';
 import { extractErrorMessage } from '@/lib/error-message';
+import { useMediaQuery } from '@/hooks/use-media-query';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { FilePreviewModal } from './FilePreviewModal';
 import { VersionHistoryModal } from './VersionHistoryModal';
+
+const DESKTOP_NAME_MAX_LENGTH = 23;
+const MOBILE_NAME_MAX_LENGTH = 16;
 
 interface BrowserFileWithPath extends File {
   webkitRelativePath: string;
@@ -38,6 +45,9 @@ export function FileBrowser({
   const uploadFiles = useUploadFiles(dataRoomId);
   const updateFile = useUpdateFile(dataRoomId);
   const deleteFile = useDeleteFile(dataRoomId);
+  const createFolder = useCreateFolder(dataRoomId);
+  const isMobile = useMediaQuery('(max-width: 640px)');
+  const nameMaxLength = isMobile ? MOBILE_NAME_MAX_LENGTH : DESKTOP_NAME_MAX_LENGTH;
 
   const multiInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -84,6 +94,11 @@ export function FileBrowser({
     if (window.confirm(`Delete "${file.name}"?`)) {
       deleteFile.mutate(file.id);
     }
+  }
+
+  function handleCreateFolder() {
+    const name = window.prompt('New folder name');
+    if (name) createFolder.mutate({ name, parentId: folderId ?? undefined });
   }
 
   return (
@@ -135,18 +150,42 @@ export function FileBrowser({
       {isLoading ? (
         <p className="text-sm text-slate-400">Loading files…</p>
       ) : !files || files.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-400">
-          {canUpload ? 'No files yet — drag files here or use Upload.' : 'No files yet.'}
+        <div className="flex flex-col items-center rounded-lg border border-dashed border-slate-300 p-12 text-center">
+          <FolderOpen className="h-10 w-10 text-slate-300" aria-hidden="true" />
+          <p className="mt-3 text-sm font-medium text-slate-600">This folder is empty</p>
+          {canUpload ? (
+            <>
+              <p className="mt-1 text-sm text-slate-400">Drag &amp; drop files here, or use the buttons below.</p>
+              <div className="mt-4 flex gap-2">
+                <button
+                  onClick={() => multiInputRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+                >
+                  <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+                  Upload files
+                </button>
+                <button
+                  onClick={handleCreateFolder}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
+                  New folder
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="mt-1 text-sm text-slate-400">No files have been added to this folder yet.</p>
+          )}
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-          <table className="w-full text-left text-sm">
+          <table className="w-full table-fixed text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Size</th>
-                <th className="px-4 py-3">Modified</th>
-                <th className="px-4 py-3" />
+                <th className="w-24 px-4 py-3">Size</th>
+                <th className="w-32 px-4 py-3">Modified</th>
+                <th className="w-44 px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -158,12 +197,14 @@ export function FileBrowser({
                   className="hover:bg-slate-50"
                 >
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => setPreviewFile(file)}
-                      className="truncate font-medium text-slate-900 hover:underline"
-                    >
-                      {file.name}
-                    </button>
+                    <Tooltip label={file.name} side="top">
+                      <button
+                        onClick={() => setPreviewFile(file)}
+                        className="truncate font-medium text-slate-900 hover:underline"
+                      >
+                        {truncateFilename(file.name, nameMaxLength)}
+                      </button>
+                    </Tooltip>
                   </td>
                   <td className="px-4 py-3 text-slate-600">{formatBytes(file.sizeBytes)}</td>
                   <td className="px-4 py-3 text-slate-600">
