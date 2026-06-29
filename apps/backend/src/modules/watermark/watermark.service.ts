@@ -43,7 +43,7 @@ export class WatermarkService {
     if (IMAGE_EXTENSIONS.includes(normalized)) {
       return this.applyToImage(buffer, lines);
     }
-    if (normalized === 'txt') {
+    if (normalized === 'txt' || normalized === 'csv') {
       return this.applyToText(buffer, lines);
     }
 
