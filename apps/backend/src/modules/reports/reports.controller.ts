@@ -8,10 +8,13 @@ import { toExcelBuffer } from './exporters/excel.exporter';
 import { toPdfBuffer } from './exporters/pdf.exporter';
 import { sendFileResponse } from '../../common/utils/http-file-response.util';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
+import { DATA_ROOM_MANAGER_ROLES as MANAGER_ROLES } from '../../common/constants/content-roles';
 
 @ApiTags('Reports')
 @Controller({ path: 'data-rooms/:dataRoomId/reports', version: '1' })
+@Roles(...MANAGER_ROLES)
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
