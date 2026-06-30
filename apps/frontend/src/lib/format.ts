@@ -21,3 +21,17 @@ export function truncateFilename(name: string, maxLength: number): string {
 
   return `${name.slice(0, frontLength)}...${name.slice(name.length - backLength)}`;
 }
+
+export function formatSpeed(bytesPerSec: number): string {
+  if (!Number.isFinite(bytesPerSec) || bytesPerSec <= 0) return '';
+  return `${formatBytes(bytesPerSec)}/s`;
+}
+
+export function formatEta(seconds: number | null): string {
+  if (seconds === null || !Number.isFinite(seconds) || seconds < 0) return '';
+  if (seconds < 1) return 'almost done';
+  if (seconds < 60) return `${Math.round(seconds)}s left`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.round(seconds % 60);
+  return `${minutes}m ${remainingSeconds}s left`;
+}
