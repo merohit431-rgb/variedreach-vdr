@@ -1,23 +1,20 @@
 'use client';
 
 import { useEffect, useRef, useState, DragEvent } from 'react';
-import {
-  useFiles,
-  useUploadFiles,
-  useUpdateFile,
-  useDeleteFile,
-  downloadFile,
-  FileRecord,
-} from '@/hooks/use-files';
+import { useQueryClient } from '@tanstack/react-query';
+import { useFiles, useUpdateFile, useDeleteFile, downloadFile, FileRecord } from '@/hooks/use-files';
 import { getPreviewFilename } from '@variedreach-vdr/shared';
 import { formatBytes } from '@/lib/format';
-import { extractErrorMessage } from '@/lib/error-message';
+import { useUploadStore } from '@/store/upload-store';
+import { UploadProgressPanel } from './UploadProgressPanel';
 import { FilePreviewModal } from './FilePreviewModal';
 import { VersionHistoryModal } from './VersionHistoryModal';
 
 interface BrowserFileWithPath extends File {
   webkitRelativePath: string;
 }
+
+const READY_ITEM_DISPLAY_MS = 1500;
 
 export function FileBrowser({
   dataRoomId,
@@ -35,16 +32,23 @@ export function FileBrowser({
   canDownload: boolean;
 }) {
   const { data: files, isLoading } = useFiles(dataRoomId, { folderId, search });
-  const uploadFiles = useUploadFiles(dataRoomId);
   const updateFile = useUpdateFile(dataRoomId);
   const deleteFile = useDeleteFile(dataRoomId);
+  const queryClient = useQueryClient();
+  const { items: uploadItems, enqueue, remove: removeUploadItem } = useUploadStore();
 
   const multiInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
-  const [error, setError] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<FileRecord | null>(null);
   const [versionsFile, setVersionsFile] = useState<FileRecord | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+
+  const visibleUploadItems = uploadItems.filter(
+    (item) => item.dataRoomId === dataRoomId && item.folderId === folderId,
+  );
+  const hasActiveUploads = visibleUploadItems.some(
+    (item) => item.status === 'queued' || item.status === 'uploading' || item.status === 'processing',
+  );
 
   useEffect(() => {
     if (folderInputRef.current) {
@@ -53,17 +57,32 @@ export function FileBrowser({
     }
   }, []);
 
-  async function uploadFileList(fileList: FileList | File[]) {
+  // Once a file finishes uploading, let it sit briefly with a "Completed"
+  // checkmark before folding into the real file list below -- removing it
+  // immediately would make the row just vanish with no confirmation.
+  useEffect(() => {
+    const readyItems = visibleUploadItems.filter((item) => item.status === 'ready');
+    if (readyItems.length === 0) return;
+
+    const timers = readyItems.map((item) =>
+      setTimeout(() => removeUploadItem(item.id), READY_ITEM_DISPLAY_MS),
+    );
+    return () => timers.forEach(clearTimeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleUploadItems.map((item) => `${item.id}:${item.status}`).join(',')]);
+
+  function uploadFileList(fileList: FileList | File[]) {
     const list = Array.from(fileList) as BrowserFileWithPath[];
     if (list.length === 0) return;
 
-    setError(null);
-    const relativePaths = list.map((file) => file.webkitRelativePath || file.name);
-
-    try {
-      await uploadFiles.mutateAsync({ files: list, folderId, relativePaths });
-    } catch (err) {
-      setError(extractErrorMessage(err));
+    for (const file of list) {
+      enqueue({
+        dataRoomId,
+        folderId,
+        file,
+        relativePath: file.webkitRelativePath || file.name,
+        queryClient,
+      });
     }
   }
 
@@ -126,19 +145,18 @@ export function FileBrowser({
           >
             Upload folder
           </button>
-          {uploadFiles.isPending && <span className="self-center text-sm text-slate-400">Uploading…</span>}
         </div>
       )}
 
-      {error && <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      <UploadProgressPanel items={visibleUploadItems} />
 
       {isLoading ? (
         <p className="text-sm text-slate-400">Loading files…</p>
-      ) : !files || files.length === 0 ? (
+      ) : (!files || files.length === 0) && !hasActiveUploads ? (
         <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-400">
           {canUpload ? 'No files yet — drag files here or use Upload.' : 'No files yet.'}
         </div>
-      ) : (
+      ) : !files || files.length === 0 ? null : (
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
