@@ -6,6 +6,15 @@ export interface BreadcrumbItem {
   onClick?: () => void;
 }
 
+const COLLAPSE_THRESHOLD = 4;
+
+// Keeps the first item (root) and the last two (current + its parent),
+// collapsing everything in between into a single non-interactive "...".
+export function collapseBreadcrumbItems(items: BreadcrumbItem[]): BreadcrumbItem[] {
+  if (items.length <= COLLAPSE_THRESHOLD) return items;
+  return [items[0], { label: '...' }, ...items.slice(-2)];
+}
+
 export function Breadcrumb({ items, trailing }: { items: BreadcrumbItem[]; trailing?: ReactNode }) {
   return (
     <nav aria-label="Breadcrumb" className="flex items-center justify-between gap-3">
