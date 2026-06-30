@@ -8,31 +8,37 @@ export interface FileTypeRule {
 }
 
 const MB = 1024 * 1024;
+const GB = 1024 * MB;
+
+// Uniform 2GB ceiling across every category -- uploads now stream straight
+// to disk instead of buffering in memory (see LocalStorageProvider), so the
+// limit is no longer constrained by container RAM the way it used to be.
+const MAX_UPLOAD_SIZE = 2 * GB;
 
 export const FILE_TYPE_RULES: FileTypeRule[] = [
-  { category: 'Documents', extensions: ['pdf'], maxSizeBytes: 100 * MB, previewable: true },
-  { category: 'Documents', extensions: ['doc', 'docx', 'odt'], maxSizeBytes: 100 * MB, previewable: true },
+  { category: 'Documents', extensions: ['pdf'], maxSizeBytes: MAX_UPLOAD_SIZE, previewable: true },
+  { category: 'Documents', extensions: ['doc', 'docx', 'odt'], maxSizeBytes: MAX_UPLOAD_SIZE, previewable: true },
   {
     category: 'Spreadsheets',
     extensions: ['xls', 'xlsx', 'ods'],
-    maxSizeBytes: 50 * MB,
+    maxSizeBytes: MAX_UPLOAD_SIZE,
     previewable: true,
   },
-  { category: 'Spreadsheets', extensions: ['csv'], maxSizeBytes: 50 * MB, previewable: true },
+  { category: 'Spreadsheets', extensions: ['csv'], maxSizeBytes: MAX_UPLOAD_SIZE, previewable: true },
   {
     category: 'Presentations',
     extensions: ['ppt', 'pptx', 'odp'],
-    maxSizeBytes: 100 * MB,
+    maxSizeBytes: MAX_UPLOAD_SIZE,
     previewable: true,
   },
   {
     category: 'Images',
     extensions: ['jpg', 'jpeg', 'png', 'gif', 'tiff', 'webp'],
-    maxSizeBytes: 20 * MB,
+    maxSizeBytes: MAX_UPLOAD_SIZE,
     previewable: true,
   },
-  { category: 'Others', extensions: ['txt'], maxSizeBytes: 10 * MB, previewable: true },
-  { category: 'Others', extensions: ['msg', 'eml'], maxSizeBytes: 10 * MB, previewable: false },
+  { category: 'Others', extensions: ['txt'], maxSizeBytes: MAX_UPLOAD_SIZE, previewable: true },
+  { category: 'Others', extensions: ['msg', 'eml'], maxSizeBytes: MAX_UPLOAD_SIZE, previewable: false },
 ];
 
 // Office formats that get converted to PDF (via Gotenberg/LibreOffice) before
