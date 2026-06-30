@@ -184,8 +184,8 @@ export function FileBrowser({
               <tr>
                 <th className="px-4 py-3">Name</th>
                 <th className="w-24 px-4 py-3">Size</th>
-                <th className="w-32 px-4 py-3">Modified</th>
-                <th className="w-44 px-4 py-3" />
+                <th className="w-36 px-4 py-3">Modified</th>
+                <th className="w-56 px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -206,8 +206,10 @@ export function FileBrowser({
                       </button>
                     </Tooltip>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{formatBytes(file.sizeBytes)}</td>
-                  <td className="px-4 py-3 text-slate-600">
+                  <td className="overflow-hidden whitespace-nowrap px-4 py-3 text-slate-600">
+                    {formatBytes(file.sizeBytes)}
+                  </td>
+                  <td className="overflow-hidden whitespace-nowrap px-4 py-3 text-slate-600">
                     {new Date(file.updatedAt).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-3">
