@@ -106,8 +106,10 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml exec nginx nginx
 # 8. Cron + backups
 mkdir -p /var/log/insolvency-vdr-staging /var/backups/insolvency-vdr-staging
 chmod +x /opt/variedreach-vdr-staging/infrastructure/scripts/backup-db-staging.sh
+chmod +x /opt/variedreach-vdr-staging/infrastructure/scripts/cleanup-upload-temp.sh
 # add to crontab:
 # 0 2 * * * /opt/variedreach-vdr-staging/infrastructure/scripts/backup-db-staging.sh >> /var/log/insolvency-vdr-staging/backup.log 2>&1
+# 0 * * * * /opt/variedreach-vdr-staging/infrastructure/scripts/cleanup-upload-temp.sh vdr_staging_backend >> /var/log/insolvency-vdr-staging/upload-temp-cleanup.log 2>&1
 ```
 
 Step 6's rebuild briefly recreates production's `backend`/`frontend`/`nginx` containers (Compose

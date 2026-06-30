@@ -118,6 +118,7 @@ Installed via `crontab -e` (or `crontab -l` to inspect current state):
 17 3,15 * * * /opt/variedreach-vdr/infrastructure/scripts/renew-cert.sh >> /var/log/insolvency-vdr/certbot-renew.log 2>&1
 0 2 * * * /opt/variedreach-vdr/infrastructure/scripts/backup-db.sh >> /var/log/insolvency-vdr/backup.log 2>&1
 0 */6 * * * /opt/variedreach-vdr/infrastructure/scripts/check-disk-space.sh >> /var/log/insolvency-vdr/disk-space.log 2>&1
+0 * * * * /opt/variedreach-vdr/infrastructure/scripts/cleanup-upload-temp.sh vdr_backend >> /var/log/insolvency-vdr/upload-temp-cleanup.log 2>&1
 ```
 
 `mkdir -p /var/log/insolvency-vdr` first if it doesn't already exist.
@@ -133,6 +134,11 @@ Installed via `crontab -e` (or `crontab -l` to inspect current state):
   (`DISK_THRESHOLD_PERCENT` override). Worth watching specifically on this app — there's no
   S3/object-storage migration in V1.0, so the VPS's local disk is the only place uploaded documents
   live.
+- **Upload temp cleanup** (hourly): `cleanup-upload-temp.sh` removes files from the upload temp
+  directory older than 2 hours (`RETENTION_MINUTES` override). Uploads stream to disk before being
+  moved into permanent storage; a cancelled or dropped upload leaves a partial file there with no
+  code path that cleans it up on its own. With uploads now up to 2GB, this matters more than it
+  used to.
 
 Check logs at `/var/log/insolvency-vdr/*.log` to confirm these are actually running, not just
 installed.
