@@ -174,6 +174,23 @@ Requires typing `restore` to confirm. Stops the backend during the restore so no
 mid-restore, drops and recreates the database from the dump, replaces the uploads volume contents,
 then restarts the backend.
 
+### Applying `init.sql` to an existing database
+
+`init.sql` (`infrastructure/docker/postgres/init.sql`) only runs automatically on a brand-new
+Postgres volume — `docker-entrypoint-initdb.d` scripts never re-run once a database already exists.
+To bring an existing environment (staging, production, a long-lived local dev db) in sync with the
+latest version of that file — e.g. after a trigger definition changes — pipe it through `psql`
+directly instead of recreating the volume:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T postgres \
+  psql -U vdr_user -d insolvency_vdr < infrastructure/docker/postgres/init.sql
+```
+
+(swap the compose files / db user / db name for staging as appropriate). Everything in `init.sql`
+is written to be safe to re-run this way — `CREATE EXTENSION IF NOT EXISTS`, `CREATE OR REPLACE
+FUNCTION`, `DROP TRIGGER IF EXISTS` before each `CREATE TRIGGER`.
+
 ## 8. Production change management
 
 **Production is never modified directly.** Every change — code, config, infrastructure — follows
