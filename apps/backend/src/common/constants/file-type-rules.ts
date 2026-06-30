@@ -11,15 +11,21 @@ export interface FileTypeRule {
 }
 
 const MB = 1024 * 1024;
+const GB = 1024 * MB;
+
+// Uniform 2GB ceiling -- uploads stream straight to disk instead of
+// buffering in memory (see LocalStorageProvider), so this is no longer
+// constrained by container RAM the way it used to be.
+const MAX_UPLOAD_SIZE = 2 * GB;
 
 export const FILE_TYPE_RULES: FileTypeRule[] = [
-  { category: 'Documents', extensions: ['pdf'], maxSizeBytes: 100 * MB },
-  { category: 'Documents', extensions: ['doc', 'docx', 'odt'], maxSizeBytes: 100 * MB },
-  { category: 'Spreadsheets', extensions: ['xls', 'xlsx', 'csv', 'ods'], maxSizeBytes: 50 * MB },
-  { category: 'Presentations', extensions: ['ppt', 'pptx', 'odp'], maxSizeBytes: 100 * MB },
-  { category: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'tiff', 'webp'], maxSizeBytes: 20 * MB },
-  { category: 'Others', extensions: ['txt'], maxSizeBytes: 10 * MB },
-  { category: 'Others', extensions: ['msg', 'eml'], maxSizeBytes: 10 * MB },
+  { category: 'Documents', extensions: ['pdf'], maxSizeBytes: MAX_UPLOAD_SIZE },
+  { category: 'Documents', extensions: ['doc', 'docx', 'odt'], maxSizeBytes: MAX_UPLOAD_SIZE },
+  { category: 'Spreadsheets', extensions: ['xls', 'xlsx', 'csv', 'ods'], maxSizeBytes: MAX_UPLOAD_SIZE },
+  { category: 'Presentations', extensions: ['ppt', 'pptx', 'odp'], maxSizeBytes: MAX_UPLOAD_SIZE },
+  { category: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'tiff', 'webp'], maxSizeBytes: MAX_UPLOAD_SIZE },
+  { category: 'Others', extensions: ['txt'], maxSizeBytes: MAX_UPLOAD_SIZE },
+  { category: 'Others', extensions: ['msg', 'eml'], maxSizeBytes: MAX_UPLOAD_SIZE },
 ];
 
 export function getFileTypeRule(extension: string): FileTypeRule | undefined {
