@@ -119,9 +119,13 @@ Installed via `crontab -e` (or `crontab -l` to inspect current state):
 0 2 * * * /opt/variedreach-vdr/infrastructure/scripts/backup-db.sh >> /var/log/insolvency-vdr/backup.log 2>&1
 0 */6 * * * /opt/variedreach-vdr/infrastructure/scripts/check-disk-space.sh >> /var/log/insolvency-vdr/disk-space.log 2>&1
 0 * * * * /opt/variedreach-vdr/infrastructure/scripts/cleanup-upload-temp.sh vdr_backend >> /var/log/insolvency-vdr/upload-temp-cleanup.log 2>&1
+0 3 * * 0 /opt/variedreach-vdr/infrastructure/scripts/docker-maintenance.sh
 ```
 
 `mkdir -p /var/log/insolvency-vdr` first if it doesn't already exist.
+
+`docker-maintenance.sh` writes its own log internally (to `/var/log/vdr/docker-maintenance.log`, which it
+creates itself), so its crontab line has no `>>` redirect of its own.
 
 - **Certificate renewal** (twice daily — Let's Encrypt's own recommendation, so a transient failure
   doesn't risk the cert expiring before the next attempt): `renew-cert.sh` runs `certbot renew`
@@ -139,6 +143,13 @@ Installed via `crontab -e` (or `crontab -l` to inspect current state):
   moved into permanent storage; a cancelled or dropped upload leaves a partial file there with no
   code path that cleans it up on its own. With uploads now up to 2GB, this matters more than it
   used to.
+- **Docker build cache maintenance** (weekly, Sunday 3am): `docker-maintenance.sh` runs
+  `docker builder prune -af --filter "until=168h"`, removing build cache older than 7 days. Scoped
+  to build cache only — by definition this command cannot touch running containers, in-use images,
+  named volumes, or any data. Repeated `--no-cache` rebuilds during development can otherwise let
+  this grow to tens of GB unnoticed (one session took it to 62.97GB before a manual prune). Logs
+  every run to `/var/log/vdr/docker-maintenance.log`, flags the run as notable if it reclaims more
+  than 5GB (`NOTABLE_RECLAIM_GB` override), and logs and exits non-zero on failure.
 
 Check logs at `/var/log/insolvency-vdr/*.log` to confirm these are actually running, not just
 installed.
