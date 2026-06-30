@@ -45,16 +45,21 @@ export function FileBrowser({
   const isMobile = useMediaQuery('(max-width: 640px)');
   const nameMaxLength = isMobile ? MOBILE_NAME_MAX_LENGTH : DESKTOP_NAME_MAX_LENGTH;
   const queryClient = useQueryClient();
-  const { items: uploadItems, enqueue, remove: removeUploadItem } = useUploadStore();
+  const { items: uploadItems, enqueue } = useUploadStore();
 
   const multiInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const [previewFile, setPreviewFile] = useState<FileRecord | null>(null);
   const [versionsFile, setVersionsFile] = useState<FileRecord | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  // Items the inline panel has finished showing -- hidden here only, not
+  // removed from the global store, so the sticky upload manager (which can
+  // outlive this component) keeps a full history regardless of which
+  // folder the user was looking at when an upload finished.
+  const [locallyDismissedIds, setLocallyDismissedIds] = useState<Set<string>>(new Set());
 
   const visibleUploadItems = uploadItems.filter(
-    (item) => item.dataRoomId === dataRoomId && item.folderId === folderId,
+    (item) => item.dataRoomId === dataRoomId && item.folderId === folderId && !locallyDismissedIds.has(item.id),
   );
   const hasActiveUploads = visibleUploadItems.some(
     (item) => item.status === 'queued' || item.status === 'uploading' || item.status === 'processing',
@@ -68,14 +73,15 @@ export function FileBrowser({
   }, []);
 
   // Once a file finishes uploading, let it sit briefly with a "Completed"
-  // checkmark before folding into the real file list below -- removing it
-  // immediately would make the row just vanish with no confirmation.
+  // checkmark before folding into the real file list below.
   useEffect(() => {
     const readyItems = visibleUploadItems.filter((item) => item.status === 'ready');
     if (readyItems.length === 0) return;
 
     const timers = readyItems.map((item) =>
-      setTimeout(() => removeUploadItem(item.id), READY_ITEM_DISPLAY_MS),
+      setTimeout(() => {
+        setLocallyDismissedIds((prev) => new Set(prev).add(item.id));
+      }, READY_ITEM_DISPLAY_MS),
     );
     return () => timers.forEach(clearTimeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
