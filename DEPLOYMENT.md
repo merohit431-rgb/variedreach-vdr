@@ -120,6 +120,7 @@ Installed via `crontab -e` (or `crontab -l` to inspect current state):
 0 */6 * * * /opt/variedreach-vdr/infrastructure/scripts/check-disk-space.sh >> /var/log/insolvency-vdr/disk-space.log 2>&1
 0 * * * * /opt/variedreach-vdr/infrastructure/scripts/cleanup-upload-temp.sh vdr_backend >> /var/log/insolvency-vdr/upload-temp-cleanup.log 2>&1
 0 3 * * 0 /opt/variedreach-vdr/infrastructure/scripts/docker-maintenance.sh
+*/5 * * * * /opt/variedreach-vdr/infrastructure/scripts/monitor-backend-memory.sh vdr_backend
 ```
 
 `mkdir -p /var/log/insolvency-vdr` first if it doesn't already exist.
@@ -150,6 +151,13 @@ creates itself), so its crontab line has no `>>` redirect of its own.
   this grow to tens of GB unnoticed (one session took it to 62.97GB before a manual prune). Logs
   every run to `/var/log/vdr/docker-maintenance.log`, flags the run as notable if it reclaims more
   than 5GB (`NOTABLE_RECLAIM_GB` override), and logs and exits non-zero on failure.
+- **Backend memory monitoring** (every 5 minutes): `monitor-backend-memory.sh` appends the backend
+  container's current memory usage and percent-of-limit to `/var/log/vdr/backend-memory.log`. Added
+  after the 512MB limit OOM-killed the backend process — once a limit changes, this is how to tell
+  whether the new ceiling has real headroom or usage is still climbing toward it, without needing to
+  watch `docker stats` live. To find the peak over any window:
+  `awk '{print $NF}' /var/log/vdr/backend-memory.log | sort -V | tail -1` (or just `grep` the log
+  for the highest `MemPerc` value).
 
 Check logs at `/var/log/insolvency-vdr/*.log` to confirm these are actually running, not just
 installed.
