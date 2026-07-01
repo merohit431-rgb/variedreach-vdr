@@ -116,3 +116,27 @@ export function useDeleteDataRoom() {
     },
   });
 }
+
+export interface SecuritySettings {
+  ipAllowlistEnabled?: boolean;
+  allowedIps?: string[];
+  ndaEnabled?: boolean;
+  ndaText?: string | null;
+}
+
+export function useUpdateSecuritySettings(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (settings: SecuritySettings) => {
+      const response = await apiClient.patch<{ data: DataRoom }>(
+        `/data-rooms/${id}/security`,
+        settings,
+      );
+      return response.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['data-rooms', id] });
+      queryClient.invalidateQueries({ queryKey: ['data-rooms', id, 'nda'] });
+    },
+  });
+}

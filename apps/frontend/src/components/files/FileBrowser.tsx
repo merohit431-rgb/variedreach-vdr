@@ -7,6 +7,7 @@ import {
   useUpdateFile,
   useDeleteFile,
   downloadFile,
+  bulkDownloadFiles,
   FileRecord,
 } from '@/hooks/use-files';
 import { getPreviewFilename } from '@variedreach-vdr/shared';
@@ -45,6 +46,8 @@ export function FileBrowser({
   const [previewFile, setPreviewFile] = useState<FileRecord | null>(null);
   const [versionsFile, setVersionsFile] = useState<FileRecord | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkDownloading, setIsBulkDownloading] = useState(false);
 
   useEffect(() => {
     if (folderInputRef.current) {
@@ -86,6 +89,39 @@ export function FileBrowser({
     }
   }
 
+  function toggleSelect(fileId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(fileId)) next.delete(fileId);
+      else next.add(fileId);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (!files) return;
+    if (selectedIds.size === files.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(files.map((f) => f.id)));
+    }
+  }
+
+  async function handleBulkDownload() {
+    if (selectedIds.size === 0) return;
+    setIsBulkDownloading(true);
+    setError(null);
+    try {
+      const dateStr = new Date().toISOString().slice(0, 10);
+      await bulkDownloadFiles(dataRoomId, Array.from(selectedIds), `data-room-export-${dateStr}.zip`);
+      setSelectedIds(new Set());
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setIsBulkDownloading(false);
+    }
+  }
+
   return (
     <div
       onDragOver={(e) => {
@@ -98,37 +134,48 @@ export function FileBrowser({
       onDrop={canUpload ? handleDrop : undefined}
       className={`rounded-lg ${isDragOver ? 'ring-2 ring-slate-400' : ''}`}
     >
-      {canUpload && (
-        <div className="mb-3 flex gap-2">
-          <input
-            ref={multiInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={(e) => e.target.files && uploadFileList(e.target.files)}
-          />
-          <input
-            ref={folderInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={(e) => e.target.files && uploadFileList(e.target.files)}
-          />
+      <div className="mb-3 flex items-center gap-2">
+        {canUpload && (
+          <>
+            <input
+              ref={multiInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => e.target.files && uploadFileList(e.target.files)}
+            />
+            <input
+              ref={folderInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => e.target.files && uploadFileList(e.target.files)}
+            />
+            <button
+              onClick={() => multiInputRef.current?.click()}
+              className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+            >
+              Upload files
+            </button>
+            <button
+              onClick={() => folderInputRef.current?.click()}
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+            >
+              Upload folder
+            </button>
+            {uploadFiles.isPending && <span className="self-center text-sm text-slate-400">Uploading…</span>}
+          </>
+        )}
+        {canDownload && selectedIds.size > 0 && (
           <button
-            onClick={() => multiInputRef.current?.click()}
-            className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+            onClick={handleBulkDownload}
+            disabled={isBulkDownloading}
+            className="ml-auto rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
-            Upload files
+            {isBulkDownloading ? 'Preparing ZIP…' : `Download selected (${selectedIds.size})`}
           </button>
-          <button
-            onClick={() => folderInputRef.current?.click()}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-          >
-            Upload folder
-          </button>
-          {uploadFiles.isPending && <span className="self-center text-sm text-slate-400">Uploading…</span>}
-        </div>
-      )}
+        )}
+      </div>
 
       {error && <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
@@ -143,6 +190,16 @@ export function FileBrowser({
           <table className="w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
+                {canDownload && (
+                  <th className="w-8 px-3 py-3">
+                    <input
+                      type="checkbox"
+                      checked={files.length > 0 && selectedIds.size === files.length}
+                      onChange={toggleSelectAll}
+                      className="h-4 w-4 rounded border-slate-300"
+                    />
+                  </th>
+                )}
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Size</th>
                 <th className="px-4 py-3">Modified</th>
@@ -155,8 +212,19 @@ export function FileBrowser({
                   key={file.id}
                   draggable={canUpload}
                   onDragStart={(e) => e.dataTransfer.setData('text/file-id', file.id)}
-                  className="hover:bg-slate-50"
+                  className={`hover:bg-slate-50 ${selectedIds.has(file.id) ? 'bg-slate-50' : ''}`}
                 >
+                  {canDownload && (
+                    <td className="w-8 px-3 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(file.id)}
+                        onChange={() => toggleSelect(file.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-4 w-4 rounded border-slate-300"
+                      />
+                    </td>
+                  )}
                   <td className="px-4 py-3">
                     <button
                       onClick={() => setPreviewFile(file)}

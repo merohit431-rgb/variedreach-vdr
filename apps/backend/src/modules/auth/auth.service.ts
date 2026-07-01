@@ -133,6 +133,11 @@ export class AuthService {
     };
   }
 
+  async getMfaStatus(actor: AuthenticatedUser): Promise<{ totpEnabled: boolean }> {
+    const user = await this.prisma.user.findUnique({ where: { id: actor.id }, select: { totpEnabled: true } });
+    return { totpEnabled: user?.totpEnabled ?? false };
+  }
+
   async setupMfa(actor: AuthenticatedUser): Promise<{ qrCodeDataUrl: string; secret: string }> {
     const secret = generateSecret();
     await this.prisma.user.update({

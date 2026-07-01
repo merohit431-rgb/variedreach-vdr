@@ -119,6 +119,12 @@ export class AuthController {
     await this.authService.acceptInvite(dto.token, dto.password);
   }
 
+  @SkipThrottle()
+  @Get('mfa/status')
+  async mfaStatus(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.getMfaStatus(user);
+  }
+
   @Post('mfa/setup')
   async mfaSetup(@CurrentUser() user: AuthenticatedUser) {
     return this.authService.setupMfa(user);

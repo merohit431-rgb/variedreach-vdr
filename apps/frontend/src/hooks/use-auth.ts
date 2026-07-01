@@ -18,9 +18,16 @@ export function useAuth() {
     async (input: LoginInput) => {
       try {
         const response = await apiClient.post('/auth/login', input);
-        const { accessToken: token, user: loggedInUser } = response.data.data;
-        setAuth(loggedInUser, token);
-        return { success: true as const };
+        const data = response.data.data;
+        if (data.requiresMfa) {
+          return {
+            success: true as const,
+            requiresMfa: true as const,
+            mfaChallengeToken: data.mfaChallengeToken as string,
+          };
+        }
+        setAuth(data.user, data.accessToken);
+        return { success: true as const, requiresMfa: false as const };
       } catch (error) {
         return { success: false as const, message: extractErrorMessage(error) };
       }
