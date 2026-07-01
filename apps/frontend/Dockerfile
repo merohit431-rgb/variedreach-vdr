@@ -19,6 +19,10 @@ RUN npm run build --workspace=apps/frontend
 FROM node:20-alpine AS production
 WORKDIR /app
 ENV NODE_ENV=production
+
+# Non-root service user — no home directory, no shell, no password
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 COPY package.json package-lock.json ./
 COPY apps/backend/package.json ./apps/backend/package.json
 COPY apps/frontend/package.json ./apps/frontend/package.json
@@ -27,5 +31,13 @@ RUN npm ci --omit=dev --ignore-scripts --workspace=apps/frontend
 COPY --from=build /app/apps/frontend/.next ./apps/frontend/.next
 COPY --from=build /app/apps/frontend/public ./apps/frontend/public
 
+# Transfer ownership so appuser can write Next.js page cache at runtime
+RUN chown -R appuser:appgroup /app
+USER appuser
+
 EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -qO- http://localhost:3000 || exit 1
+
 CMD ["npm", "run", "start", "--workspace=apps/frontend"]

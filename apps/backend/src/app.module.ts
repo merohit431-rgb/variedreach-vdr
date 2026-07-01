@@ -1,11 +1,14 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import appConfig from './config/app.config';
 import jwtConfig from './config/jwt.config';
 import mailConfig from './config/mail.config';
 import storageThresholdConfig from './config/storage-threshold.config';
 import conversionConfig from './config/conversion.config';
 import paymentConfig from './config/payment.config';
+import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -35,6 +38,19 @@ import { SuperAdminModule } from './modules/super-admin/super-admin.module';
       load: [appConfig, jwtConfig, mailConfig, storageThresholdConfig, conversionConfig, paymentConfig],
       envFilePath: ['.env'],
     }),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        throttlers: [
+          {
+            name: 'global',
+            ttl: config.get<number>('app.throttle.globalTtl', 60),
+            limit: config.get<number>('app.throttle.globalLimit', 300),
+          },
+        ],
+      }),
+    }),
     PrismaModule,
     AuditModule,
     EmailLogModule,
@@ -56,6 +72,13 @@ import { SuperAdminModule } from './modules/super-admin/super-admin.module';
     SuperAdminModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
+  }
+}

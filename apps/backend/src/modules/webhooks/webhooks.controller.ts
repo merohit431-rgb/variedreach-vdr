@@ -1,10 +1,12 @@
 import { Controller, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { ApiExcludeController } from '@nestjs/swagger';
 import type { RawBodyRequest } from '@nestjs/common';
 import type { Request } from 'express';
 import { Public } from '../auth/decorators/public.decorator';
 import { ResendWebhookService } from './resend-webhook.service';
 
+@SkipThrottle()
 @ApiExcludeController()
 @Controller({ path: 'webhooks', version: '1' })
 export class WebhooksController {

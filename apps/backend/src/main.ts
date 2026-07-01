@@ -42,10 +42,33 @@ async function bootstrap() {
   // audit logs and watermarks depend on an accurate IP address.
   app.getHttpAdapter().getInstance().set('trust proxy', 1);
 
+  const isProd = nodeEnv === 'production';
+
   app.use(
     helmet({
-      contentSecurityPolicy: nodeEnv === 'production',
-      crossOriginEmbedderPolicy: nodeEnv === 'production',
+      // CSP enabled in all environments. Non-production relaxes script-src so
+      // Swagger UI (inline scripts) works; production is fully strict.
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: isProd ? ["'self'"] : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", 'data:', 'blob:'],
+          connectSrc: ["'self'", frontendUrl],
+          fontSrc: ["'self'"],
+          objectSrc: ["'none'"],
+          frameAncestors: ["'none'"],
+          ...(isProd ? { upgradeInsecureRequests: [] } : {}),
+        },
+      },
+      // Prevent clickjacking — already covered by frameAncestors:'none' in CSP
+      // but the legacy header adds defence-in-depth for older proxies/browsers.
+      frameguard: { action: 'deny' },
+      // Deprecated XSS auditor — explicitly disabled to avoid triggering
+      // the flawed mode=block behaviour in old IE/Edge builds.
+      xXssProtection: false,
+      crossOriginEmbedderPolicy: isProd,
+      crossOriginResourcePolicy: { policy: 'same-site' },
     }),
   );
 
@@ -96,8 +119,6 @@ async function bootstrap() {
   }
 
   await app.listen(port, '0.0.0.0');
-  console.log(`Varied Reach VDR backend running on http://localhost:${port}`);
-  console.log(`Swagger docs: http://localhost:${port}/api/docs`);
 }
 
 bootstrap();

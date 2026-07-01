@@ -2,6 +2,7 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import { ConfigService } from '@nestjs/config';
 import { File, UserRole } from '@prisma/client';
 import { getFileTypeRule, isOfficeConvertible, getPreviewFilename } from '../../common/constants/file-type-rules';
+import { validateMagicBytes } from '../../common/utils/magic-bytes.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { DataRoomAccessService } from '../data-room-access/data-room-access.service';
@@ -70,6 +71,22 @@ export class FilesService {
       await this.assertFolderExists(dataRoomId, folderId);
     }
 
+    // Pre-flight: verify the batch would not exceed the data room's storage quota
+    // before writing a single byte to disk.
+    const dataRoom = await this.prisma.dataRoom.findUnique({
+      where: { id: dataRoomId },
+      select: { storageUsedBytes: true, storageLimitGb: true },
+    });
+    if (dataRoom) {
+      const quotaBytes = BigInt(dataRoom.storageLimitGb) * 1024n * 1024n * 1024n;
+      const batchBytes = multerFiles.reduce((sum, f) => sum + BigInt(f.size), 0n);
+      if (dataRoom.storageUsedBytes + batchBytes > quotaBytes) {
+        throw new BadRequestException(
+          `Upload would exceed the data room's ${dataRoom.storageLimitGb} GB storage quota`,
+        );
+      }
+    }
+
     const created: File[] = [];
 
     for (let index = 0; index < multerFiles.length; index += 1) {
@@ -86,6 +103,15 @@ export class FilesService {
       if (multerFile.size > rule.maxSizeBytes) {
         throw new BadRequestException(
           `"${fileName}" exceeds the ${Math.round(rule.maxSizeBytes / (1024 * 1024))}MB limit for ${rule.category}`,
+        );
+      }
+
+      // Magic byte check — validates the actual file bytes match the declared
+      // extension so a renamed executable cannot masquerade as a PDF.
+      const magic = validateMagicBytes(multerFile.buffer, extension);
+      if (!magic.valid) {
+        throw new BadRequestException(
+          `"${fileName}" appears to be corrupt or its content does not match the .${extension} format`,
         );
       }
 
@@ -216,6 +242,30 @@ export class FilesService {
     if (rule && multerFile.size > rule.maxSizeBytes) {
       throw new BadRequestException(
         `New version exceeds the ${Math.round(rule.maxSizeBytes / (1024 * 1024))}MB limit for ${rule.category}`,
+      );
+    }
+
+    // Quota pre-check: the net size delta (new - old) must not push usage over limit.
+    const dataRoomForVersion = await this.prisma.dataRoom.findUnique({
+      where: { id: dataRoomId },
+      select: { storageUsedBytes: true, storageLimitGb: true },
+    });
+    if (dataRoomForVersion) {
+      const quotaBytes = BigInt(dataRoomForVersion.storageLimitGb) * 1024n * 1024n * 1024n;
+      const netDelta = BigInt(multerFile.size) - file.sizeBytes;
+      if (dataRoomForVersion.storageUsedBytes + netDelta > quotaBytes) {
+        throw new BadRequestException(
+          `New version would exceed the data room's ${dataRoomForVersion.storageLimitGb} GB storage quota`,
+        );
+      }
+    }
+
+    // Magic byte check — the new version must match the extension declared at
+    // original upload time; extension changes are not allowed via versioning.
+    const magic = validateMagicBytes(multerFile.buffer, file.extension);
+    if (!magic.valid) {
+      throw new BadRequestException(
+        `New version content does not match the .${file.extension} format. The file may be corrupt or spoofed.`,
       );
     }
 

@@ -10,6 +10,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import { ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
@@ -32,6 +33,7 @@ export class AuthController {
   ) {}
 
   @Public()
+  @Throttle({ global: { ttl: 900, limit: 5 } })
   @Post('login')
   async login(
     @Body() dto: LoginDto,
@@ -49,6 +51,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ global: { ttl: 60, limit: 30 } })
   @Post('refresh')
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const refreshToken = req.cookies?.[REFRESH_COOKIE_NAME];
@@ -67,6 +70,7 @@ export class AuthController {
     return { accessToken: result.accessToken };
   }
 
+  @SkipThrottle()
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
   async logout(
@@ -78,12 +82,14 @@ export class AuthController {
     res.clearCookie(REFRESH_COOKIE_NAME, { path: '/api/v1/auth' });
   }
 
+  @SkipThrottle()
   @Get('me')
   me(@CurrentUser() user: AuthenticatedUser) {
     return user;
   }
 
   @Public()
+  @Throttle({ global: { ttl: 900, limit: 5 } })
   @Post('forgot-password')
   @HttpCode(HttpStatus.NO_CONTENT)
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
@@ -91,6 +97,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ global: { ttl: 900, limit: 5 } })
   @Post('reset-password')
   @HttpCode(HttpStatus.NO_CONTENT)
   async resetPassword(@Body() dto: ResetPasswordDto) {
@@ -98,6 +105,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ global: { ttl: 900, limit: 10 } })
   @Post('accept-invite')
   @HttpCode(HttpStatus.NO_CONTENT)
   async acceptInvite(@Body() dto: AcceptInviteDto) {
