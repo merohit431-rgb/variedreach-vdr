@@ -76,7 +76,15 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          # Raised from 512M after this limit OOM-killed the backend process
+          # (watermarking a moderately-sized PDF is enough to spike well past
+          # 512M -- pdf-lib loads the whole file and re-serializes it, using
+          # several times the file's own size). 2GB matches what staging
+          # already runs with.
+          memory: 2048M
+    networks:
+      - vdr_network
+      - vdr_edge
 
   frontend:
     build:
@@ -103,6 +111,9 @@ services:
       resources:
         limits:
           memory: 512M
+    networks:
+      - vdr_network
+      - vdr_edge
 
   nginx:
     build:
@@ -124,8 +135,9 @@ services:
       - vdr_network
       # Lets this same Nginx also proxy staging.vdr.variedreach.com to the
       # fully separate staging Compose project — see docker-compose.staging.yml
-      # and STAGING.md. Production's own backend/frontend are unaffected;
-      # they're never on this network.
+      # and STAGING.md. Production containers (backend, frontend) also join
+      # this network so nginx resolves them by container name (vdr_backend,
+      # vdr_frontend), which is unique and avoids conflicts with staging.
       - vdr_edge
     deploy:
       resources:
