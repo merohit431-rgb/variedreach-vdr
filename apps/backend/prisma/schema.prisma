@@ -100,12 +100,21 @@ model Organisation {
   slug           String    @unique
   logoUrl        String?
   storageLimitGb Int       @default(25)
+  // SaaS plan limits — null for legacy/manually-provisioned orgs
+  planSlug       String?
+  userLimit      Int       @default(10)
+  gstNumber      String?
+  address        String?
+  mobileNumber   String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  users     User[]
-  dataRooms DataRoom[]
+  users         User[]
+  dataRooms     DataRoom[]
+  subscription  Subscription?
+  payments      Payment[]
+  invoices      Invoice[]
 
   @@map("organisations")
 }
@@ -192,9 +201,16 @@ model Registration {
   companyAddress        String?
   selectedPlan          String
   selectedStorageGb     Int
+  billingCycle          String    @default("MONTHLY")
   verificationTokenHash String?   @unique
   verificationExpiresAt DateTime?
   verifiedAt            DateTime?
+  // Set when a payment order is created
+  gatewayOrderId        String?   @unique
+  // Set to 'COMPLETED' after successful provisioning
+  paymentStatus         String?
+  // Set after Org + User are created — idempotency guard
+  provisionedAt         DateTime?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -466,8 +482,11 @@ enum EmailTemplate {
   STORAGE_WARNING_80
   STORAGE_CRITICAL_95
   STORAGE_FULL_100
-  SUBSCRIPTION_ACTIVATED // future — no billing system exists yet
-  SUBSCRIPTION_RENEWAL_REMINDER // future — no billing system exists yet
+  SUBSCRIPTION_ACTIVATED
+  SUBSCRIPTION_RENEWAL_REMINDER
+  SUBSCRIPTION_UPGRADE_CONFIRMATION
+  SUBSCRIPTION_CANCELLED
+  DOCUMENT_UPLOADED
 }
 
 // userId/dataRoomId are both optional since not every email has either
@@ -498,4 +517,106 @@ model EmailLog {
   @@index([userId, sentAt])
   @@index([dataRoomId])
   @@map("email_logs")
+}
+
+// ═══════════════════════════════════════════════════════════
+// SAAS BILLING (Subscription, Payment, Invoice)
+// ═══════════════════════════════════════════════════════════
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESSFUL
+  FAILED
+  REFUNDED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  VOID
+}
+
+model Subscription {
+  id                 String             @id @default(uuid())
+  organisationId     String             @unique
+  planSlug           String
+  billingCycle       BillingCycle
+  storageGb          Int
+  status             SubscriptionStatus
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd  Boolean            @default(false)
+  cancelledAt        DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  payments     Payment[]
+  invoices     Invoice[]
+
+  @@map("subscriptions")
+}
+
+model Payment {
+  id               String        @id @default(uuid())
+  subscriptionId   String
+  organisationId   String
+  amountPaisa      Int
+  currency         String        @default("INR")
+  status           PaymentStatus
+  gatewayOrderId   String?       @unique
+  gatewayPaymentId String?       @unique
+  gatewaySignature String?
+  failureReason    String?
+  metadata         Json?
+  paidAt           DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  invoice      Invoice?
+
+  @@index([organisationId, createdAt])
+  @@map("payments")
+}
+
+// Amounts stored in paise (1 INR = 100 paise) to avoid floating-point issues.
+// Invoice number format: INV-YYYY-NNNNNN (year-scoped sequential number).
+model Invoice {
+  id                String        @id @default(uuid())
+  subscriptionId    String
+  organisationId    String
+  paymentId         String?       @unique
+  invoiceNumber     String        @unique
+  amountPaisa       Int
+  gstAmountPaisa    Int
+  totalAmountPaisa  Int
+  status            InvoiceStatus
+  issuedAt          DateTime?
+  paidAt            DateTime?
+  lineItems         Json
+  customerGstNumber String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  payment      Payment?     @relation(fields: [paymentId], references: [id])
+
+  @@index([organisationId, createdAt])
+  @@map("invoices")
 }

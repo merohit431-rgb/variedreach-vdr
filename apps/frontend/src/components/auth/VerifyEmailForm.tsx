@@ -17,6 +17,7 @@ export function VerifyEmailForm() {
   const { verifyEmail, resendVerification } = useRegistration();
 
   const [status, setStatus] = useState<Status>('verifying');
+  const [verifiedEmail, setVerifiedEmail] = useState('');
   const [resendEmail, setResendEmail] = useState('');
   const [isResending, setIsResending] = useState(false);
   const [resendSent, setResendSent] = useState(false);
@@ -28,7 +29,12 @@ export function VerifyEmailForm() {
     }
 
     verifyEmail(token).then((result) => {
-      setStatus(result.success ? 'success' : 'error');
+      if (result.success) {
+        setVerifiedEmail(result.email);
+        setStatus('success');
+      } else {
+        setStatus('error');
+      }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
@@ -53,11 +59,13 @@ export function VerifyEmailForm() {
         </div>
         <h1 className="mt-4 text-lg font-semibold text-slate-900">Email verified</h1>
         <p className="mt-2 text-sm text-slate-600">
-          Thanks for confirming your address. We&apos;ll be in touch separately about activating your account —
-          this step doesn&apos;t sign you in yet.
+          Your email address has been confirmed. Complete your subscription to activate your account.
         </p>
-        <Link href="/" className="mt-4 inline-block text-sm font-medium text-brand-700 hover:text-brand-800">
-          Back to home
+        <Link
+          href={`/checkout?email=${encodeURIComponent(verifiedEmail)}`}
+          className="mt-5 inline-block rounded-lg bg-brand-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-800 transition-colors"
+        >
+          Proceed to Payment
         </Link>
       </div>
     );

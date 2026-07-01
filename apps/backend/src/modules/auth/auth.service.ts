@@ -313,6 +313,10 @@ export class AuthService {
     }
   }
 
+  async issueTokensForUser(userId: string, email: string, role: string, organisationId: string) {
+    return this.issueTokens(userId, email, role, organisationId, true, { userAgent: '', ipAddress: '' });
+  }
+
   private async issueTokens(
     userId: string,
     email: string,

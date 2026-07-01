@@ -5,6 +5,7 @@ import jwtConfig from './config/jwt.config';
 import mailConfig from './config/mail.config';
 import storageThresholdConfig from './config/storage-threshold.config';
 import conversionConfig from './config/conversion.config';
+import paymentConfig from './config/payment.config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -24,12 +25,13 @@ import { FilesModule } from './modules/files/files.module';
 import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
+import { PaymentModule } from './modules/payment/payment.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, jwtConfig, mailConfig, storageThresholdConfig, conversionConfig],
+      load: [appConfig, jwtConfig, mailConfig, storageThresholdConfig, conversionConfig, paymentConfig],
       envFilePath: ['.env'],
     }),
     PrismaModule,
@@ -49,6 +51,7 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module';
     AuditLogsModule,
     ReportsModule,
     WebhooksModule,
+    PaymentModule,
   ],
   controllers: [AppController],
   providers: [AppService],
