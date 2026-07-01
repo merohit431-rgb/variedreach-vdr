@@ -23,6 +23,7 @@ import {
 } from '../../common/constants/content-roles';
 import { CreateDataRoomDto } from './dto/create-data-room.dto';
 import { UpdateDataRoomDto } from './dto/update-data-room.dto';
+import { UpdateSecuritySettingsDto } from './dto/update-security-settings.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
 
 @Injectable()
@@ -124,6 +125,31 @@ export class DataRoomsService {
       userId: actor.id,
       resourceType: 'DataRoom',
       resourceId: id,
+    });
+
+    return dataRoom;
+  }
+
+  async updateSecuritySettings(id: string, dto: UpdateSecuritySettingsDto, actor: AuthenticatedUser) {
+    await this.assertManager(id, actor);
+
+    const dataRoom = await this.prisma.dataRoom.update({
+      where: { id },
+      data: {
+        ...(dto.ipAllowlistEnabled !== undefined && { ipAllowlistEnabled: dto.ipAllowlistEnabled }),
+        ...(dto.allowedIps !== undefined && { allowedIps: dto.allowedIps }),
+        ...(dto.ndaEnabled !== undefined && { ndaEnabled: dto.ndaEnabled }),
+        ...(dto.ndaText !== undefined && { ndaText: dto.ndaText }),
+      },
+    });
+
+    await this.auditLogService.record({
+      action: 'DATA_ROOM_UPDATED',
+      dataRoomId: id,
+      userId: actor.id,
+      resourceType: 'DataRoom',
+      resourceId: id,
+      metadata: { securitySettings: true },
     });
 
     return dataRoom;

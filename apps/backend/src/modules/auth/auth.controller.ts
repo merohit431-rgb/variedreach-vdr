@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -18,6 +19,8 @@ import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AcceptInviteDto } from './dto/accept-invite.dto';
+import { VerifyMfaSetupDto } from './dto/verify-mfa-setup.dto';
+import { VerifyMfaLoginDto } from './dto/verify-mfa-login.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { AuthenticatedUser } from './types/jwt-payload.interface';
@@ -44,6 +47,10 @@ export class AuthController {
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
     });
+
+    if (result.requiresMfa) {
+      return { requiresMfa: true, mfaChallengeToken: result.mfaChallengeToken };
+    }
 
     this.setRefreshCookie(res, result.refreshToken, result.refreshExpiresAt);
 
@@ -110,6 +117,47 @@ export class AuthController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async acceptInvite(@Body() dto: AcceptInviteDto) {
     await this.authService.acceptInvite(dto.token, dto.password);
+  }
+
+  @Post('mfa/setup')
+  async mfaSetup(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.setupMfa(user);
+  }
+
+  @Post('mfa/verify-setup')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async mfaVerifySetup(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: VerifyMfaSetupDto,
+  ) {
+    await this.authService.verifyMfaSetup(user, dto.totpCode);
+  }
+
+  @Delete('mfa/disable')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async mfaDisable(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: VerifyMfaSetupDto,
+  ) {
+    await this.authService.disableMfa(user, dto.totpCode);
+  }
+
+  @Public()
+  @Throttle({ global: { ttl: 900, limit: 10 } })
+  @Post('mfa/verify-login')
+  async mfaVerifyLogin(
+    @Body() dto: VerifyMfaLoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.verifyMfaLogin(
+      dto.mfaChallengeToken,
+      dto.totpCode,
+      Boolean(dto.rememberMe),
+      { ipAddress: req.ip, userAgent: req.headers['user-agent'] },
+    );
+    this.setRefreshCookie(res, result.refreshToken, result.refreshExpiresAt);
+    return { accessToken: result.accessToken, user: result.user };
   }
 
   private setRefreshCookie(res: Response, token: string, expiresAt: Date) {

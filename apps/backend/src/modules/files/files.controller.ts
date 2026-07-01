@@ -28,6 +28,7 @@ import { ListFilesQueryDto } from './dto/list-files-query.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { sendFileResponse } from '../../common/utils/http-file-response.util';
+import { BulkDownloadDto } from './dto/bulk-download.dto';
 
 const MAX_FILES_PER_UPLOAD = 50;
 
@@ -152,6 +153,26 @@ export class FilesController {
       versionId,
     );
     sendFileResponse(res, content, 'attachment');
+  }
+
+  @Post('bulk-download')
+  async bulkDownload(
+    @Param('dataRoomId') dataRoomId: string,
+    @Body() dto: BulkDownloadDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const { buffer, filename } = await this.filesService.bulkDownload(
+      dataRoomId,
+      dto.fileIds,
+      user,
+      { ipAddress: req.ip ?? '0.0.0.0', userAgent: req.headers['user-agent'] as string | undefined },
+    );
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
   }
 
   private parseRelativePaths(raw: string | undefined, fileCount: number): string[] | undefined {

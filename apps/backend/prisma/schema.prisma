@@ -78,6 +78,13 @@ enum AuditAction {
   FILE_MOVED
   FILE_DELETED
   REPORT_EXPORTED
+  NDA_ACCEPTED
+  QUESTION_ASKED
+  QUESTION_ANSWERED
+  QUESTION_STATUS_CHANGED
+  BULK_DOWNLOADED
+  MFA_ENABLED
+  MFA_DISABLED
 }
 
 enum PermissionScope {
@@ -135,6 +142,9 @@ model User {
   lastLoginIp         String?
   // bcrypt hashes of the last 5 passwords, oldest first — enforces no-reuse policy
   previousPasswords   Json       @default("[]")
+  // TOTP-based MFA — secret stored as base32 string
+  totpSecret          String?
+  totpEnabled         Boolean    @default(false)
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
   deletedAt           DateTime?
@@ -149,6 +159,9 @@ model User {
   uploadedVersions    FileVersion[]        @relation("FileVersionUploader")
   watermarkEvents     Watermark[]
   emailLogs           EmailLog[]
+  ndaAcceptances      NdaAcceptance[]
+  questionsAsked      Question[]           @relation("QuestionAsker")
+  answersGiven        Answer[]             @relation("AnswerAuthor")
 
   @@index([organisationId])
   @@map("users")
@@ -260,17 +273,25 @@ model DataRoom {
   watermarkTemplate String         @default("{{name}} | {{email}} | {{date}} | {{ip}} | CONFIDENTIAL")
   watermarkOpacity  Float          @default(0.25)
   watermarkPosition String         @default("diagonal")
+  // IP Allowlisting — if enabled, only IPs matching allowedIps CIDRs can access
+  ipAllowlistEnabled Boolean       @default(false)
+  allowedIps         String[]      @default([])
+  // NDA Gate — members must accept NDA before viewing content
+  ndaEnabled        Boolean        @default(false)
+  ndaText           String?        @db.Text
   createdBy         String
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
   deletedAt         DateTime?
 
-  organisation Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  members      DataRoomMember[]
-  folders      Folder[]
-  files        File[]
-  auditLogs    AuditLog[]
-  emailLogs    EmailLog[]
+  organisation    Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  members         DataRoomMember[]
+  folders         Folder[]
+  files           File[]
+  auditLogs       AuditLog[]
+  emailLogs       EmailLog[]
+  ndaAcceptances  NdaAcceptance[]
+  questions       Question[]
 
   @@index([organisationId, deletedAt])
   @@map("data_rooms")
@@ -620,4 +641,69 @@ model Invoice {
 
   @@index([organisationId, createdAt])
   @@map("invoices")
+}
+
+// ═══════════════════════════════════════════════════════════
+// ENTERPRISE FEATURES (Phase 2)
+// ═══════════════════════════════════════════════════════════
+
+// Immutable record of each user accepting a data room's NDA.
+model NdaAcceptance {
+  id         String   @id @default(uuid())
+  dataRoomId String
+  userId     String
+  acceptedAt DateTime @default(now())
+  ipAddress  String?
+  userAgent  String?
+
+  dataRoom DataRoom @relation(fields: [dataRoomId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([dataRoomId, userId])
+  @@index([dataRoomId, acceptedAt])
+  @@map("nda_acceptances")
+}
+
+enum QuestionStatus {
+  PENDING
+  ANSWERED
+  REJECTED
+  WITHDRAWN
+}
+
+model Question {
+  id         String         @id @default(uuid())
+  dataRoomId String
+  askedBy    String
+  question   String         @db.Text
+  status     QuestionStatus @default(PENDING)
+  // Private questions are only visible to the asker + data room managers
+  isPrivate  Boolean        @default(false)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  deletedAt  DateTime?
+
+  dataRoom DataRoom @relation(fields: [dataRoomId], references: [id], onDelete: Cascade)
+  asker    User     @relation("QuestionAsker", fields: [askedBy], references: [id])
+  answers  Answer[]
+
+  @@index([dataRoomId, status])
+  @@index([dataRoomId, askedBy])
+  @@map("questions")
+}
+
+model Answer {
+  id         String    @id @default(uuid())
+  questionId String
+  answeredBy String
+  answer     String    @db.Text
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answerer User     @relation("AnswerAuthor", fields: [answeredBy], references: [id])
+
+  @@index([questionId, createdAt])
+  @@map("answers")
 }

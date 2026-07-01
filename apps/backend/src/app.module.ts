@@ -30,6 +30,8 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { PaymentModule } from './modules/payment/payment.module';
 import { SuperAdminModule } from './modules/super-admin/super-admin.module';
+import { NdaModule } from './modules/nda/nda.module';
+import { QnaModule } from './modules/qna/qna.module';
 
 @Module({
   imports: [
@@ -70,6 +72,8 @@ import { SuperAdminModule } from './modules/super-admin/super-admin.module';
     WebhooksModule,
     PaymentModule,
     SuperAdminModule,
+    NdaModule,
+    QnaModule,
   ],
   controllers: [AppController],
   providers: [

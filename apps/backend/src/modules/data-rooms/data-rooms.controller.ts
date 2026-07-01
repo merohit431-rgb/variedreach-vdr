@@ -13,6 +13,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { DataRoomsService } from './data-rooms.service';
 import { CreateDataRoomDto } from './dto/create-data-room.dto';
 import { UpdateDataRoomDto } from './dto/update-data-room.dto';
+import { UpdateSecuritySettingsDto } from './dto/update-security-settings.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -54,6 +55,16 @@ export class DataRoomsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.dataRoomsService.update(id, dto, user);
+  }
+
+  @Roles(...MANAGER_ROLES)
+  @Patch(':id/security')
+  updateSecuritySettings(
+    @Param('id') id: string,
+    @Body() dto: UpdateSecuritySettingsDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.dataRoomsService.updateSecuritySettings(id, dto, user);
   }
 
   @Roles(...MANAGER_ROLES)

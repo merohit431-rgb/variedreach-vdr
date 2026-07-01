@@ -6,29 +6,39 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import { generateSecret, generateURI, verifySync as otpVerifySync } from 'otplib';
+import * as QRCode from 'qrcode';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { MailService } from '../mail/mail.service';
 import { generateOpaqueToken, sha256Hex } from '../../common/utils/crypto.util';
 import { LoginDto } from './dto/login.dto';
-import { JwtPayload } from './types/jwt-payload.interface';
+import { JwtPayload, AuthenticatedUser } from './types/jwt-payload.interface';
 
 const BCRYPT_ROUNDS = 12;
 const PASSWORD_HISTORY_LIMIT = 5;
+const MFA_CHALLENGE_EXPIRY = '5m';
+const APP_NAME = 'InsolvencyVDR';
 
-export interface LoginResult {
-  accessToken: string;
-  refreshToken: string;
-  refreshExpiresAt: Date;
-  user: {
-    id: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    role: string;
-    organisationId: string;
-  };
-}
+export type LoginResult =
+  | {
+      requiresMfa: true;
+      mfaChallengeToken: string;
+    }
+  | {
+      requiresMfa?: false;
+      accessToken: string;
+      refreshToken: string;
+      refreshExpiresAt: Date;
+      user: {
+        id: string;
+        email: string;
+        firstName: string;
+        lastName: string;
+        role: string;
+        organisationId: string;
+      };
+    };
 
 interface RequestMeta {
   ipAddress?: string;
@@ -81,12 +91,145 @@ export class AuthService {
 
     await this.enforceConcurrentSessionLimit(user.id);
 
+    if (user.totpEnabled && user.totpSecret) {
+      const mfaChallengeToken = this.jwtService.sign(
+        { sub: user.id, mfaChallenge: true },
+        {
+          secret: this.configService.get<string>('jwt.accessSecret'),
+          expiresIn: MFA_CHALLENGE_EXPIRY,
+        },
+      );
+      return { requiresMfa: true, mfaChallengeToken };
+    }
+
     const { accessToken, refreshToken, refreshExpiresAt } = await this.issueTokens(
       user.id,
       user.email,
       user.role,
       user.organisationId,
       Boolean(dto.rememberMe),
+      meta,
+    );
+
+    await this.auditLogService.record({
+      action: 'USER_LOGGED_IN',
+      userId: user.id,
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+    });
+
+    return {
+      accessToken,
+      refreshToken,
+      refreshExpiresAt,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        organisationId: user.organisationId,
+      },
+    };
+  }
+
+  async setupMfa(actor: AuthenticatedUser): Promise<{ qrCodeDataUrl: string; secret: string }> {
+    const secret = generateSecret();
+    await this.prisma.user.update({
+      where: { id: actor.id },
+      data: { totpSecret: secret, totpEnabled: false },
+    });
+
+    const otpAuthUrl = generateURI({ issuer: APP_NAME, label: actor.email, secret });
+    const qrCodeDataUrl = await QRCode.toDataURL(otpAuthUrl);
+
+    return { qrCodeDataUrl, secret };
+  }
+
+  async verifyMfaSetup(actor: AuthenticatedUser, totpCode: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: actor.id } });
+    if (!user?.totpSecret) {
+      throw new BadRequestException('MFA setup has not been initiated. Call /auth/mfa/setup first.');
+    }
+    if (user.totpEnabled) {
+      throw new BadRequestException('MFA is already enabled');
+    }
+
+    const result = otpVerifySync({ secret: user.totpSecret, token: totpCode });
+    if (!result.valid) {
+      throw new UnauthorizedException('Invalid TOTP code');
+    }
+
+    await this.prisma.user.update({ where: { id: actor.id }, data: { totpEnabled: true } });
+
+    await this.auditLogService.record({
+      action: 'MFA_ENABLED',
+      userId: actor.id,
+    });
+  }
+
+  async disableMfa(actor: AuthenticatedUser, totpCode: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id: actor.id } });
+    if (!user?.totpEnabled || !user.totpSecret) {
+      throw new BadRequestException('MFA is not enabled');
+    }
+
+    const result = otpVerifySync({ secret: user.totpSecret, token: totpCode });
+    if (!result.valid) {
+      throw new UnauthorizedException('Invalid TOTP code');
+    }
+
+    await this.prisma.user.update({
+      where: { id: actor.id },
+      data: { totpEnabled: false, totpSecret: null },
+    });
+
+    await this.auditLogService.record({
+      action: 'MFA_DISABLED',
+      userId: actor.id,
+    });
+  }
+
+  async verifyMfaLogin(
+    mfaChallengeToken: string,
+    totpCode: string,
+    rememberMe: boolean,
+    meta: RequestMeta,
+  ): Promise<{ accessToken: string; refreshToken: string; refreshExpiresAt: Date; user: { id: string; email: string; firstName: string; lastName: string; role: string; organisationId: string } }> {
+    let payload: { sub: string; mfaChallenge?: boolean };
+    try {
+      payload = this.jwtService.verify(mfaChallengeToken, {
+        secret: this.configService.get<string>('jwt.accessSecret'),
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid or expired MFA challenge token');
+    }
+
+    if (!payload.mfaChallenge) {
+      throw new UnauthorizedException('Invalid MFA challenge token');
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    if (!user || !user.totpEnabled || !user.totpSecret) {
+      throw new UnauthorizedException('MFA is not configured for this account');
+    }
+
+    const result = otpVerifySync({ secret: user.totpSecret, token: totpCode });
+    if (!result.valid) {
+      throw new UnauthorizedException('Invalid TOTP code');
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: new Date(), lastLoginIp: meta.ipAddress },
+    });
+
+    const { accessToken, refreshToken, refreshExpiresAt } = await this.issueTokens(
+      user.id,
+      user.email,
+      user.role,
+      user.organisationId,
+      rememberMe,
       meta,
     );
 

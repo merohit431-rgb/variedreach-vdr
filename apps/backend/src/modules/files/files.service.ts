@@ -1,6 +1,10 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { File, UserRole } from '@prisma/client';
+import type { Archiver as ArchiverInstance, ArchiverOptions } from 'archiver';
+// archiver ships CommonJS; we use a typed cast so the factory is callable
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const createArchive = require('archiver') as (format: string, opts?: ArchiverOptions) => ArchiverInstance;
 import { getFileTypeRule, isOfficeConvertible, getPreviewFilename } from '../../common/constants/file-type-rules';
 import { validateMagicBytes } from '../../common/utils/magic-bytes.util';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -376,6 +380,83 @@ export class FilesService {
       filename: getPreviewFilename(file.name, file.extension),
       mimeType: isOffice ? 'application/pdf' : file.mimeType,
     };
+  }
+
+  async bulkDownload(
+    dataRoomId: string,
+    fileIds: string[],
+    actor: AuthenticatedUser,
+    context: { ipAddress: string; userAgent?: string },
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    await this.dataRoomAccess.assertCanDownload(dataRoomId, actor);
+
+    const files = await this.prisma.file.findMany({
+      where: { id: { in: fileIds }, dataRoomId, deletedAt: null },
+      include: { currentVersion: true },
+    });
+
+    if (files.length === 0) {
+      throw new NotFoundException('No valid files found for the requested IDs');
+    }
+
+    const elements = this.watermarkService.buildElements(actor, context.ipAddress);
+    const archive = createArchive('zip', { zlib: { level: 6 } });
+    const chunks: Buffer[] = [];
+    archive.on('data', (chunk: Buffer) => chunks.push(chunk));
+
+    for (const file of files) {
+      if (!file.currentVersion) continue;
+
+      const version = file.currentVersion;
+      const isOffice = isOfficeConvertible(file.extension);
+      const sourceBuffer = isOffice
+        ? await this.getOrCreateConvertedPdf(dataRoomId, file, version)
+        : await this.storage.read(version.storagePath);
+
+      const watermarked = await this.watermarkService.apply(sourceBuffer, isOffice ? 'pdf' : file.extension, elements);
+      const entryName = isOffice ? getPreviewFilename(file.name, file.extension) : file.name;
+      archive.append(watermarked, { name: entryName });
+
+      const auditLog = await this.auditLogService.record({
+        action: 'FILE_DOWNLOADED',
+        dataRoomId,
+        userId: actor.id,
+        resourceType: 'File',
+        resourceId: file.id,
+        metadata: { name: file.name, versionNumber: version.versionNumber, bulkDownload: true },
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+      });
+      await this.watermarkService.recordWatermark({
+        auditLogId: auditLog.id,
+        fileId: file.id,
+        fileVersionId: version.id,
+        userId: actor.id,
+        elements,
+      });
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      archive.on('end', resolve);
+      archive.on('error', reject);
+      archive.finalize();
+    });
+
+    const buffer = Buffer.concat(chunks);
+    const dateStr = new Date().toISOString().slice(0, 10);
+
+    await this.auditLogService.record({
+      action: 'BULK_DOWNLOADED',
+      dataRoomId,
+      userId: actor.id,
+      resourceType: 'DataRoom',
+      resourceId: dataRoomId,
+      metadata: { fileIds: files.map((f) => f.id), count: files.length },
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
+
+    return { buffer, filename: `data-room-export-${dateStr}.zip` };
   }
 
   // Office files (Word/Excel/PowerPoint) get converted to PDF once per
