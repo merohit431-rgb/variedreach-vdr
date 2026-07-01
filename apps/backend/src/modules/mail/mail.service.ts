@@ -12,6 +12,7 @@ import { accountCreatedTemplate } from './templates/account-created.template';
 import { storageWarningTemplate, StorageWarningLevel } from './templates/storage-warning.template';
 import { subscriptionActivatedTemplate } from './templates/subscription-activated.template';
 import { subscriptionRenewalReminderTemplate } from './templates/subscription-renewal-reminder.template';
+import { documentUploadedTemplate } from './templates/document-uploaded.template';
 
 export interface SendResult {
   sent: boolean;
@@ -166,5 +167,28 @@ export class MailService {
   ): Promise<SendResult> {
     const rendered = subscriptionRenewalReminderTemplate({ recipientName, planName, renewalDate });
     return this.dispatch({ template: 'SUBSCRIPTION_RENEWAL_REMINDER', to, ...context }, rendered);
+  }
+
+  async sendDocumentUploadedEmail(
+    to: string,
+    recipientName: string,
+    dataRoomName: string,
+    folderPath: string,
+    documentName: string,
+    uploadedBy: string,
+    uploadedAt: string,
+    dataRoomUrl: string,
+    context: { userId?: string; dataRoomId?: string } = {},
+  ): Promise<SendResult> {
+    const rendered = documentUploadedTemplate({
+      recipientName,
+      dataRoomName,
+      folderPath,
+      documentName,
+      uploadedBy,
+      uploadedAt,
+      dataRoomUrl,
+    });
+    return this.dispatch({ template: 'DOCUMENT_UPLOADED', to, ...context }, rendered);
   }
 }
