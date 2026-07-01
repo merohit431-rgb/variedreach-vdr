@@ -26,6 +26,7 @@ import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { PaymentModule } from './modules/payment/payment.module';
+import { SuperAdminModule } from './modules/super-admin/super-admin.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { PaymentModule } from './modules/payment/payment.module';
     ReportsModule,
     WebhooksModule,
     PaymentModule,
+    SuperAdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],

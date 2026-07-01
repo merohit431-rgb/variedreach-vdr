@@ -30,7 +30,9 @@ export function LoginForm() {
     setIsSubmitting(false);
 
     if (result.success) {
-      router.push('/dashboard');
+      const { useAuthStore } = await import('@/store/auth-store');
+      const role = useAuthStore.getState().user?.role;
+      router.push(role === 'SUPER_ADMIN' ? '/super-admin/dashboard' : '/dashboard');
     } else {
       setError(result.message);
     }

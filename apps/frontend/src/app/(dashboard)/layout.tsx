@@ -15,12 +15,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   useEffect(() => {
-    if (!isInitializing && !user) {
-      router.replace('/login');
+    if (!isInitializing) {
+      if (!user) {
+        router.replace('/login');
+      } else if (user.role === 'SUPER_ADMIN') {
+        router.replace('/super-admin/dashboard');
+      }
     }
   }, [isInitializing, user, router]);
 
-  if (isInitializing || !user) {
+  if (isInitializing || !user || user.role === 'SUPER_ADMIN') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">
         Loading…
