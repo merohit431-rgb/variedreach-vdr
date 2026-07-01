@@ -4,7 +4,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { SuperAdminService } from './super-admin.service';
 import { UpdateOrgDto } from './dto/update-org.dto';
 
-@Controller('super-admin')
+@Controller({ path: 'super-admin', version: '1' })
 @Roles(UserRole.SUPER_ADMIN)
 export class SuperAdminController {
   constructor(private readonly service: SuperAdminService) {}
