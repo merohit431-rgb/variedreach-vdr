@@ -62,10 +62,10 @@ export default function ActivityPage() {
           </Thead>
           <Tbody>
             {loading && <Tr><Td colSpan={5} className="text-center py-8 text-slate-400">Loading…</Td></Tr>}
-            {!loading && data?.data?.length === 0 && (
+            {!loading && data?.items?.length === 0 && (
               <Tr><Td colSpan={5} className="text-center py-8 text-slate-400">No activity recorded yet.</Td></Tr>
             )}
-            {!loading && data?.data?.map((log: any) => (
+            {!loading && data?.items?.map((log: any) => (
               <Tr key={log.id}>
                 <Td>
                   <Badge tone={actionTone(log.action)} className="font-mono text-[11px]">{log.action}</Badge>

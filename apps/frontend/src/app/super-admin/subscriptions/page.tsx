@@ -93,10 +93,10 @@ export default function SubscriptionsPage() {
           </Thead>
           <Tbody>
             {loading && <Tr><Td colSpan={7} className="text-center py-8 text-slate-400">Loading…</Td></Tr>}
-            {!loading && data?.data?.length === 0 && (
+            {!loading && data?.items?.length === 0 && (
               <Tr><Td colSpan={7} className="text-center py-8 text-slate-400">No subscriptions found.</Td></Tr>
             )}
-            {!loading && data?.data?.map((sub: any) => (
+            {!loading && data?.items?.map((sub: any) => (
               <Tr key={sub.id}>
                 <Td>
                   <p className="font-medium text-slate-800">{sub.organisation?.name ?? '—'}</p>

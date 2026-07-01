@@ -129,7 +129,7 @@ export class SuperAdminService {
       this.prisma.organisation.count({ where }),
     ]);
 
-    return { data, total, page, limit };
+    return { items: data, total, page, limit };
   }
 
   async getOrganisationById(id: string) {
@@ -186,7 +186,7 @@ export class SuperAdminService {
 
     return {
       funnel: { started, emailVerified, checkoutReached, paymentSuccessful, provisioned },
-      data,
+      items: data,
       total,
       page,
       limit,
@@ -227,7 +227,7 @@ export class SuperAdminService {
         failed:     analyticsMap['FAILED']     ?? { count: 0, total: 0 },
         refunded:   analyticsMap['REFUNDED']   ?? { count: 0, total: 0 },
       },
-      data,
+      items: data,
       total,
       page,
       limit,
@@ -253,7 +253,7 @@ export class SuperAdminService {
     const statusMap: Record<string, number> = {};
     for (const s of statusGroups) statusMap[s.status] = s._count;
 
-    return { data, total, page, limit, statusBreakdown: statusMap };
+    return { items: data, total, page, limit, statusBreakdown: statusMap };
   }
 
   async getInvoices(page: number, limit: number) {
@@ -270,7 +270,7 @@ export class SuperAdminService {
       }),
       this.prisma.invoice.count(),
     ]);
-    return { data, total, page, limit };
+    return { items: data, total, page, limit };
   }
 
   async getRevenue() {
@@ -376,6 +376,6 @@ export class SuperAdminService {
       }),
       this.prisma.auditLog.count(),
     ]);
-    return { data, total, page, limit };
+    return { items: data, total, page, limit };
   }
 }

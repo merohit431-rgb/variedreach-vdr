@@ -82,10 +82,10 @@ export default function OrganisationsPage() {
             {loading && (
               <Tr><Td colSpan={7} className="text-center text-slate-400 py-8">Loading…</Td></Tr>
             )}
-            {!loading && data?.data?.length === 0 && (
+            {!loading && data?.items?.length === 0 && (
               <Tr><Td colSpan={7} className="text-center text-slate-400 py-8">No organisations found.</Td></Tr>
             )}
-            {!loading && data?.data?.map((org: any) => (
+            {!loading && data?.items?.map((org: any) => (
               <Tr key={org.id}>
                 <Td>
                   <p className="font-medium text-slate-900">{org.name}</p>

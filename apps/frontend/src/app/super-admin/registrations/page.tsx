@@ -94,10 +94,10 @@ export default function RegistrationsPage() {
           </Thead>
           <Tbody>
             {loading && <Tr><Td colSpan={6} className="text-center py-8 text-slate-400">Loading…</Td></Tr>}
-            {!loading && data?.data?.length === 0 && (
+            {!loading && data?.items?.length === 0 && (
               <Tr><Td colSpan={6} className="text-center py-8 text-slate-400">No registrations yet.</Td></Tr>
             )}
-            {!loading && data?.data?.map((reg: any) => (
+            {!loading && data?.items?.map((reg: any) => (
               <Tr key={reg.id}>
                 <Td>
                   <p className="font-medium text-slate-800">{reg.companyName}</p>

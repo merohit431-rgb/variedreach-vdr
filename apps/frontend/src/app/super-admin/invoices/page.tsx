@@ -61,10 +61,10 @@ export default function InvoicesPage() {
           </Thead>
           <Tbody>
             {loading && <Tr><Td colSpan={8} className="text-center py-8 text-slate-400">Loading…</Td></Tr>}
-            {!loading && data?.data?.length === 0 && (
+            {!loading && data?.items?.length === 0 && (
               <Tr><Td colSpan={8} className="text-center py-8 text-slate-400">No invoices yet.</Td></Tr>
             )}
-            {!loading && data?.data?.map((inv: any) => (
+            {!loading && data?.items?.map((inv: any) => (
               <Tr key={inv.id}>
                 <Td className="font-mono text-xs font-medium text-slate-700">{inv.invoiceNumber}</Td>
                 <Td className="text-slate-800">{inv.organisation?.name ?? '—'}</Td>

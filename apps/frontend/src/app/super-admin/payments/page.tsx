@@ -87,10 +87,10 @@ export default function PaymentsPage() {
           </Thead>
           <Tbody>
             {loading && <Tr><Td colSpan={6} className="text-center py-8 text-slate-400">Loading…</Td></Tr>}
-            {!loading && data?.data?.length === 0 && (
+            {!loading && data?.items?.length === 0 && (
               <Tr><Td colSpan={6} className="text-center py-8 text-slate-400">No payments yet.</Td></Tr>
             )}
-            {!loading && data?.data?.map((p: any) => {
+            {!loading && data?.items?.map((p: any) => {
               const cfg = STATUS_CONFIG[p.status] ?? STATUS_CONFIG['PENDING'];
               return (
                 <Tr key={p.id}>
