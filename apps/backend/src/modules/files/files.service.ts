@@ -1,7 +1,8 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { File, UserRole } from '@prisma/client';
+import { File, PermissionPrincipal, UserRole } from '@prisma/client';
 import { getFileTypeRule, isOfficeConvertible, getPreviewFilename } from '../../common/constants/file-type-rules';
+import { DATA_ROOM_MANAGER_ROLES, EXTERNAL_ROLES } from '../../common/constants/content-roles';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { DataRoomAccessService } from '../data-room-access/data-room-access.service';
@@ -140,6 +141,7 @@ export class FilesService {
       });
 
       created.push(file);
+      this.notifyUpload(dataRoomId, file, actor).catch(() => undefined);
     }
 
     await this.checkStorageThreshold(dataRoomId);
@@ -457,5 +459,90 @@ export class FilesService {
     }
 
     return Array.from(byId.values());
+  }
+
+  private async notifyUpload(dataRoomId: string, file: File, actor: AuthenticatedUser): Promise<void> {
+    const dataRoom = await this.prisma.dataRoom.findUnique({
+      where: { id: dataRoomId },
+      include: {
+        members: {
+          where: { removedAt: null },
+          include: { user: { select: { id: true, email: true, firstName: true, lastName: true, role: true } } },
+        },
+      },
+    });
+    if (!dataRoom) return;
+
+    let folderPath = 'Root';
+    if (file.folderId) {
+      const folder = await this.prisma.folder.findUnique({ where: { id: file.folderId } });
+      if (folder) folderPath = folder.path;
+    }
+
+    let folderPermissions: Array<{ principalType: PermissionPrincipal; principalId: string; flags: unknown }> = [];
+    if (file.folderId) {
+      folderPermissions = await this.prisma.permission.findMany({
+        where: { scopeType: 'FOLDER', scopeId: file.folderId, deletedAt: null },
+        select: { principalType: true, principalId: true, flags: true },
+      });
+    }
+    const hasFolderRestrictions = folderPermissions.length > 0;
+
+    const actorMember = dataRoom.members.find((m) => m.userId === actor.id);
+    const uploaderName = actorMember
+      ? `${actorMember.user.firstName} ${actorMember.user.lastName}`
+      : actor.email;
+
+    const uploadedAt = new Date().toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+
+    const frontendUrl = this.configService.get<string>('app.frontendUrl') || '';
+    const dataRoomUrl = `${frontendUrl}/data-rooms/${dataRoomId}`;
+
+    for (const member of dataRoom.members) {
+      if (member.userId === actor.id) continue;
+
+      const effectiveRole = member.roleOverride ?? member.user.role;
+      let shouldNotify = false;
+
+      if ((DATA_ROOM_MANAGER_ROLES as UserRole[]).includes(effectiveRole)) {
+        shouldNotify = true;
+      } else if ((EXTERNAL_ROLES as UserRole[]).includes(effectiveRole)) {
+        if (!hasFolderRestrictions) {
+          shouldNotify = true;
+        } else {
+          shouldNotify = folderPermissions.some((p) => {
+            const flags = p.flags as Record<string, boolean>;
+            if (!flags?.view) return false;
+            if (p.principalType === PermissionPrincipal.USER && p.principalId === member.userId) return true;
+            if (p.principalType === PermissionPrincipal.ROLE && p.principalId === effectiveRole) return true;
+            return false;
+          });
+        }
+      }
+
+      if (!shouldNotify) continue;
+
+      await this.mailService
+        .sendDocumentUploadedEmail(
+          member.user.email,
+          `${member.user.firstName} ${member.user.lastName}`,
+          dataRoom.name,
+          folderPath,
+          file.name,
+          uploaderName,
+          uploadedAt,
+          dataRoomUrl,
+          { userId: member.userId, dataRoomId },
+        )
+        .catch(() => undefined);
+    }
   }
 }

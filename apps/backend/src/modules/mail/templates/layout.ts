@@ -79,11 +79,23 @@ export function renderEmailHtml(options: EmailLayoutOptions): string {
           ${ctaHtml}
           <tr>
             <td style="padding: 24px 40px 32px 40px; border-top: 1px solid ${SLATE_200};">
-              <p style="margin: 0; font-family: Helvetica, Arial, sans-serif; font-size: 12px; color: ${SLATE_400};">
-                Varied Reach &mdash; Virtual Data Room
+              <p style="margin: 0 0 10px 0; font-family: Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 600; color: ${SLATE_500};">
+                Varied Reach &ndash; Virtual Data Room
               </p>
-              <p style="margin: 4px 0 0 0; font-family: Helvetica, Arial, sans-serif; font-size: 12px; color: ${SLATE_400};">
-                This is an automated message. Please do not reply to this email.
+              <p style="margin: 0 0 2px 0; font-family: Helvetica, Arial, sans-serif; font-size: 12px; color: ${SLATE_400};">
+                📞 +91 88510 96461
+              </p>
+              <p style="margin: 0 0 2px 0; font-family: Helvetica, Arial, sans-serif; font-size: 12px; color: ${SLATE_400};">
+                📧 <a href="mailto:support@variedreach.com" style="color: ${SLATE_400}; text-decoration: none;">support@variedreach.com</a>
+              </p>
+              <p style="margin: 0 0 16px 0; font-family: Helvetica, Arial, sans-serif; font-size: 12px; color: ${SLATE_400};">
+                🌐 <a href="https://vdr.variedreach.com" style="color: ${SLATE_400}; text-decoration: none;">vdr.variedreach.com</a>
+              </p>
+              <p style="margin: 0 0 4px 0; font-family: Helvetica, Arial, sans-serif; font-size: 11px; color: ${SLATE_400};">
+                This is an automated system notification from the Varied Reach Virtual Data Room.
+              </p>
+              <p style="margin: 0; font-family: Helvetica, Arial, sans-serif; font-size: 11px; color: ${SLATE_400};">
+                Please do not reply to this email. If you require assistance, please contact our support team using the details above.
               </p>
             </td>
           </tr>
@@ -110,5 +122,11 @@ export function renderEmailText(options: EmailLayoutTextOptions): string {
 ${bodyText}${ctaText}
 
 ---
-This is an automated message. Please do not reply to this email.`;
+Varied Reach – Virtual Data Room
+📞 +91 88510 96461
+📧 support@variedreach.com
+🌐 vdr.variedreach.com
+
+This is an automated system notification from the Varied Reach Virtual Data Room.
+Please do not reply to this email. If you require assistance, please contact our support team using the details above.`;
 }

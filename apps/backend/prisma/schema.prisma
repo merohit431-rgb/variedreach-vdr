@@ -442,6 +442,7 @@ enum EmailTemplate {
   STORAGE_FULL_100
   SUBSCRIPTION_ACTIVATED // future — no billing system exists yet
   SUBSCRIPTION_RENEWAL_REMINDER // future — no billing system exists yet
+  DOCUMENT_UPLOADED
 }
 
 // userId/dataRoomId are both optional since not every email has either
