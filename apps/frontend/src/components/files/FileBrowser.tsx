@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, DragEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { FolderOpen, Upload, FolderPlus, Grid3X3, List, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { FolderOpen, Upload, FolderPlus, Grid3X3, List, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, Cloud } from 'lucide-react';
 import {
   useFiles,
   useUpdateFile,
@@ -18,8 +18,11 @@ import { extractErrorMessage } from '@/lib/error-message';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useUploadStore } from '@/store/upload-store';
+import { useImportStore, ImportProvider } from '@/store/import-store';
 import { getFileIcon } from '@/lib/file-icon';
 import { UploadProgressPanel } from './UploadProgressPanel';
+import { ImportProgressPanel } from './ImportProgressPanel';
+import { CloudImportModal } from './CloudImportModal';
 import { FilePreviewModal } from './FilePreviewModal';
 import { VersionHistoryModal } from './VersionHistoryModal';
 import { FileDetailsPanel } from './FileDetailsPanel';
@@ -112,6 +115,13 @@ export function FileBrowser({
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
 
   const [locallyDismissedIds, setLocallyDismissedIds] = useState<Set<string>>(new Set());
+
+  const [showUploadMenu, setShowUploadMenu] = useState(false);
+  const [showCloudImport, setShowCloudImport] = useState<ImportProvider | null>(null);
+  const { items: importItems } = useImportStore();
+  const visibleImportItems = importItems.filter(
+    (item) => item.dataRoomId === dataRoomId && item.folderId === folderId,
+  );
 
   const visibleUploadItems = uploadItems.filter(
     (item) => item.dataRoomId === dataRoomId && item.folderId === folderId && !locallyDismissedIds.has(item.id),
@@ -308,20 +318,50 @@ export function FileBrowser({
       {/* Toolbar */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {canUpload && (
-          <>
+          <div className="relative">
             <button
-              onClick={() => multiInputRef.current?.click()}
-              className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+              onClick={() => setShowUploadMenu((v) => !v)}
+              className="flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
             >
-              Upload files
+              <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+              Upload
+              <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
-            <button
-              onClick={() => folderInputRef.current?.click()}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-            >
-              Upload folder
-            </button>
-          </>
+            {showUploadMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowUploadMenu(false)} />
+                <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+                  <button
+                    onClick={() => { multiInputRef.current?.click(); setShowUploadMenu(false); }}
+                    className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    📄 Upload Files
+                  </button>
+                  <button
+                    onClick={() => { folderInputRef.current?.click(); setShowUploadMenu(false); }}
+                    className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    📁 Upload Folder
+                  </button>
+                  <div className="my-1 border-t border-slate-100" />
+                  <button
+                    onClick={() => { setShowCloudImport('google-drive'); setShowUploadMenu(false); }}
+                    className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    <Cloud className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                    Import from Google Drive
+                  </button>
+                  <button
+                    onClick={() => { setShowCloudImport('onedrive'); setShowUploadMenu(false); }}
+                    className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    <Cloud className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                    Import from Microsoft OneDrive
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         )}
         <div className="ml-auto flex items-center gap-2">
           {/* View mode toggle */}
@@ -396,6 +436,7 @@ export function FileBrowser({
       {error && <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       <UploadProgressPanel items={visibleUploadItems} />
+      <ImportProgressPanel items={visibleImportItems} />
 
       {/* Main content area: file list/grid + optional details panel */}
       <div className="flex gap-4">
@@ -653,6 +694,14 @@ export function FileBrowser({
           canManage={canUpload}
           canDownload={canDownload}
           onClose={() => setVersionsFile(null)}
+        />
+      )}
+      {showCloudImport && (
+        <CloudImportModal
+          dataRoomId={dataRoomId}
+          folderId={folderId}
+          initialProvider={showCloudImport}
+          onClose={() => setShowCloudImport(null)}
         />
       )}
     </div>
