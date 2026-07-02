@@ -29,6 +29,21 @@ const config: Config = {
           800: '#0A5F70',
           900: '#073F4A',
         },
+        // Marketing dark-theme tokens — never use these in the dashboard
+        mk: {
+          bg: '#07080d',
+          s1: '#0d1118',
+          s2: '#141b25',
+          s3: '#1e2a3a',
+          text: '#f1f5f9',
+          t2: '#94a3b8',
+          t3: '#64748b',
+          t4: '#475569',
+          blue: '#2563eb',
+          'blue-lt': '#3b82f6',
+          gold: '#d97706',
+          green: '#10b981',
+        },
       },
       fontFamily: {
         sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
