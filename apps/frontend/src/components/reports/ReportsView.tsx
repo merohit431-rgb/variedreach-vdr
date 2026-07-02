@@ -122,7 +122,7 @@ export function ReportsView({ dataRoomId }: { dataRoomId: string }) {
             <button
               onClick={() => setShowExportMenu((v) => !v)}
               disabled={isExporting !== null}
-              className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
             >
               <Download className="h-4 w-4" aria-hidden="true" />
               {isExporting ? 'Exporting…' : 'Export'}
@@ -132,7 +132,7 @@ export function ReportsView({ dataRoomId }: { dataRoomId: string }) {
               <>
                 {/* Click-outside backdrop */}
                 <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
-                <div className="absolute right-0 top-full z-20 mt-1 w-32 rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+                <div className="absolute right-0 top-full z-20 mt-1 w-32 rounded-xl border border-slate-200 bg-white py-1.5 shadow-popover">
                   {EXPORT_FORMATS.map((fmt) => (
                     <button
                       key={fmt.value}
@@ -155,9 +155,9 @@ export function ReportsView({ dataRoomId }: { dataRoomId: string }) {
           <button
             key={preset.value}
             onClick={() => setDatePreset(preset.value)}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
               datePreset === preset.value
-                ? 'bg-slate-900 text-white'
+                ? 'bg-brand-600 text-white'
                 : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
             }`}
           >
@@ -229,7 +229,7 @@ export function ReportsView({ dataRoomId }: { dataRoomId: string }) {
               onClick={() => setActiveTab(tab.value)}
               className={`px-5 py-2.5 text-sm font-medium transition-colors ${
                 activeTab === tab.value
-                  ? 'border-b-2 border-slate-900 text-slate-900'
+                  ? 'border-b-2 border-brand-600 text-brand-700'
                   : 'text-slate-500 hover:text-slate-800'
               }`}
             >
@@ -241,7 +241,7 @@ export function ReportsView({ dataRoomId }: { dataRoomId: string }) {
 
       {/* ── Overview tab ── */}
       {activeTab === 'overview' && (
-        <div className="rounded-lg border border-slate-200 bg-white p-5">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-soft">
           <div className="mb-1 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-700">Download &amp; View Activity</h3>
             <span className="text-xs text-slate-400">

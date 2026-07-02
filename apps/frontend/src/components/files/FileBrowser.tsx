@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, DragEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { FolderOpen, Upload, FolderPlus, Grid3X3, List, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, Cloud } from 'lucide-react';
+import { FolderOpen, Upload, FolderPlus, Grid3X3, List, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, Cloud, Download, History, PenLine, Trash2 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/Skeleton';
 import {
   useFiles,
   useUpdateFile,
@@ -287,12 +288,12 @@ export function FileBrowser({
         if (canUpload) e.preventDefault();
       }}
       onDrop={canUpload ? handleDrop : undefined}
-      className={`relative rounded-lg ${isDragOver ? 'ring-2 ring-slate-400' : ''}`}
+      className={`relative rounded-lg ${isDragOver ? 'ring-2 ring-brand-400' : ''}`}
     >
       {/* Drop overlay */}
       {isDragOver && canUpload && (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-white/80 backdrop-blur-[2px]">
-          <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-400 px-8 py-6">
+          <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-brand-400 px-8 py-6">
             <Upload className="h-8 w-8 text-slate-400" aria-hidden="true" />
             <p className="text-sm font-medium text-slate-700">Drop to upload</p>
           </div>
@@ -321,7 +322,7 @@ export function FileBrowser({
           <div className="relative">
             <button
               onClick={() => setShowUploadMenu((v) => !v)}
-              className="flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+              className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
             >
               <Upload className="h-3.5 w-3.5" aria-hidden="true" />
               Upload
@@ -330,7 +331,7 @@ export function FileBrowser({
             {showUploadMenu && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowUploadMenu(false)} />
-                <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded-md border border-slate-200 bg-white py-1 shadow-lg">
+                <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded-xl border border-slate-200 bg-white py-1.5 shadow-popover">
                   <button
                     onClick={() => { multiInputRef.current?.click(); setShowUploadMenu(false); }}
                     className="flex w-full items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
@@ -369,14 +370,14 @@ export function FileBrowser({
             <button
               onClick={() => setViewMode('list')}
               title="List view"
-              className={`px-2 py-1.5 ${viewMode === 'list' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
+              className={`px-2 py-1.5 ${viewMode === 'list' ? 'bg-brand-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
             >
               <List className="h-4 w-4" aria-hidden="true" />
             </button>
             <button
               onClick={() => setViewMode('grid')}
               title="Grid view"
-              className={`px-2 py-1.5 ${viewMode === 'grid' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
+              className={`px-2 py-1.5 ${viewMode === 'grid' ? 'bg-brand-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
             >
               <Grid3X3 className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -393,7 +394,7 @@ export function FileBrowser({
               onClick={() => setTypeFilter(type)}
               className={`rounded-full px-3 py-0.5 text-xs font-medium transition-colors ${
                 typeFilter === type
-                  ? 'bg-slate-900 text-white'
+                  ? 'bg-brand-600 text-white'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
@@ -405,16 +406,17 @@ export function FileBrowser({
 
       {/* Bulk actions bar */}
       {selectedIds.size > 0 && (
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-          <span className="text-sm font-medium text-slate-700">
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-4 py-2.5 shadow-soft">
+          <span className="text-sm font-semibold text-brand-700">
             {selectedIds.size} selected
           </span>
           {canDownload && (
             <button
               onClick={handleBulkDownload}
               disabled={isBulkDownloading}
-              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
+              <Download className="h-3.5 w-3.5" aria-hidden="true" />
               {isBulkDownloading ? 'Preparing ZIP…' : 'Download ZIP'}
             </button>
           )}
@@ -422,13 +424,13 @@ export function FileBrowser({
             <button
               onClick={handleBulkDelete}
               disabled={isBulkDeleting}
-              className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+              className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
             >
-              {isBulkDeleting ? 'Deleting…' : 'Delete'}
+              {isBulkDeleting ? 'Deleting…' : 'Delete selected'}
             </button>
           )}
-          <button onClick={clearSelection} className="ml-auto text-sm text-slate-500 hover:text-slate-900">
-            ✕ Deselect all
+          <button onClick={clearSelection} className="ml-auto text-xs font-medium text-slate-500 hover:text-slate-800">
+            Clear selection
           </button>
         </div>
       )}
@@ -442,7 +444,16 @@ export function FileBrowser({
       <div className="flex gap-4">
         <div className="min-w-0 flex-1">
           {isLoading ? (
-            <p className="text-sm text-slate-400">Loading files…</p>
+            <div className="space-y-2">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <Skeleton className="h-4 w-4 flex-shrink-0 rounded" />
+                  <Skeleton className="h-3.5 flex-1 rounded" />
+                  <Skeleton className="h-3 w-16 rounded" />
+                  <Skeleton className="h-3 w-24 rounded" />
+                </div>
+              ))}
+            </div>
           ) : displayFiles.length === 0 && !hasActiveUploads ? (
             <div className="flex flex-col items-center rounded-lg border border-dashed border-slate-300 p-12 text-center">
               <FolderOpen className="h-10 w-10 text-slate-300" aria-hidden="true" />
@@ -455,7 +466,7 @@ export function FileBrowser({
                   <div className="mt-4 flex gap-2">
                     <button
                       onClick={() => multiInputRef.current?.click()}
-                      className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
                     >
                       <Upload className="h-3.5 w-3.5" aria-hidden="true" />
                       Upload files
@@ -521,9 +532,9 @@ export function FileBrowser({
             </div>
           ) : (
             /* List view */
-            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-soft">
               <table className="w-full table-fixed text-left text-sm">
-                <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+                <thead className="border-b border-slate-100 bg-slate-50/80 text-xs">
                   <tr>
                     {canDownload && (
                       <th className="w-8 px-3 py-3">
@@ -536,40 +547,41 @@ export function FileBrowser({
                       </th>
                     )}
                     <th
-                      className="cursor-pointer select-none px-4 py-3 hover:text-slate-900"
+                      className="cursor-pointer select-none px-4 py-3 font-semibold uppercase tracking-wide text-slate-400 hover:text-slate-700"
                       onClick={() => handleSortHeader('name')}
                     >
                       Name
                       <SortIcon sortKey={sortKey} col="name" sortDir={sortDir} />
                     </th>
                     <th
-                      className="w-24 cursor-pointer select-none px-4 py-3 hover:text-slate-900"
+                      className="w-24 cursor-pointer select-none px-4 py-3 font-semibold uppercase tracking-wide text-slate-400 hover:text-slate-700"
                       onClick={() => handleSortHeader('size')}
                     >
                       Size
                       <SortIcon sortKey={sortKey} col="size" sortDir={sortDir} />
                     </th>
                     <th
-                      className="w-36 cursor-pointer select-none px-4 py-3 hover:text-slate-900"
+                      className="w-36 cursor-pointer select-none px-4 py-3 font-semibold uppercase tracking-wide text-slate-400 hover:text-slate-700"
                       onClick={() => handleSortHeader('modified')}
                     >
                       Modified
                       <SortIcon sortKey={sortKey} col="modified" sortDir={sortDir} />
                     </th>
-                    <th className="w-48 px-4 py-3" />
+                    <th className="w-40 px-4 py-3" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {displayFiles.map((file, idx) => {
                     const isSelected = selectedIds.has(file.id);
                     const isActive = detailsFile?.id === file.id;
+                    const FileIcon = getFileIcon(file.extension);
                     return (
                       <tr
                         key={file.id}
                         draggable={canUpload}
                         onDragStart={(e) => e.dataTransfer.setData('text/file-id', file.id)}
                         onClick={() => setDetailsFile(isActive ? null : file)}
-                        className={`cursor-pointer hover:bg-slate-50 ${isSelected || isActive ? 'bg-slate-50' : ''}`}
+                        className={`group cursor-pointer hover:bg-slate-50/80 ${isSelected || isActive ? 'bg-slate-50' : ''}`}
                       >
                         {canDownload && (
                           <td className="w-8 px-3 py-3">
@@ -586,64 +598,75 @@ export function FileBrowser({
                           </td>
                         )}
                         <td className="px-4 py-3">
-                          <Tooltip label={file.name} side="top">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPreviewFile(file);
-                              }}
-                              className="truncate font-medium text-slate-900 hover:underline"
-                            >
-                              {truncateFilename(file.name, nameMaxLength)}
-                            </button>
-                          </Tooltip>
+                          <div className="flex items-center gap-2.5">
+                            <FileIcon className="h-4 w-4 flex-shrink-0 text-slate-400" aria-hidden="true" />
+                            <Tooltip label={file.name} side="top">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPreviewFile(file);
+                                }}
+                                className="truncate font-medium text-slate-900 hover:text-brand-600 hover:underline"
+                              >
+                                {truncateFilename(file.name, nameMaxLength)}
+                              </button>
+                            </Tooltip>
+                          </div>
                         </td>
-                        <td className="overflow-hidden whitespace-nowrap px-4 py-3 text-slate-600">
+                        <td className="overflow-hidden whitespace-nowrap px-4 py-3 text-slate-500">
                           {formatBytes(file.sizeBytes)}
                         </td>
-                        <td className="overflow-hidden whitespace-nowrap px-4 py-3 text-slate-600">
+                        <td className="overflow-hidden whitespace-nowrap px-4 py-3 text-slate-500">
                           {new Date(file.updatedAt).toLocaleDateString()}
                         </td>
                         <td
                           className="px-4 py-3"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <div className="flex justify-end gap-3 text-xs">
+                          <div className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                             {canDownload && (
-                              <button
-                                onClick={() =>
-                                  downloadFile(
-                                    dataRoomId,
-                                    file.id,
-                                    getPreviewFilename(file.name, file.extension),
-                                  )
-                                }
-                                className="text-slate-500 hover:text-slate-900"
-                              >
-                                Download
-                              </button>
+                              <Tooltip label="Download" side="top">
+                                <button
+                                  onClick={() =>
+                                    downloadFile(
+                                      dataRoomId,
+                                      file.id,
+                                      getPreviewFilename(file.name, file.extension),
+                                    )
+                                  }
+                                  className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                                >
+                                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                                </button>
+                              </Tooltip>
                             )}
-                            <button
-                              onClick={() => setVersionsFile(file)}
-                              className="text-slate-500 hover:text-slate-900"
-                            >
-                              Versions
-                            </button>
-                            {canUpload && (
+                            <Tooltip label="Version history" side="top">
                               <button
-                                onClick={() => handleRename(file)}
-                                className="text-slate-500 hover:text-slate-900"
+                                onClick={() => setVersionsFile(file)}
+                                className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                               >
-                                Rename
+                                <History className="h-3.5 w-3.5" aria-hidden="true" />
                               </button>
+                            </Tooltip>
+                            {canUpload && (
+                              <Tooltip label="Rename" side="top">
+                                <button
+                                  onClick={() => handleRename(file)}
+                                  className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                                >
+                                  <PenLine className="h-3.5 w-3.5" aria-hidden="true" />
+                                </button>
+                              </Tooltip>
                             )}
                             {canDelete && (
-                              <button
-                                onClick={() => handleDelete(file)}
-                                className="text-red-500 hover:text-red-700"
-                              >
-                                Delete
-                              </button>
+                              <Tooltip label="Delete" side="top">
+                                <button
+                                  onClick={() => handleDelete(file)}
+                                  className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                </button>
+                              </Tooltip>
                             )}
                           </div>
                         </td>
