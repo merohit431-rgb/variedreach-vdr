@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 
-export type ReportName = 'download-activity' | 'user-activity';
+export type ReportName = 'download-activity' | 'user-activity' | 'storage';
 export type ReportExportFormat = 'csv' | 'xlsx' | 'pdf';
 
 export interface ReportTable {
@@ -10,22 +10,81 @@ export interface ReportTable {
   rows: (string | number)[][];
 }
 
+export interface StorageReportTable extends ReportTable {
+  summary: {
+    usedBytes: string;
+    limitGb: number;
+    fileCount: number;
+    byType: Record<string, string>;
+  };
+}
+
+export interface SummaryStats {
+  totalFiles: number;
+  totalDownloads: number;
+  totalViews: number;
+  totalUploads: number;
+  activeUsers: number;
+  storageUsedBytes: string;
+  storageLimitGb: number;
+  storageUsedPercent: number;
+}
+
+export interface TrendPoint {
+  date: string;
+  downloads: number;
+  views: number;
+}
+
 export interface ReportFilters {
   from?: string;
   to?: string;
 }
 
-export function useReportPreview(dataRoomId: string, reportName: ReportName, filters: ReportFilters) {
+export function useReportSummary(dataRoomId: string, filters: ReportFilters) {
+  return useQuery({
+    queryKey: ['data-rooms', dataRoomId, 'reports', 'summary', filters],
+    queryFn: async () => {
+      const response = await apiClient.get<{ data: SummaryStats }>(
+        `/data-rooms/${dataRoomId}/reports/summary`,
+        { params: { ...filters } },
+      );
+      return response.data.data;
+    },
+    enabled: Boolean(dataRoomId),
+  });
+}
+
+export function useDownloadTrends(dataRoomId: string, filters: ReportFilters) {
+  return useQuery({
+    queryKey: ['data-rooms', dataRoomId, 'reports', 'download-trends', filters],
+    queryFn: async () => {
+      const response = await apiClient.get<{ data: TrendPoint[] }>(
+        `/data-rooms/${dataRoomId}/reports/download-trends`,
+        { params: { ...filters } },
+      );
+      return response.data.data;
+    },
+    enabled: Boolean(dataRoomId),
+  });
+}
+
+export function useReportPreview(
+  dataRoomId: string,
+  reportName: ReportName,
+  filters: ReportFilters,
+  enabled = true,
+) {
   return useQuery({
     queryKey: ['data-rooms', dataRoomId, 'reports', reportName, filters],
     queryFn: async () => {
-      const response = await apiClient.get<{ data: ReportTable }>(
+      const response = await apiClient.get<{ data: ReportTable | StorageReportTable }>(
         `/data-rooms/${dataRoomId}/reports/${reportName}`,
         { params: { ...filters, format: 'json' } },
       );
       return response.data.data;
     },
-    enabled: Boolean(dataRoomId),
+    enabled: enabled && Boolean(dataRoomId),
   });
 }
 
