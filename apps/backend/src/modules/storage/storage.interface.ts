@@ -9,6 +9,10 @@ export interface SavedFile {
 // nothing in the Files module needs to change.
 export interface IStorageService {
   save(dataRoomId: string, originalName: string, buffer: Buffer): Promise<SavedFile>;
+  // Moves an already-on-disk upload (multer's diskStorage temp file) into
+  // permanent storage without holding it in memory -- the only safe way to
+  // handle uploads up to ~2GB inside a memory-capped container.
+  saveFromPath(dataRoomId: string, originalName: string, tempPath: string): Promise<SavedFile>;
   read(storagePath: string): Promise<Buffer>;
   delete(storagePath: string): Promise<void>;
 }

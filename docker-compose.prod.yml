@@ -76,7 +76,12 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          # Raised from 512M after this limit OOM-killed the backend process
+          # (watermarking a moderately-sized PDF is enough to spike well past
+          # 512M -- pdf-lib loads the whole file and re-serializes it, using
+          # several times the file's own size). 2GB matches what staging
+          # already runs with.
+          memory: 2048M
 
   frontend:
     build:

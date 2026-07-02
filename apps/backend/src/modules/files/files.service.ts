@@ -1,5 +1,6 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { rm } from 'fs/promises';
 import { File, UserRole } from '@prisma/client';
 import type { Archiver as ArchiverInstance, ArchiverOptions } from 'archiver';
 // archiver ships CommonJS; we use a typed cast so the factory is callable
@@ -95,83 +96,81 @@ export class FilesService {
 
     const created: File[] = [];
 
-    for (let index = 0; index < multerFiles.length; index += 1) {
-      const multerFile = multerFiles[index];
-      const relativePath = relativePaths?.[index];
-      const segments = relativePath ? relativePath.split('/').filter(Boolean) : [];
-      const fileName = segments.pop() ?? multerFile.originalname;
-      const extension = this.extractExtension(fileName);
+    try {
+      for (let index = 0; index < multerFiles.length; index += 1) {
+        const multerFile = multerFiles[index];
+        const relativePath = relativePaths?.[index];
+        const segments = relativePath ? relativePath.split('/').filter(Boolean) : [];
+        const fileName = segments.pop() ?? multerFile.originalname;
+        const extension = this.extractExtension(fileName);
 
-      const rule = getFileTypeRule(extension);
-      if (!rule) {
-        throw new BadRequestException(`"${fileName}" has an unsupported file type (.${extension})`);
-      }
-      if (multerFile.size > rule.maxSizeBytes) {
-        throw new BadRequestException(
-          `"${fileName}" exceeds the ${Math.round(rule.maxSizeBytes / (1024 * 1024))}MB limit for ${rule.category}`,
-        );
-      }
+        const rule = getFileTypeRule(extension);
+        if (!rule) {
+          throw new BadRequestException(`"${fileName}" has an unsupported file type (.${extension})`);
+        }
+        if (multerFile.size > rule.maxSizeBytes) {
+          throw new BadRequestException(
+            `"${fileName}" exceeds the ${Math.round(rule.maxSizeBytes / (1024 * 1024))}MB limit for ${rule.category}`,
+          );
+        }
 
-      // Magic byte check — validates the actual file bytes match the declared
-      // extension so a renamed executable cannot masquerade as a PDF.
-      const magic = validateMagicBytes(multerFile.buffer, extension);
-      if (!magic.valid) {
-        throw new BadRequestException(
-          `"${fileName}" appears to be corrupt or its content does not match the .${extension} format`,
-        );
-      }
+        const targetFolderId =
+          segments.length > 0
+            ? await this.foldersService.findOrCreateFolderPath(dataRoomId, folderId ?? null, segments, actor.id)
+            : folderId ?? null;
 
-      const targetFolderId =
-        segments.length > 0
-          ? await this.foldersService.findOrCreateFolderPath(dataRoomId, folderId ?? null, segments, actor.id)
-          : folderId ?? null;
+        const saved = await this.storage.saveFromPath(dataRoomId, fileName, multerFile.path);
 
-      const saved = await this.storage.save(dataRoomId, fileName, multerFile.buffer);
+        const file = await this.prisma.$transaction(async (tx) => {
+          const draft = await tx.file.create({
+            data: {
+              dataRoomId,
+              folderId: targetFolderId,
+              name: fileName,
+              mimeType: multerFile.mimetype || 'application/octet-stream',
+              extension,
+              sizeBytes: saved.sizeBytes,
+              uploadedBy: actor.id,
+            },
+          });
 
-      const file = await this.prisma.$transaction(async (tx) => {
-        const draft = await tx.file.create({
-          data: {
-            dataRoomId,
-            folderId: targetFolderId,
-            name: fileName,
-            mimeType: multerFile.mimetype || 'application/octet-stream',
-            extension,
-            sizeBytes: saved.sizeBytes,
-            uploadedBy: actor.id,
-          },
+          const version = await tx.fileVersion.create({
+            data: {
+              fileId: draft.id,
+              versionNumber: 1,
+              storagePath: saved.storagePath,
+              sizeBytes: saved.sizeBytes,
+              mimeType: draft.mimeType,
+              checksum: saved.checksum,
+              uploadedBy: actor.id,
+              comment: 'Initial upload',
+            },
+          });
+
+          return tx.file.update({ where: { id: draft.id }, data: { currentVersionId: version.id } });
         });
 
-        const version = await tx.fileVersion.create({
-          data: {
-            fileId: draft.id,
-            versionNumber: 1,
-            storagePath: saved.storagePath,
-            sizeBytes: saved.sizeBytes,
-            mimeType: draft.mimeType,
-            checksum: saved.checksum,
-            uploadedBy: actor.id,
-            comment: 'Initial upload',
-          },
+        await this.prisma.dataRoom.update({
+          where: { id: dataRoomId },
+          data: { storageUsedBytes: { increment: saved.sizeBytes } },
         });
 
-        return tx.file.update({ where: { id: draft.id }, data: { currentVersionId: version.id } });
-      });
+        await this.auditLogService.record({
+          action: 'FILE_UPLOADED',
+          dataRoomId,
+          userId: actor.id,
+          resourceType: 'File',
+          resourceId: file.id,
+          metadata: { name: fileName, sizeBytes: saved.sizeBytes },
+        });
 
-      await this.prisma.dataRoom.update({
-        where: { id: dataRoomId },
-        data: { storageUsedBytes: { increment: saved.sizeBytes } },
-      });
-
-      await this.auditLogService.record({
-        action: 'FILE_UPLOADED',
-        dataRoomId,
-        userId: actor.id,
-        resourceType: 'File',
-        resourceId: file.id,
-        metadata: { name: fileName, sizeBytes: saved.sizeBytes },
-      });
-
-      created.push(file);
+        created.push(file);
+      }
+    } finally {
+      // saveFromPath renames successful files out of the temp dir, so this
+      // is a no-op for those -- only matters when validation throws partway
+      // through a batch and leaves later files' temp uploads orphaned.
+      await Promise.all(multerFiles.map((f) => rm(f.path, { force: true }).catch(() => undefined)));
     }
 
     await this.checkStorageThreshold(dataRoomId);
@@ -278,16 +277,13 @@ export class FilesService {
       }
     }
 
-    // Magic byte check — the new version must match the extension declared at
-    // original upload time; extension changes are not allowed via versioning.
-    const magic = validateMagicBytes(multerFile.buffer, file.extension);
-    if (!magic.valid) {
-      throw new BadRequestException(
-        `New version content does not match the .${file.extension} format. The file may be corrupt or spoofed.`,
-      );
+    let saved;
+    try {
+      saved = await this.storage.saveFromPath(dataRoomId, file.name, multerFile.path);
+    } finally {
+      await rm(multerFile.path, { force: true }).catch(() => undefined);
     }
 
-    const saved = await this.storage.save(dataRoomId, file.name, multerFile.buffer);
     const latestVersion = await this.prisma.fileVersion.findFirst({
       where: { fileId: file.id },
       orderBy: { versionNumber: 'desc' },

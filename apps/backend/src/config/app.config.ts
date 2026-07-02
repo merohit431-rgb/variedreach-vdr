@@ -18,5 +18,5 @@ export default registerAs('app', () => ({
     registrationLimit: parseInt(process.env.THROTTLE_REGISTRATION_LIMIT || '10', 10),
   },
   storageLocalPath: process.env.STORAGE_LOCAL_PATH || './uploads',
-  storageMaxFileSizeBytes: parseInt(process.env.STORAGE_MAX_FILE_SIZE_BYTES || `${100 * 1024 * 1024}`, 10),
+  storageMaxFileSizeBytes: parseInt(process.env.STORAGE_MAX_FILE_SIZE_BYTES || `${2 * 1024 * 1024 * 1024}`, 10),
 }));

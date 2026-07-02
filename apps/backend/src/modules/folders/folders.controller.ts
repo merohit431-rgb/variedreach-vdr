@@ -3,6 +3,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { FoldersService } from './folders.service';
 import { CreateFolderDto } from './dto/create-folder.dto';
 import { UpdateFolderDto } from './dto/update-folder.dto';
+import { CopyFolderDto } from './dto/copy-folder.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 
@@ -33,6 +34,16 @@ export class FoldersController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.foldersService.update(dataRoomId, folderId, dto, user);
+  }
+
+  @Post(':folderId/copy')
+  copy(
+    @Param('dataRoomId') dataRoomId: string,
+    @Param('folderId') folderId: string,
+    @Body() dto: CopyFolderDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.foldersService.copy(dataRoomId, folderId, dto, user);
   }
 
   @Delete(':folderId')
