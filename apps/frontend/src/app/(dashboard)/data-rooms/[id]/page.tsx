@@ -2,8 +2,9 @@
 
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
+import { Search } from 'lucide-react';
 import { useDataRoomAccess } from '@/hooks/use-data-rooms';
-import { useFolders, FolderNode } from '@/hooks/use-folders';
+import { useFolders, type FolderNode } from '@/hooks/use-folders';
 import { FolderTree } from '@/components/folders/FolderTree';
 import { FileBrowser } from '@/components/files/FileBrowser';
 import { NdaGateModal } from '@/components/data-rooms/NdaGateModal';
@@ -44,7 +45,7 @@ export default function DataRoomFilesPage() {
 
   return (
     <NdaGateModal dataRoomId={id}>
-      <div className="flex gap-6 pt-4">
+      <div className="flex gap-5">
         <FolderTree
           dataRoomId={id}
           selectedFolderId={selectedFolderId}
@@ -53,16 +54,22 @@ export default function DataRoomFilesPage() {
           canDelete={canDelete}
           canDownload={canDownload}
         />
-        <div className="flex-1">
-          <div className="mb-3 flex items-center justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="mb-3 flex items-center justify-between gap-3">
             <Breadcrumb items={breadcrumbItems} />
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search files in this data room"
-              className="w-64 flex-shrink-0 rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
-            />
+            <div className="relative flex-shrink-0">
+              <Search
+                className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
+                aria-hidden="true"
+              />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search files…"
+                className="w-52 rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              />
+            </div>
           </div>
           <FileBrowser
             dataRoomId={id}
