@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState, DragEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, DragEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { FolderOpen, Upload, FolderPlus } from 'lucide-react';
+import { FolderOpen, Upload, FolderPlus, Grid3X3, List, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import {
   useFiles,
   useUpdateFile,
@@ -18,18 +18,53 @@ import { extractErrorMessage } from '@/lib/error-message';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useUploadStore } from '@/store/upload-store';
+import { getFileIcon } from '@/lib/file-icon';
 import { UploadProgressPanel } from './UploadProgressPanel';
 import { FilePreviewModal } from './FilePreviewModal';
 import { VersionHistoryModal } from './VersionHistoryModal';
+import { FileDetailsPanel } from './FileDetailsPanel';
 
 const DESKTOP_NAME_MAX_LENGTH = 23;
 const MOBILE_NAME_MAX_LENGTH = 16;
+const READY_ITEM_DISPLAY_MS = 1500;
+
+type SortKey = 'name' | 'size' | 'modified';
+type SortDir = 'asc' | 'desc';
+type ViewMode = 'list' | 'grid';
+type TypeFilter = 'all' | 'pdf' | 'images' | 'office' | 'other';
 
 interface BrowserFileWithPath extends File {
   webkitRelativePath: string;
 }
 
-const READY_ITEM_DISPLAY_MS = 1500;
+const TYPE_FILTER_LABELS: Record<TypeFilter, string> = {
+  all: 'All',
+  pdf: 'PDF',
+  images: 'Images',
+  office: 'Docs',
+  other: 'Other',
+};
+
+const PDF_EXTS = new Set(['pdf']);
+const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff', 'tif']);
+const OFFICE_EXTS = new Set(['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'csv', 'txt', 'rtf']);
+
+function getTypeCategory(ext: string): TypeFilter {
+  const e = ext.toLowerCase();
+  if (PDF_EXTS.has(e)) return 'pdf';
+  if (IMAGE_EXTS.has(e)) return 'images';
+  if (OFFICE_EXTS.has(e)) return 'office';
+  return 'other';
+}
+
+function SortIcon({ sortKey, col, sortDir }: { sortKey: SortKey; col: SortKey; sortDir: SortDir }) {
+  if (sortKey !== col) return <ArrowUpDown className="ml-1 inline h-3 w-3 text-slate-400" aria-hidden="true" />;
+  return sortDir === 'asc' ? (
+    <ArrowUp className="ml-1 inline h-3 w-3 text-slate-700" aria-hidden="true" />
+  ) : (
+    <ArrowDown className="ml-1 inline h-3 w-3 text-slate-700" aria-hidden="true" />
+  );
+}
 
 export function FileBrowser({
   dataRoomId,
@@ -57,14 +92,25 @@ export function FileBrowser({
 
   const multiInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<FileRecord | null>(null);
   const [versionsFile, setVersionsFile] = useState<FileRecord | null>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
+  const [detailsFile, setDetailsFile] = useState<FileRecord | null>(null);
+
+  // Drag-over counter avoids false leave events when cursor crosses child elements
+  const [dragCounter, setDragCounter] = useState(0);
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lastClickedIdx, setLastClickedIdx] = useState<number | null>(null);
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
-  // Items the inline panel has finished showing — hidden here only, not
-  // removed from the global store so the sticky upload manager keeps a full history.
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [sortKey, setSortKey] = useState<SortKey>('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+
   const [locallyDismissedIds, setLocallyDismissedIds] = useState<Set<string>>(new Set());
 
   const visibleUploadItems = uploadItems.filter(
@@ -74,6 +120,19 @@ export function FileBrowser({
     (item) => item.status === 'queued' || item.status === 'uploading' || item.status === 'processing',
   );
 
+  const displayFiles = useMemo(() => {
+    if (!files) return [];
+    let result = typeFilter === 'all' ? files : files.filter((f) => getTypeCategory(f.extension) === typeFilter);
+    result = [...result].sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === 'name') cmp = a.name.localeCompare(b.name);
+      else if (sortKey === 'size') cmp = Number(a.sizeBytes) - Number(b.sizeBytes);
+      else if (sortKey === 'modified') cmp = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return result;
+  }, [files, typeFilter, sortKey, sortDir]);
+
   useEffect(() => {
     if (folderInputRef.current) {
       folderInputRef.current.setAttribute('webkitdirectory', 'true');
@@ -81,12 +140,9 @@ export function FileBrowser({
     }
   }, []);
 
-  // Once a file finishes uploading, let it sit briefly with a "Completed"
-  // checkmark before folding into the real file list below.
   useEffect(() => {
     const readyItems = visibleUploadItems.filter((item) => item.status === 'ready');
     if (readyItems.length === 0) return;
-
     const timers = readyItems.map((item) =>
       setTimeout(() => {
         setLocallyDismissedIds((prev) => new Set(prev).add(item.id));
@@ -99,24 +155,15 @@ export function FileBrowser({
   function uploadFileList(fileList: FileList | File[]) {
     const list = Array.from(fileList) as BrowserFileWithPath[];
     if (list.length === 0) return;
-
     for (const file of list) {
-      enqueue({
-        dataRoomId,
-        folderId,
-        file,
-        relativePath: file.webkitRelativePath || file.name,
-        queryClient,
-      });
+      enqueue({ dataRoomId, folderId, file, relativePath: file.webkitRelativePath || file.name, queryClient });
     }
   }
 
   function handleDrop(event: DragEvent) {
     event.preventDefault();
-    setIsDragOver(false);
-    if (event.dataTransfer.files.length > 0) {
-      uploadFileList(event.dataTransfer.files);
-    }
+    setDragCounter(0);
+    if (event.dataTransfer.files.length > 0) uploadFileList(event.dataTransfer.files);
   }
 
   function handleRename(file: FileRecord) {
@@ -127,6 +174,7 @@ export function FileBrowser({
   function handleDelete(file: FileRecord) {
     if (window.confirm(`Delete "${file.name}"?`)) {
       deleteFile.mutate(file.id);
+      if (detailsFile?.id === file.id) setDetailsFile(null);
     }
   }
 
@@ -135,21 +183,41 @@ export function FileBrowser({
     if (name) createFolder.mutate({ name, parentId: folderId ?? undefined });
   }
 
-  function toggleSelect(fileId: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(fileId)) next.delete(fileId);
-      else next.add(fileId);
-      return next;
-    });
+  function clearSelection() {
+    setSelectedIds(new Set());
+    setLastClickedIdx(null);
+  }
+
+  function toggleSelect(idx: number, shiftKey: boolean) {
+    const file = displayFiles[idx];
+    if (!file) return;
+
+    if (shiftKey && lastClickedIdx !== null) {
+      const start = Math.min(lastClickedIdx, idx);
+      const end = Math.max(lastClickedIdx, idx);
+      const rangeIds = displayFiles.slice(start, end + 1).map((f) => f.id);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        rangeIds.forEach((id) => next.add(id));
+        return next;
+      });
+    } else {
+      setLastClickedIdx(idx);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(file.id)) next.delete(file.id);
+        else next.add(file.id);
+        return next;
+      });
+    }
   }
 
   function toggleSelectAll() {
-    if (!files) return;
-    if (selectedIds.size === files.length) {
-      setSelectedIds(new Set());
+    if (!displayFiles.length) return;
+    if (selectedIds.size === displayFiles.length) {
+      clearSelection();
     } else {
-      setSelectedIds(new Set(files.map((f) => f.id)));
+      setSelectedIds(new Set(displayFiles.map((f) => f.id)));
     }
   }
 
@@ -160,7 +228,7 @@ export function FileBrowser({
     try {
       const dateStr = new Date().toISOString().slice(0, 10);
       await bulkDownloadFiles(dataRoomId, Array.from(selectedIds), `data-room-export-${dateStr}.zip`);
-      setSelectedIds(new Set());
+      clearSelection();
     } catch (err) {
       setError(extractErrorMessage(err));
     } finally {
@@ -168,35 +236,79 @@ export function FileBrowser({
     }
   }
 
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    if (!window.confirm(`Permanently delete ${count} file${count === 1 ? '' : 's'}?`)) return;
+    setIsBulkDeleting(true);
+    setError(null);
+    const idsToDelete = Array.from(selectedIds);
+    try {
+      for (const id of idsToDelete) {
+        await deleteFile.mutateAsync(id);
+      }
+      clearSelection();
+      if (detailsFile && idsToDelete.includes(detailsFile.id)) setDetailsFile(null);
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  }
+
+  function handleSortHeader(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  }
+
+  const isDragOver = dragCounter > 0;
+
   return (
     <div
-      onDragOver={(e) => {
-        if (canUpload) {
-          e.preventDefault();
-          setIsDragOver(true);
-        }
+      onDragEnter={(e) => {
+        if (canUpload && e.dataTransfer.types.includes('Files')) setDragCounter((c) => c + 1);
       }}
-      onDragLeave={() => setIsDragOver(false)}
+      onDragLeave={() => setDragCounter((c) => Math.max(0, c - 1))}
+      onDragOver={(e) => {
+        if (canUpload) e.preventDefault();
+      }}
       onDrop={canUpload ? handleDrop : undefined}
-      className={`rounded-lg ${isDragOver ? 'ring-2 ring-slate-400' : ''}`}
+      className={`relative rounded-lg ${isDragOver ? 'ring-2 ring-slate-400' : ''}`}
     >
-      <div className="mb-3 flex items-center gap-2">
+      {/* Drop overlay */}
+      {isDragOver && canUpload && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-white/80 backdrop-blur-[2px]">
+          <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-400 px-8 py-6">
+            <Upload className="h-8 w-8 text-slate-400" aria-hidden="true" />
+            <p className="text-sm font-medium text-slate-700">Drop to upload</p>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden file inputs */}
+      <input
+        ref={multiInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => e.target.files && uploadFileList(e.target.files)}
+      />
+      <input
+        ref={folderInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => e.target.files && uploadFileList(e.target.files)}
+      />
+
+      {/* Toolbar */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         {canUpload && (
           <>
-            <input
-              ref={multiInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => e.target.files && uploadFileList(e.target.files)}
-            />
-            <input
-              ref={folderInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => e.target.files && uploadFileList(e.target.files)}
-            />
             <button
               onClick={() => multiInputRef.current?.click()}
               className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
@@ -211,147 +323,320 @@ export function FileBrowser({
             </button>
           </>
         )}
-        {canDownload && selectedIds.size > 0 && (
-          <button
-            onClick={handleBulkDownload}
-            disabled={isBulkDownloading}
-            className="ml-auto rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            {isBulkDownloading ? 'Preparing ZIP…' : `Download selected (${selectedIds.size})`}
-          </button>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {/* View mode toggle */}
+          <div className="flex overflow-hidden rounded-md border border-slate-200">
+            <button
+              onClick={() => setViewMode('list')}
+              title="List view"
+              className={`px-2 py-1.5 ${viewMode === 'list' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
+            >
+              <List className="h-4 w-4" aria-hidden="true" />
+            </button>
+            <button
+              onClick={() => setViewMode('grid')}
+              title="Grid view"
+              className={`px-2 py-1.5 ${viewMode === 'grid' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
+            >
+              <Grid3X3 className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* Type filter chips */}
+      {files && files.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {(Object.keys(TYPE_FILTER_LABELS) as TypeFilter[]).map((type) => (
+            <button
+              key={type}
+              onClick={() => setTypeFilter(type)}
+              className={`rounded-full px-3 py-0.5 text-xs font-medium transition-colors ${
+                typeFilter === type
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {TYPE_FILTER_LABELS[type]}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Bulk actions bar */}
+      {selectedIds.size > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <span className="text-sm font-medium text-slate-700">
+            {selectedIds.size} selected
+          </span>
+          {canDownload && (
+            <button
+              onClick={handleBulkDownload}
+              disabled={isBulkDownloading}
+              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              {isBulkDownloading ? 'Preparing ZIP…' : 'Download ZIP'}
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={handleBulkDelete}
+              disabled={isBulkDeleting}
+              className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+            >
+              {isBulkDeleting ? 'Deleting…' : 'Delete'}
+            </button>
+          )}
+          <button onClick={clearSelection} className="ml-auto text-sm text-slate-500 hover:text-slate-900">
+            ✕ Deselect all
+          </button>
+        </div>
+      )}
 
       {error && <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       <UploadProgressPanel items={visibleUploadItems} />
 
-      {isLoading ? (
-        <p className="text-sm text-slate-400">Loading files…</p>
-      ) : (!files || files.length === 0) && !hasActiveUploads ? (
-        <div className="flex flex-col items-center rounded-lg border border-dashed border-slate-300 p-12 text-center">
-          <FolderOpen className="h-10 w-10 text-slate-300" aria-hidden="true" />
-          <p className="mt-3 text-sm font-medium text-slate-600">This folder is empty</p>
-          {canUpload ? (
-            <>
-              <p className="mt-1 text-sm text-slate-400">Drag &amp; drop files here, or use the buttons below.</p>
-              <div className="mt-4 flex gap-2">
-                <button
-                  onClick={() => multiInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
-                >
-                  <Upload className="h-3.5 w-3.5" aria-hidden="true" />
-                  Upload files
-                </button>
-                <button
-                  onClick={handleCreateFolder}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-                >
-                  <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
-                  New folder
-                </button>
-              </div>
-            </>
-          ) : (
-            <p className="mt-1 text-sm text-slate-400">No files have been added to this folder yet.</p>
-          )}
-        </div>
-      ) : !files || files.length === 0 ? null : (
-        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-          <table className="w-full table-fixed text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                {canDownload && (
-                  <th className="w-8 px-3 py-3">
-                    <input
-                      type="checkbox"
-                      checked={files.length > 0 && selectedIds.size === files.length}
-                      onChange={toggleSelectAll}
-                      className="h-4 w-4 rounded border-slate-300"
-                    />
-                  </th>
-                )}
-                <th className="px-4 py-3">Name</th>
-                <th className="w-24 px-4 py-3">Size</th>
-                <th className="w-36 px-4 py-3">Modified</th>
-                <th className="w-56 px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {files.map((file) => (
-                <tr
-                  key={file.id}
-                  draggable={canUpload}
-                  onDragStart={(e) => e.dataTransfer.setData('text/file-id', file.id)}
-                  className={`hover:bg-slate-50 ${selectedIds.has(file.id) ? 'bg-slate-50' : ''}`}
-                >
-                  {canDownload && (
-                    <td className="w-8 px-3 py-3">
+      {/* Main content area: file list/grid + optional details panel */}
+      <div className="flex gap-4">
+        <div className="min-w-0 flex-1">
+          {isLoading ? (
+            <p className="text-sm text-slate-400">Loading files…</p>
+          ) : displayFiles.length === 0 && !hasActiveUploads ? (
+            <div className="flex flex-col items-center rounded-lg border border-dashed border-slate-300 p-12 text-center">
+              <FolderOpen className="h-10 w-10 text-slate-300" aria-hidden="true" />
+              <p className="mt-3 text-sm font-medium text-slate-600">
+                {typeFilter !== 'all' ? 'No files in this category' : 'This folder is empty'}
+              </p>
+              {canUpload && typeFilter === 'all' ? (
+                <>
+                  <p className="mt-1 text-sm text-slate-400">Drag &amp; drop files here, or use the buttons above.</p>
+                  <div className="mt-4 flex gap-2">
+                    <button
+                      onClick={() => multiInputRef.current?.click()}
+                      className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+                    >
+                      <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+                      Upload files
+                    </button>
+                    <button
+                      onClick={handleCreateFolder}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
+                      New folder
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <p className="mt-1 text-sm text-slate-400">No files have been added to this folder yet.</p>
+              )}
+            </div>
+          ) : viewMode === 'grid' ? (
+            /* Grid view */
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+              {displayFiles.map((file, idx) => {
+                const Icon = getFileIcon(file.extension);
+                const isSelected = selectedIds.has(file.id);
+                const isActive = detailsFile?.id === file.id;
+                return (
+                  <div
+                    key={file.id}
+                    draggable={canUpload}
+                    onDragStart={(e) => e.dataTransfer.setData('text/file-id', file.id)}
+                    onClick={() => setDetailsFile(isActive ? null : file)}
+                    className={`group relative cursor-pointer rounded-lg border p-3 transition-colors ${
+                      isSelected || isActive
+                        ? 'border-slate-400 bg-slate-50'
+                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    {canDownload && (
                       <input
                         type="checkbox"
-                        checked={selectedIds.has(file.id)}
-                        onChange={() => toggleSelect(file.id)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="h-4 w-4 rounded border-slate-300"
+                        checked={isSelected}
+                        onChange={() => {}}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelect(idx, e.shiftKey);
+                        }}
+                        className={`absolute left-2 top-2 h-4 w-4 rounded border-slate-300 ${
+                          isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                        }`}
                       />
-                    </td>
-                  )}
-                  <td className="px-4 py-3">
-                    <Tooltip label={file.name} side="top">
-                      <button
-                        onClick={() => setPreviewFile(file)}
-                        className="truncate font-medium text-slate-900 hover:underline"
-                      >
-                        {truncateFilename(file.name, nameMaxLength)}
-                      </button>
-                    </Tooltip>
-                  </td>
-                  <td className="overflow-hidden whitespace-nowrap px-4 py-3 text-slate-600">
-                    {formatBytes(file.sizeBytes)}
-                  </td>
-                  <td className="overflow-hidden whitespace-nowrap px-4 py-3 text-slate-600">
-                    {new Date(file.updatedAt).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end gap-3 text-xs">
-                      {canDownload && (
-                        <button
-                          onClick={() => downloadFile(dataRoomId, file.id, getPreviewFilename(file.name, file.extension))}
-                          className="text-slate-500 hover:text-slate-900"
-                        >
-                          Download
-                        </button>
-                      )}
-                      <button
-                        onClick={() => setVersionsFile(file)}
-                        className="text-slate-500 hover:text-slate-900"
-                      >
-                        Versions
-                      </button>
-                      {canUpload && (
-                        <button
-                          onClick={() => handleRename(file)}
-                          className="text-slate-500 hover:text-slate-900"
-                        >
-                          Rename
-                        </button>
-                      )}
-                      {canDelete && (
-                        <button
-                          onClick={() => handleDelete(file)}
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          Delete
-                        </button>
-                      )}
+                    )}
+                    <div className="flex flex-col items-center gap-2 pt-2">
+                      <Icon className="h-10 w-10 text-slate-400" aria-hidden="true" />
+                      <Tooltip label={file.name} side="top">
+                        <p className="w-full truncate text-center text-xs font-medium text-slate-700">
+                          {file.name}
+                        </p>
+                      </Tooltip>
+                      <p className="text-xs text-slate-400">{formatBytes(file.sizeBytes)}</p>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* List view */
+            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+              <table className="w-full table-fixed text-left text-sm">
+                <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+                  <tr>
+                    {canDownload && (
+                      <th className="w-8 px-3 py-3">
+                        <input
+                          type="checkbox"
+                          checked={displayFiles.length > 0 && selectedIds.size === displayFiles.length}
+                          onChange={toggleSelectAll}
+                          className="h-4 w-4 rounded border-slate-300"
+                        />
+                      </th>
+                    )}
+                    <th
+                      className="cursor-pointer select-none px-4 py-3 hover:text-slate-900"
+                      onClick={() => handleSortHeader('name')}
+                    >
+                      Name
+                      <SortIcon sortKey={sortKey} col="name" sortDir={sortDir} />
+                    </th>
+                    <th
+                      className="w-24 cursor-pointer select-none px-4 py-3 hover:text-slate-900"
+                      onClick={() => handleSortHeader('size')}
+                    >
+                      Size
+                      <SortIcon sortKey={sortKey} col="size" sortDir={sortDir} />
+                    </th>
+                    <th
+                      className="w-36 cursor-pointer select-none px-4 py-3 hover:text-slate-900"
+                      onClick={() => handleSortHeader('modified')}
+                    >
+                      Modified
+                      <SortIcon sortKey={sortKey} col="modified" sortDir={sortDir} />
+                    </th>
+                    <th className="w-48 px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {displayFiles.map((file, idx) => {
+                    const isSelected = selectedIds.has(file.id);
+                    const isActive = detailsFile?.id === file.id;
+                    return (
+                      <tr
+                        key={file.id}
+                        draggable={canUpload}
+                        onDragStart={(e) => e.dataTransfer.setData('text/file-id', file.id)}
+                        onClick={() => setDetailsFile(isActive ? null : file)}
+                        className={`cursor-pointer hover:bg-slate-50 ${isSelected || isActive ? 'bg-slate-50' : ''}`}
+                      >
+                        {canDownload && (
+                          <td className="w-8 px-3 py-3">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleSelect(idx, e.shiftKey);
+                              }}
+                              className="h-4 w-4 rounded border-slate-300"
+                            />
+                          </td>
+                        )}
+                        <td className="px-4 py-3">
+                          <Tooltip label={file.name} side="top">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewFile(file);
+                              }}
+                              className="truncate font-medium text-slate-900 hover:underline"
+                            >
+                              {truncateFilename(file.name, nameMaxLength)}
+                            </button>
+                          </Tooltip>
+                        </td>
+                        <td className="overflow-hidden whitespace-nowrap px-4 py-3 text-slate-600">
+                          {formatBytes(file.sizeBytes)}
+                        </td>
+                        <td className="overflow-hidden whitespace-nowrap px-4 py-3 text-slate-600">
+                          {new Date(file.updatedAt).toLocaleDateString()}
+                        </td>
+                        <td
+                          className="px-4 py-3"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex justify-end gap-3 text-xs">
+                            {canDownload && (
+                              <button
+                                onClick={() =>
+                                  downloadFile(
+                                    dataRoomId,
+                                    file.id,
+                                    getPreviewFilename(file.name, file.extension),
+                                  )
+                                }
+                                className="text-slate-500 hover:text-slate-900"
+                              >
+                                Download
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setVersionsFile(file)}
+                              className="text-slate-500 hover:text-slate-900"
+                            >
+                              Versions
+                            </button>
+                            {canUpload && (
+                              <button
+                                onClick={() => handleRename(file)}
+                                className="text-slate-500 hover:text-slate-900"
+                              >
+                                Rename
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                onClick={() => handleDelete(file)}
+                                className="text-red-500 hover:text-red-700"
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Details panel */}
+        {detailsFile && (
+          <FileDetailsPanel
+            dataRoomId={dataRoomId}
+            file={detailsFile}
+            canDownload={canDownload}
+            canUpload={canUpload}
+            canDelete={canDelete}
+            onClose={() => setDetailsFile(null)}
+            onPreview={() => {
+              setPreviewFile(detailsFile);
+              setDetailsFile(null);
+            }}
+            onVersions={() => {
+              setVersionsFile(detailsFile);
+              setDetailsFile(null);
+            }}
+            onRename={() => handleRename(detailsFile)}
+            onDelete={() => handleDelete(detailsFile)}
+          />
+        )}
+      </div>
 
       {previewFile && (
         <FilePreviewModal
