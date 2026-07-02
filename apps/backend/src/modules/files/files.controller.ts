@@ -183,6 +183,7 @@ export class FilesController {
   }
 
   @Post('folder-download')
+  @HttpCode(HttpStatus.OK)
   async folderDownload(
     @Param('dataRoomId') dataRoomId: string,
     @Body() dto: FolderDownloadDto,
