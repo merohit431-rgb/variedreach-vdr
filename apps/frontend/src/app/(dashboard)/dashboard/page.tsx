@@ -1,35 +1,89 @@
 'use client';
 
 import { useDashboardStats, useRecentActivity } from '@/hooks/use-dashboard';
+import { useAuthStore } from '@/store/auth-store';
 import { StatsCards } from '@/components/dashboard/StatsCards';
+import { StatCardSkeleton } from '@/components/dashboard/StatCard';
 import { StorageWidget } from '@/components/dashboard/StorageWidget';
 import { RecentActivity } from '@/components/dashboard/RecentActivity';
 import { QuickActions } from '@/components/dashboard/QuickActions';
+import { Skeleton } from '@/components/ui/Skeleton';
+
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function formatDate(): string {
+  return new Date().toLocaleDateString('en-IN', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
 
 export default function DashboardPage() {
+  const { user } = useAuthStore();
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
-  const { data: activity, isLoading: activityLoading } = useRecentActivity();
+  const { data: activity, isLoading: activityLoading } = useRecentActivity(12);
+
+  const isAdminView = stats && 'activeDataRooms' in stats;
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold text-slate-900">Dashboard</h1>
+      {/* Header */}
+      <div>
+        <h1 className="text-xl font-bold text-slate-900">
+          {getGreeting()}{user ? `, ${user.firstName}` : ''}.
+        </h1>
+        <p className="mt-0.5 text-sm text-slate-400">{formatDate()}</p>
+      </div>
 
+      {/* Stat cards */}
       {statsLoading || !stats ? (
-        <p className="text-sm text-slate-400">Loading stats…</p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+          <StatCardSkeleton />
+        </div>
       ) : (
-        <>
-          <StatsCards stats={stats} />
-          {'storage' in stats && <StorageWidget storage={stats.storage} />}
-        </>
+        <StatsCards stats={stats} />
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <QuickActions />
-        {activityLoading || !activity ? (
-          <p className="text-sm text-slate-400">Loading activity…</p>
-        ) : (
-          <RecentActivity items={activity} />
-        )}
+      {/* Main content grid */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Activity feed — takes 2/3 */}
+        <div className="lg:col-span-2">
+          {activityLoading || !activity ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-soft">
+              <Skeleton className="h-3.5 w-32" />
+              <div className="mt-4 space-y-3">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <Skeleton className="mt-1.5 h-2 w-2 rounded-full" />
+                    <div className="flex-1 space-y-1.5">
+                      <Skeleton className="h-3.5 w-3/4" />
+                    </div>
+                    <Skeleton className="h-3 w-12" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <RecentActivity items={activity} />
+          )}
+        </div>
+
+        {/* Right column — 1/3 */}
+        <div className="space-y-4">
+          <QuickActions />
+          {isAdminView && stats && 'storage' in stats && (
+            <StorageWidget storage={stats.storage} />
+          )}
+        </div>
       </div>
     </div>
   );

@@ -2,16 +2,57 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, FolderLock, ShieldCheck, ChevronsLeft, ChevronsRight, X } from 'lucide-react';
+import {
+  type LucideIcon,
+  LayoutDashboard,
+  FolderLock,
+  ShieldCheck,
+  ChevronsLeft,
+  ChevronsRight,
+  X,
+} from 'lucide-react';
 import { Logo } from '@/components/brand/Logo';
+import { Avatar } from '@/components/ui/Avatar';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { useAuthStore } from '@/store/auth-store';
+import { ROLE_LABELS, EXTERNAL_ROLES, type UserRole } from '@variedreach-vdr/shared';
 import { cn } from '@/lib/cn';
 
-const NAV_ITEMS = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/data-rooms', label: 'Data Rooms', icon: FolderLock },
-  { href: '/roles', label: 'Roles & Permissions', icon: ShieldCheck },
-];
+type NavItem = { href: string; label: string; icon: LucideIcon };
+type NavSection = { label?: string; items: NavItem[] };
+
+function getNavSections(role: UserRole): NavSection[] {
+  const isExternal = EXTERNAL_ROLES.includes(role);
+
+  if (isExternal) {
+    return [
+      {
+        items: [
+          { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+          { href: '/data-rooms', label: 'My Assignments', icon: FolderLock },
+        ],
+      },
+    ];
+  }
+
+  const sections: NavSection[] = [
+    {
+      items: [
+        { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { href: '/data-rooms', label: 'Data Rooms', icon: FolderLock },
+      ],
+    },
+  ];
+
+  if (role === 'ORG_ADMIN') {
+    sections.push({
+      label: 'Administration',
+      items: [{ href: '/roles', label: 'Roles & Permissions', icon: ShieldCheck }],
+    });
+  }
+
+  return sections;
+}
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -22,12 +63,15 @@ interface SidebarProps {
 
 export function Sidebar({ isCollapsed, onToggleCollapse, isMobileOpen, onCloseMobile }: SidebarProps) {
   const pathname = usePathname();
+  const { user } = useAuthStore();
+  const sections = user ? getNavSections(user.role) : getNavSections('RP_LIQUIDATOR');
 
   const content = (
     <>
+      {/* Logo header */}
       <div
         className={cn(
-          'flex h-16 items-center border-b border-slate-100',
+          'flex h-16 flex-shrink-0 items-center border-b border-slate-100',
           isCollapsed ? 'justify-center px-2' : 'justify-between px-4',
         )}
       >
@@ -41,40 +85,76 @@ export function Sidebar({ isCollapsed, onToggleCollapse, isMobileOpen, onCloseMo
         </button>
       </div>
 
-      <nav className="flex-1 space-y-1 p-3">
-        {NAV_ITEMS.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          const link = (
-            <Link
-              href={item.href}
-              onClick={onCloseMobile}
-              className={cn(
-                'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                isCollapsed && 'justify-center px-0 py-2.5',
-                isActive ? 'bg-brand-50 text-brand-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
-              )}
-            >
-              {isActive && (
-                <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-brand-600" />
-              )}
-              <item.icon className="h-[18px] w-[18px] flex-shrink-0" aria-hidden="true" />
-              {!isCollapsed && <span className="truncate">{item.label}</span>}
-            </Link>
-          );
+      {/* Navigation */}
+      <nav className="flex-1 overflow-y-auto p-3">
+        {sections.map((section, si) => (
+          <div key={si} className={si > 0 ? 'mt-4' : undefined}>
+            {!isCollapsed && section.label && (
+              <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+                {section.label}
+              </p>
+            )}
+            {isCollapsed && si > 0 && <div className="mb-3 mt-1 mx-3 border-t border-slate-100" />}
+            <div className="space-y-0.5">
+              {section.items.map((item) => {
+                const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const link = (
+                  <Link
+                    href={item.href}
+                    onClick={onCloseMobile}
+                    className={cn(
+                      'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                      isCollapsed && 'justify-center px-0 py-2.5',
+                      isActive
+                        ? 'bg-brand-50 text-brand-700'
+                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+                    )}
+                  >
+                    {isActive && (
+                      <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-brand-600" />
+                    )}
+                    <item.icon
+                      className={cn(
+                        'h-[18px] w-[18px] flex-shrink-0',
+                        isActive ? 'text-brand-600' : 'text-slate-400 group-hover:text-slate-600',
+                      )}
+                      aria-hidden="true"
+                    />
+                    {!isCollapsed && <span className="truncate">{item.label}</span>}
+                  </Link>
+                );
 
-          return (
-            <div key={item.href}>
-              {isCollapsed ? (
-                <Tooltip label={item.label}>{link}</Tooltip>
-              ) : (
-                link
-              )}
+                return (
+                  <div key={item.href}>
+                    {isCollapsed ? <Tooltip label={item.label}>{link}</Tooltip> : link}
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        ))}
       </nav>
 
-      <div className="border-t border-slate-100 p-3">
+      {/* User info + collapse toggle */}
+      <div className="flex-shrink-0 border-t border-slate-100 p-3">
+        {user && !isCollapsed && (
+          <div className="mb-2 flex items-center gap-2.5 rounded-lg px-3 py-2">
+            <Avatar name={`${user.firstName} ${user.lastName}`} size="sm" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-semibold text-slate-700">
+                {user.firstName} {user.lastName}
+              </p>
+              <p className="truncate text-[10px] text-slate-400">{ROLE_LABELS[user.role]}</p>
+            </div>
+          </div>
+        )}
+        {user && isCollapsed && (
+          <div className="mb-2 flex justify-center">
+            <Tooltip label={`${user.firstName} ${user.lastName} — ${ROLE_LABELS[user.role]}`}>
+              <Avatar name={`${user.firstName} ${user.lastName}`} size="sm" />
+            </Tooltip>
+          </div>
+        )}
         <button
           onClick={onToggleCollapse}
           className={cn(
