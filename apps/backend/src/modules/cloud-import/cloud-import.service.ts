@@ -38,14 +38,12 @@ export class CloudImportService {
         throw new BadRequestException(`Google Drive returned HTTP ${res.status} for "${dto.name}"`);
       }
 
-      // Readable.fromWeb converts the browser-style ReadableStream to a Node stream
       await pipeline(
         Readable.fromWeb(res.body as Parameters<typeof Readable.fromWeb>[0]),
         createWriteStream(tempPath),
       );
 
       const fakeFile = this.buildFakeMulterFile(tempPath, dto.name, dto.mimeType, dto.sizeBytes);
-      // filesService.upload runs magic-byte check, quota check, saves to storage, audit log, notifications
       const results = await this.filesService.upload(
         dataRoomId,
         [fakeFile],
@@ -54,11 +52,10 @@ export class CloudImportService {
         actor,
       );
       return results[0];
-    } catch (err) {
-      // filesService.upload has its own finally-block cleanup; this handles
-      // failures that occur before filesService is called (e.g. download error).
+    } finally {
+      // Always clean up regardless of success or failure. force:true is safe
+      // if the download failed before the file was created.
       await rm(tempPath, { force: true }).catch(() => undefined);
-      throw err;
     }
   }
 
@@ -93,9 +90,8 @@ export class CloudImportService {
         actor,
       );
       return results[0];
-    } catch (err) {
+    } finally {
       await rm(tempPath, { force: true }).catch(() => undefined);
-      throw err;
     }
   }
 
