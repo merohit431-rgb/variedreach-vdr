@@ -7,7 +7,7 @@ export default function ContactPage() {
       {/* Hero */}
       <section className="py-20">
         <div className="mx-auto max-w-4xl px-4 sm:px-6">
-          <span className="inline-block rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-400">
+          <span className="inline-block rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-600">
             Contact
           </span>
           <h1 className="mt-5 text-4xl font-bold tracking-tight text-mk-text sm:text-5xl">
@@ -26,14 +26,14 @@ export default function ContactPage() {
           <div className="grid gap-6 sm:grid-cols-3">
             <a
               href="mailto:rohit@variedreach.com"
-              className="group flex flex-col gap-4 rounded-xl border border-white/[0.06] bg-mk-bg p-6 transition-colors hover:border-blue-500/20"
+              className="group flex flex-col gap-4 rounded-xl border border-slate-200 bg-mk-bg p-6 transition-colors hover:border-blue-500/20"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/10">
-                <Mail className="h-5 w-5 text-blue-400" aria-hidden="true" />
+                <Mail className="h-5 w-5 text-blue-600" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-mk-t4">Email</p>
-                <p className="mt-1 text-sm font-medium text-mk-text group-hover:text-blue-400 transition-colors">
+                <p className="mt-1 text-sm font-medium text-mk-text group-hover:text-blue-600 transition-colors">
                   rohit@variedreach.com
                 </p>
                 <p className="mt-1 text-xs text-mk-t3">For all enquiries</p>
@@ -42,23 +42,23 @@ export default function ContactPage() {
 
             <a
               href="tel:+918851096461"
-              className="group flex flex-col gap-4 rounded-xl border border-white/[0.06] bg-mk-bg p-6 transition-colors hover:border-blue-500/20"
+              className="group flex flex-col gap-4 rounded-xl border border-slate-200 bg-mk-bg p-6 transition-colors hover:border-blue-500/20"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/10">
-                <Phone className="h-5 w-5 text-blue-400" aria-hidden="true" />
+                <Phone className="h-5 w-5 text-blue-600" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-mk-t4">Phone</p>
-                <p className="mt-1 text-sm font-medium text-mk-text group-hover:text-blue-400 transition-colors">
+                <p className="mt-1 text-sm font-medium text-mk-text group-hover:text-blue-600 transition-colors">
                   +91 88510 96461
                 </p>
                 <p className="mt-1 text-xs text-mk-t3">Mon–Fri, 9am–6pm IST</p>
               </div>
             </a>
 
-            <div className="flex flex-col gap-4 rounded-xl border border-white/[0.06] bg-mk-bg p-6">
+            <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-mk-bg p-6">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/10">
-                <MapPin className="h-5 w-5 text-blue-400" aria-hidden="true" />
+                <MapPin className="h-5 w-5 text-blue-600" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-mk-t4">Office</p>
@@ -105,7 +105,7 @@ export default function ContactPage() {
             ].map((item) => (
               <div
                 key={item.title}
-                className="rounded-xl border border-white/[0.06] bg-mk-s1 p-5"
+                className="rounded-xl border border-slate-200 bg-mk-s1 p-5"
               >
                 <h3 className="text-sm font-semibold text-mk-text">{item.title}</h3>
                 <p className="mt-1.5 text-xs text-mk-t3">{item.desc}</p>
@@ -123,7 +123,7 @@ export default function ContactPage() {
             </a>
             <Link
               href="/signup"
-              className="inline-flex items-center gap-2 rounded-md border border-white/[0.10] px-6 py-3 text-sm font-semibold text-mk-t2 transition-colors hover:text-white"
+              className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-6 py-3 text-sm font-semibold text-mk-t2 transition-colors hover:text-slate-900"
             >
               Start free trial instead
             </Link>

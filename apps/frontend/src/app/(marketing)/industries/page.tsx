@@ -149,7 +149,7 @@ export default function IndustriesPage() {
       {/* Hero */}
       <section className="py-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <span className="inline-block rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-400">
+          <span className="inline-block rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-600">
             Industries
           </span>
           <h1 className="mt-5 text-4xl font-bold tracking-tight text-mk-text sm:text-5xl">
@@ -170,7 +170,7 @@ export default function IndustriesPage() {
               <div
                 key={ind.id}
                 id={ind.id}
-                className="rounded-xl border border-white/[0.06] bg-mk-bg p-7 transition-colors hover:border-blue-500/20"
+                className="rounded-xl border border-slate-200 bg-mk-bg p-7 transition-colors hover:border-blue-500/20"
               >
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div>
@@ -213,7 +213,7 @@ export default function IndustriesPage() {
             </Link>
             <Link
               href="/signup"
-              className="inline-flex rounded-md border border-white/[0.10] px-6 py-3 text-sm font-semibold text-mk-t2 transition-colors hover:text-white"
+              className="inline-flex rounded-md border border-slate-300 px-6 py-3 text-sm font-semibold text-mk-t2 transition-colors hover:text-slate-900"
             >
               Start free trial
             </Link>

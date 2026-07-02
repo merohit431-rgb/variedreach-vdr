@@ -72,7 +72,7 @@ function useCountUp(target: number, enabled: boolean, decimals = 0) {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-block rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-400">
+    <span className="inline-block rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-600">
       {children}
     </span>
   );
@@ -81,24 +81,18 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // ─── 1. Hero ──────────────────────────────────────────────────────────────────
 
 const HERO_FOLDERS = [
-  { name: '01  Financials', badge: 'Encrypted', badgeCls: 'bg-green-500/10 text-green-400' },
-  { name: '02  Legal Documents', badge: 'Watermarked', badgeCls: 'bg-amber-500/10 text-amber-400' },
-  { name: '03  Claims Register', badge: 'View Only', badgeCls: 'bg-blue-500/10 text-blue-400' },
+  { name: '01  Financials', badge: 'Encrypted', badgeCls: 'bg-green-500/10 text-green-600' },
+  { name: '02  Legal Documents', badge: 'Watermarked', badgeCls: 'bg-amber-500/10 text-amber-600' },
+  { name: '03  Claims Register', badge: 'View Only', badgeCls: 'bg-blue-500/10 text-blue-600' },
   { name: '04  Resolution Plan', badge: 'Restricted', badgeCls: 'bg-red-500/10 text-red-400' },
 ];
 
 function VDRCard() {
   return (
     <div
-      className="relative w-full max-w-sm rounded-xl border border-white/[0.08] bg-mk-s1 p-5 shadow-2xl shadow-black/60"
+      className="relative w-full max-w-sm rounded-xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-300/50"
       style={{ transform: 'perspective(1000px) rotateY(-8deg) rotateX(3deg)' }}
     >
-      {/* Subtle glow behind the card */}
-      <div
-        className="pointer-events-none absolute -inset-px rounded-xl opacity-30"
-        style={{ background: 'radial-gradient(ellipse at 40% 0%, rgba(37,99,235,0.4), transparent 70%)' }}
-        aria-hidden="true"
-      />
       <div className="mb-4 flex items-center gap-1.5">
         <div className="h-2.5 w-2.5 rounded-full bg-red-500/60" />
         <div className="h-2.5 w-2.5 rounded-full bg-amber-400/60" />
@@ -114,10 +108,10 @@ function VDRCard() {
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.5 + i * 0.12, duration: 0.4 }}
-            className="flex items-center justify-between rounded-lg px-3 py-2.5 transition-colors hover:bg-white/[0.04]"
+            className="flex items-center justify-between rounded-lg px-3 py-2.5 transition-colors hover:bg-slate-50"
           >
             <div className="flex items-center gap-2.5">
-              <Folder className="h-3.5 w-3.5 text-blue-400" aria-hidden="true" />
+              <Folder className="h-3.5 w-3.5 text-blue-600" aria-hidden="true" />
               <span className="text-sm text-mk-t2">{folder.name}</span>
             </div>
             <span className={cn('rounded px-2 py-0.5 text-[10px] font-semibold', folder.badgeCls)}>
@@ -126,17 +120,17 @@ function VDRCard() {
           </motion.div>
         ))}
       </div>
-      <div className="mt-4 grid grid-cols-3 border-t border-white/[0.06] pt-4 text-center">
+      <div className="mt-4 grid grid-cols-3 border-t border-slate-200 pt-4 text-center">
         <div>
-          <div className="text-sm font-bold text-blue-400">24</div>
+          <div className="text-sm font-bold text-blue-600">24</div>
           <div className="text-[10px] text-mk-t3">Members</div>
         </div>
         <div>
-          <div className="text-sm font-bold text-blue-400">847</div>
+          <div className="text-sm font-bold text-blue-600">847</div>
           <div className="text-[10px] text-mk-t3">Documents</div>
         </div>
         <div>
-          <div className="text-sm font-bold text-green-400">Live</div>
+          <div className="text-sm font-bold text-green-600">Live</div>
           <div className="text-[10px] text-mk-t3">Status</div>
         </div>
       </div>
@@ -154,16 +148,8 @@ function HeroSection() {
       <div
         className="pointer-events-none absolute inset-0"
         style={{
-          backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px)',
+          backgroundImage: 'radial-gradient(circle, #cbd5e1 1px, transparent 1px)',
           backgroundSize: '28px 28px',
-        }}
-        aria-hidden="true"
-      />
-      {/* Blue radial glow */}
-      <div
-        className="pointer-events-none absolute right-0 top-0 h-[600px] w-[600px] opacity-20"
-        style={{
-          background: 'radial-gradient(ellipse at 60% 20%, rgba(37,99,235,0.6), transparent 70%)',
         }}
         aria-hidden="true"
       />
@@ -188,7 +174,7 @@ function HeroSection() {
               transition={{ duration: 0.6, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
             >
               Secure, audited data rooms.{' '}
-              <span className="text-blue-400">Built for Indian enterprise.</span>
+              <span className="text-blue-600">Built for Indian enterprise.</span>
             </motion.h1>
 
             <motion.p
@@ -217,7 +203,7 @@ function HeroSection() {
               </Link>
               <Link
                 href="/contact"
-                className="inline-flex items-center gap-2 rounded-md border border-white/[0.12] bg-white/[0.04] px-5 py-3 text-sm font-semibold text-mk-t2 transition-colors hover:border-white/20 hover:text-white"
+                className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-slate-50 px-5 py-3 text-sm font-semibold text-mk-t2 transition-colors hover:border-slate-300 hover:text-slate-900"
               >
                 Book a live demo
               </Link>
@@ -319,7 +305,7 @@ function ProblemSection() {
 
         <Reveal delay={0.3}>
           <div className="mt-6 rounded-xl border border-blue-500/20 bg-blue-500/[0.06] p-6 text-center">
-            <p className="text-sm font-medium text-blue-400">
+            <p className="text-sm font-medium text-blue-600">
               Varied Reach VDR solves every one of these problems — out of the box, for every data room you
               create.
             </p>
@@ -343,8 +329,8 @@ const STATS = [
 function StatCard({ stat, enabled }: { stat: (typeof STATS)[0]; enabled: boolean }) {
   const count = useCountUp(stat.value, enabled, stat.decimals);
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-mk-s1 p-6 text-center">
-      <div className="text-3xl font-bold text-blue-400 sm:text-4xl">
+    <div className="rounded-xl border border-slate-200 bg-mk-s1 p-6 text-center">
+      <div className="text-3xl font-bold text-blue-600 sm:text-4xl">
         {stat.prefix}
         {count}
         {stat.suffix}
@@ -397,7 +383,7 @@ const DEMO_STEPS = [
           {['Room name', 'Type', 'Download policy'].map((label) => (
             <div key={label}>
               <div className="mb-1 text-[10px] text-mk-t3">{label}</div>
-              <div className="rounded border border-white/[0.08] bg-mk-bg px-3 py-2 text-xs text-mk-t2">
+              <div className="rounded border border-slate-200 bg-mk-bg px-3 py-2 text-xs text-mk-t2">
                 {label === 'Room name' && 'CIRP Proceedings #4471'}
                 {label === 'Type' && 'Insolvency & CIRP  ▾'}
                 {label === 'Download policy' && 'Watermarked Only  ▾'}
@@ -422,10 +408,10 @@ const DEMO_STEPS = [
           (name, i) => (
             <div
               key={name}
-              className="mb-1 flex items-center justify-between rounded-md px-3 py-2 hover:bg-white/[0.03]"
+              className="mb-1 flex items-center justify-between rounded-md px-3 py-2 hover:bg-slate-50"
             >
               <div className="flex items-center gap-2">
-                <Folder className="h-3.5 w-3.5 text-blue-400" aria-hidden="true" />
+                <Folder className="h-3.5 w-3.5 text-blue-600" aria-hidden="true" />
                 <span className="text-xs text-mk-t2">{name}</span>
               </div>
               <span className="text-[10px] text-mk-t3">{[24, 8, 156, 3][i]} files</span>
@@ -443,18 +429,18 @@ const DEMO_STEPS = [
       <div className="rounded-lg bg-mk-s1 p-5">
         <p className="mb-3 text-xs font-semibold text-mk-t4">Invite Members</p>
         <div className="mb-3 flex gap-2">
-          <div className="flex-1 rounded border border-white/[0.08] bg-mk-bg px-2 py-1.5 text-[11px] text-mk-t3">
+          <div className="flex-1 rounded border border-slate-200 bg-mk-bg px-2 py-1.5 text-[11px] text-mk-t3">
             email@example.com
           </div>
-          <div className="rounded border border-white/[0.08] bg-mk-bg px-2 py-1.5 text-[11px] text-mk-t2">
+          <div className="rounded border border-slate-200 bg-mk-bg px-2 py-1.5 text-[11px] text-mk-t2">
             CoC Member ▾
           </div>
         </div>
         <div className="space-y-1.5">
           {[
-            { name: 'Rajiv Sharma', role: 'RP', color: 'text-blue-400' },
-            { name: 'Meera Iyer', role: 'CoC Member', color: 'text-green-400' },
-            { name: 'Anil Bansal', role: 'Auditor', color: 'text-amber-400' },
+            { name: 'Rajiv Sharma', role: 'RP', color: 'text-blue-600' },
+            { name: 'Meera Iyer', role: 'CoC Member', color: 'text-green-600' },
+            { name: 'Anil Bansal', role: 'Auditor', color: 'text-amber-600' },
           ].map((u) => (
             <div key={u.name} className="flex items-center justify-between rounded-md bg-mk-bg px-3 py-2">
               <span className="text-[11px] text-mk-t2">{u.name}</span>
@@ -472,11 +458,11 @@ const DEMO_STEPS = [
     illustration: (
       <div className="relative overflow-hidden rounded-lg bg-mk-s1 p-5">
         <p className="mb-3 text-xs font-semibold text-mk-t4">Document Preview</p>
-        <div className="relative rounded border border-white/[0.06] bg-mk-bg p-4">
-          <div className="mb-3 h-2 w-24 rounded bg-white/[0.08]" />
+        <div className="relative rounded border border-slate-200 bg-mk-bg p-4">
+          <div className="mb-3 h-2 w-24 rounded bg-slate-100" />
           <div className="space-y-1.5">
             {[16, 24, 20, 14, 22].map((w, i) => (
-              <div key={i} className={`h-1.5 rounded bg-white/[0.05]`} style={{ width: `${w * 4}px` }} />
+              <div key={i} className={`h-1.5 rounded bg-slate-100`} style={{ width: `${w * 4}px` }} />
             ))}
           </div>
           {/* Watermark */}
@@ -513,7 +499,7 @@ const DEMO_STEPS = [
               className="flex items-center justify-between rounded-md bg-mk-bg px-3 py-2"
             >
               <div>
-                <span className="text-[10px] font-semibold text-blue-400">{log.action}</span>
+                <span className="text-[10px] font-semibold text-blue-600">{log.action}</span>
                 <span className="ml-1.5 text-[10px] text-mk-t3">{log.file}</span>
               </div>
               <div className="text-right">
@@ -541,12 +527,12 @@ const DEMO_STEPS = [
             { label: 'Documents', value: '847' },
           ].map((s) => (
             <div key={s.label} className="rounded-md bg-mk-bg px-3 py-2">
-              <div className="text-sm font-bold text-blue-400">{s.value}</div>
+              <div className="text-sm font-bold text-blue-600">{s.value}</div>
               <div className="text-[10px] text-mk-t3">{s.label}</div>
             </div>
           ))}
         </div>
-        <button className="w-full rounded-md bg-blue-600/20 py-1.5 text-[11px] font-semibold text-blue-400">
+        <button className="w-full rounded-md bg-blue-600/20 py-1.5 text-[11px] font-semibold text-blue-600">
           Export Report →
         </button>
       </div>
@@ -586,14 +572,14 @@ function PlatformDemoSection() {
                   'w-full rounded-xl px-5 py-4 text-left transition-all duration-200',
                   active === i
                     ? 'border border-blue-500/20 bg-blue-500/[0.08]'
-                    : 'hover:bg-white/[0.03]',
+                    : 'hover:bg-slate-50',
                 )}
               >
                 <div className="flex items-start gap-4">
                   <span
                     className={cn(
                       'mt-0.5 text-xs font-bold tabular-nums',
-                      active === i ? 'text-blue-400' : 'text-mk-t4',
+                      active === i ? 'text-blue-600' : 'text-mk-t4',
                     )}
                   >
                     {step.num}
@@ -631,7 +617,7 @@ function PlatformDemoSection() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.3 }}
-                className="rounded-2xl border border-white/[0.06] bg-mk-s2 p-6"
+                className="rounded-2xl border border-slate-200 bg-mk-s2 p-6"
               >
                 {DEMO_STEPS[active].illustration}
               </motion.div>
@@ -645,7 +631,7 @@ function PlatformDemoSection() {
                   aria-label={`Step ${i + 1}`}
                   className={cn(
                     'h-1.5 rounded-full transition-all duration-300',
-                    active === i ? 'w-6 bg-blue-500' : 'w-1.5 bg-white/20',
+                    active === i ? 'w-6 bg-blue-500' : 'w-1.5 bg-slate-300',
                   )}
                 />
               ))}
@@ -715,9 +701,9 @@ function SecuritySection() {
             const Icon = pillar.icon;
             return (
               <Reveal key={pillar.title} delay={i * 0.07}>
-                <div className="h-full rounded-xl border border-white/[0.06] bg-mk-bg p-6 transition-colors hover:border-blue-500/20">
+                <div className="h-full rounded-xl border border-slate-200 bg-mk-bg p-6 transition-colors hover:border-blue-500/20">
                   <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
-                    <Icon className="h-5 w-5 text-blue-400" aria-hidden="true" />
+                    <Icon className="h-5 w-5 text-blue-600" aria-hidden="true" />
                   </div>
                   <h3 className="mb-2 text-sm font-semibold text-mk-text">{pillar.title}</h3>
                   <p className="text-sm leading-relaxed text-mk-t2">{pillar.desc}</p>
@@ -731,7 +717,7 @@ function SecuritySection() {
           <div className="mt-10 text-center">
             <Link
               href="/security"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-400 hover:text-blue-300"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"
             >
               Read our full security architecture
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
@@ -783,7 +769,7 @@ function IndustriesSection() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: '-60px' }}
               transition={{ delay: i * 0.04, duration: 0.45 }}
-              className="group relative overflow-hidden rounded-xl border border-white/[0.06] bg-mk-s1 p-5 transition-all duration-200 hover:border-blue-500/20 hover:bg-mk-s2"
+              className="group relative overflow-hidden rounded-xl border border-slate-200 bg-mk-s1 p-5 transition-all duration-200 hover:border-blue-500/20 hover:bg-mk-s2"
             >
               <div className="mb-3 text-xl">{ind.icon}</div>
               <h3 className="mb-1.5 text-sm font-semibold text-mk-text">{ind.title}</h3>
@@ -797,7 +783,7 @@ function IndustriesSection() {
           <div className="mt-8 text-center">
             <Link
               href="/industries"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-400 hover:text-blue-300"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"
             >
               Explore all industries
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
@@ -894,7 +880,7 @@ function FeaturesSection() {
                   )}
                 >
                   <div>
-                    <span className="text-xs font-semibold uppercase tracking-widest text-blue-400">
+                    <span className="text-xs font-semibold uppercase tracking-widest text-blue-600">
                       {feat.tag}
                     </span>
                     <h3 className="mt-3 text-xl font-bold text-mk-text sm:text-2xl">{feat.title}</h3>
@@ -902,15 +888,15 @@ function FeaturesSection() {
                     <ul className="mt-5 space-y-2">
                       {feat.benefits.map((b) => (
                         <li key={b} className="flex items-center gap-2.5 text-sm text-mk-t2">
-                          <Check className="h-4 w-4 flex-shrink-0 text-green-400" aria-hidden="true" />
+                          <Check className="h-4 w-4 flex-shrink-0 text-green-600" aria-hidden="true" />
                           {b}
                         </li>
                       ))}
                     </ul>
                   </div>
-                  <div className="flex items-center justify-center rounded-2xl border border-white/[0.06] bg-mk-bg p-10">
+                  <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-mk-bg p-10">
                     <Icon
-                      className="h-16 w-16 text-blue-400/40"
+                      className="h-16 w-16 text-blue-600/40"
                       aria-hidden="true"
                       strokeWidth={1}
                     />
@@ -925,7 +911,7 @@ function FeaturesSection() {
           <div className="mt-14 text-center">
             <Link
               href="/features"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-400 hover:text-blue-300"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"
             >
               View full feature list
               <ChevronRight className="h-4 w-4" aria-hidden="true" />
@@ -944,7 +930,7 @@ const INTEGRATIONS = [
     name: 'Google Drive',
     desc: 'Import files and folders directly from Drive into your VDR. Access token saved for repeat imports.',
     icon: Globe,
-    color: 'text-blue-400',
+    color: 'text-blue-600',
   },
   {
     name: 'Microsoft OneDrive',
@@ -956,13 +942,13 @@ const INTEGRATIONS = [
     name: 'Email delivery',
     desc: 'Invitations, notifications, and welcome messages delivered reliably via enterprise email infrastructure.',
     icon: FileText,
-    color: 'text-purple-400',
+    color: 'text-purple-600',
   },
   {
     name: 'REST API',
     desc: 'Programmatic access to rooms, files, members, and audit events. Integrate into your own workflows.',
     icon: Zap,
-    color: 'text-amber-400',
+    color: 'text-amber-600',
   },
 ];
 
@@ -986,7 +972,7 @@ function IntegrationsSection() {
             const Icon = intg.icon;
             return (
               <Reveal key={intg.name} delay={i * 0.08}>
-                <div className="h-full rounded-xl border border-white/[0.06] bg-mk-s1 p-5 transition-colors hover:border-blue-500/20">
+                <div className="h-full rounded-xl border border-slate-200 bg-mk-s1 p-5 transition-colors hover:border-blue-500/20">
                   <Icon className={cn('mb-4 h-7 w-7', intg.color)} aria-hidden="true" />
                   <h3 className="mb-2 text-sm font-semibold text-mk-text">{intg.name}</h3>
                   <p className="text-xs leading-relaxed text-mk-t3">{intg.desc}</p>
@@ -1032,7 +1018,7 @@ function JourneySection() {
         <div className="relative mt-14">
           {/* Connecting line (desktop) */}
           <div
-            className="absolute left-6 top-6 hidden h-[calc(100%-48px)] w-px bg-white/[0.06] lg:block"
+            className="absolute left-6 top-6 hidden h-[calc(100%-48px)] w-px bg-slate-100 lg:block"
             aria-hidden="true"
           />
 
@@ -1040,13 +1026,13 @@ function JourneySection() {
             {JOURNEY_STEPS.map((step, i) => (
               <Reveal key={step.num} delay={i * 0.06}>
                 <div className="relative flex items-start gap-5">
-                  <div className="absolute -left-[72px] hidden h-10 w-10 items-center justify-center rounded-full border border-white/[0.08] bg-mk-s2 text-xs font-bold text-blue-400 lg:flex">
+                  <div className="absolute -left-[72px] hidden h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-mk-s2 text-xs font-bold text-blue-600 lg:flex">
                     {step.num}
                   </div>
-                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-mk-s2 text-xs font-bold text-blue-400 lg:hidden">
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-slate-200 bg-mk-s2 text-xs font-bold text-blue-600 lg:hidden">
                     {step.num}
                   </div>
-                  <div className="rounded-xl border border-white/[0.06] bg-mk-bg px-5 py-4 flex-1">
+                  <div className="rounded-xl border border-slate-200 bg-mk-bg px-5 py-4 flex-1">
                     <p className="text-sm font-semibold text-mk-text">{step.title}</p>
                     <p className="mt-0.5 text-xs text-mk-t3">{step.desc}</p>
                   </div>
@@ -1087,7 +1073,7 @@ function PricingSection() {
             </Link>
             <Link
               href="/contact"
-              className="text-sm font-medium text-mk-t2 hover:text-white transition-colors"
+              className="text-sm font-medium text-mk-t2 hover:text-slate-900 transition-colors"
             >
               Talk to us about enterprise pricing →
             </Link>
@@ -1122,11 +1108,11 @@ function PricingSection() {
                   'flex h-full flex-col rounded-xl border p-6',
                   plan.highlight
                     ? 'border-blue-500/40 bg-blue-500/[0.06]'
-                    : 'border-white/[0.06] bg-mk-s1',
+                    : 'border-slate-200 bg-mk-s1',
                 )}
               >
                 {plan.highlight && (
-                  <span className="mb-3 self-start rounded-full bg-blue-500/20 px-2.5 py-0.5 text-xs font-semibold text-blue-400">
+                  <span className="mb-3 self-start rounded-full bg-blue-500/20 px-2.5 py-0.5 text-xs font-semibold text-blue-600">
                     Most popular
                   </span>
                 )}
@@ -1135,7 +1121,7 @@ function PricingSection() {
                 <ul className="mt-5 flex-1 space-y-2">
                   {plan.features.map((f) => (
                     <li key={f} className="flex items-center gap-2 text-xs text-mk-t2">
-                      <Check className="h-3.5 w-3.5 flex-shrink-0 text-green-400" aria-hidden="true" />
+                      <Check className="h-3.5 w-3.5 flex-shrink-0 text-green-600" aria-hidden="true" />
                       {f}
                     </li>
                   ))}
@@ -1146,7 +1132,7 @@ function PricingSection() {
                     'mt-6 block rounded-md py-2.5 text-center text-sm font-semibold transition-colors',
                     plan.highlight
                       ? 'bg-blue-600 text-white hover:bg-blue-500'
-                      : 'border border-white/[0.10] text-mk-t2 hover:border-white/20 hover:text-white',
+                      : 'border border-slate-300 text-mk-t2 hover:border-slate-300 hover:text-slate-900',
                   )}
                 >
                   {plan.cta}
@@ -1228,7 +1214,7 @@ function FAQSection() {
         <div className="mt-12 space-y-1">
           {FAQS.map((faq, i) => (
             <Reveal key={i} delay={i * 0.03}>
-              <div className="rounded-xl border border-white/[0.06] bg-mk-bg">
+              <div className="rounded-xl border border-slate-200 bg-mk-bg">
                 <button
                   onClick={() => setOpen(open === i ? null : i)}
                   className="flex w-full items-start justify-between gap-4 px-5 py-4 text-left"
@@ -1252,7 +1238,7 @@ function FAQSection() {
                       transition={{ duration: 0.2 }}
                       className="overflow-hidden"
                     >
-                      <p className="border-t border-white/[0.04] px-5 pb-4 pt-3 text-sm leading-relaxed text-mk-t2">
+                      <p className="border-t border-slate-100 px-5 pb-4 pt-3 text-sm leading-relaxed text-mk-t2">
                         {faq.a}
                       </p>
                     </motion.div>
@@ -1266,7 +1252,7 @@ function FAQSection() {
         <Reveal delay={0.3}>
           <p className="mt-8 text-center text-sm text-mk-t3">
             Have a question we haven&apos;t answered?{' '}
-            <Link href="/contact" className="text-blue-400 hover:text-blue-300">
+            <Link href="/contact" className="text-blue-600 hover:text-blue-700">
               Contact us →
             </Link>
           </p>
@@ -1300,26 +1286,26 @@ function CTASection() {
               </Link>
               <Link
                 href="/contact"
-                className="inline-flex items-center gap-2 rounded-md border border-white/[0.12] bg-white/[0.04] px-7 py-3.5 text-sm font-semibold text-mk-t2 transition-colors hover:text-white"
+                className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-slate-50 px-7 py-3.5 text-sm font-semibold text-mk-t2 transition-colors hover:text-slate-900"
               >
                 Book a live demo
               </Link>
             </div>
             <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-mk-t4">
               <span className="flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5 text-green-400" aria-hidden="true" />
+                <Check className="h-3.5 w-3.5 text-green-600" aria-hidden="true" />
                 Dynamic watermarking
               </span>
               <span className="flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5 text-green-400" aria-hidden="true" />
+                <Check className="h-3.5 w-3.5 text-green-600" aria-hidden="true" />
                 Role-based access control
               </span>
               <span className="flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5 text-green-400" aria-hidden="true" />
+                <Check className="h-3.5 w-3.5 text-green-600" aria-hidden="true" />
                 Complete audit trail
               </span>
               <span className="flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5 text-green-400" aria-hidden="true" />
+                <Check className="h-3.5 w-3.5 text-green-600" aria-hidden="true" />
                 Cloud import
               </span>
             </div>

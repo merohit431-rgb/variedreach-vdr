@@ -23,7 +23,7 @@ export default function PricingPage() {
       {/* Hero */}
       <section className="py-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <span className="inline-block rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-400">
+          <span className="inline-block rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-600">
             Pricing
           </span>
           <h1 className="mt-5 text-4xl font-bold tracking-tight text-mk-text sm:text-5xl">
@@ -50,11 +50,11 @@ export default function PricingPage() {
                     'flex flex-col rounded-xl border p-7',
                     isHighlighted
                       ? 'border-blue-500/40 bg-blue-500/[0.06]'
-                      : 'border-white/[0.06] bg-mk-bg',
+                      : 'border-slate-200 bg-mk-bg',
                   )}
                 >
                   {isHighlighted && (
-                    <span className="mb-3 self-start rounded-full bg-blue-500/20 px-2.5 py-0.5 text-xs font-semibold text-blue-400">
+                    <span className="mb-3 self-start rounded-full bg-blue-500/20 px-2.5 py-0.5 text-xs font-semibold text-blue-600">
                       Most popular
                     </span>
                   )}
@@ -77,7 +77,7 @@ export default function PricingPage() {
                     {plan.features.map((feature) => (
                       <li key={feature} className="flex items-start gap-2.5 text-sm text-mk-t2">
                         <Check
-                          className="mt-0.5 h-4 w-4 flex-shrink-0 text-green-400"
+                          className="mt-0.5 h-4 w-4 flex-shrink-0 text-green-600"
                           aria-hidden="true"
                         />
                         {feature}
@@ -91,7 +91,7 @@ export default function PricingPage() {
                       'mt-6 w-full rounded-md py-3 text-sm font-semibold transition-colors',
                       isHighlighted
                         ? 'bg-blue-600 text-white hover:bg-blue-500'
-                        : 'border border-white/[0.10] text-mk-t2 hover:border-white/20 hover:text-white',
+                        : 'border border-slate-300 text-mk-t2 hover:border-slate-300 hover:text-slate-900',
                     )}
                   >
                     Choose {plan.name}
@@ -101,7 +101,7 @@ export default function PricingPage() {
             })}
           </div>
 
-          <div className="mt-8 rounded-xl border border-white/[0.06] bg-mk-bg p-5 text-center">
+          <div className="mt-8 rounded-xl border border-slate-200 bg-mk-bg p-5 text-center">
             <p className="text-sm text-mk-t3">
               All plans include: dynamic watermarking, RBAC, complete audit trail, office document preview,
               Google Drive &amp; OneDrive import, download policy control, and compliance reports.
@@ -122,13 +122,13 @@ export default function PricingPage() {
               </p>
               <p className="mt-4 text-sm text-mk-t3">
                 Need more than 50 GB or custom terms?{' '}
-                <Link href="/contact" className="text-blue-400 hover:text-blue-300">
+                <Link href="/contact" className="text-blue-600 hover:text-blue-700">
                   Talk to us
                 </Link>
                 .
               </p>
             </div>
-            <div className="rounded-xl border border-white/[0.06] bg-mk-s1 p-6">
+            <div className="rounded-xl border border-slate-200 bg-mk-s1 p-6">
               <PricingCalculator onChoosePlan={goToSignup} />
             </div>
           </div>
@@ -158,7 +158,7 @@ export default function PricingPage() {
                 a: 'Yes. You can upgrade, downgrade, or adjust your storage at any time. Changes take effect from the next billing cycle.',
               },
             ].map(({ q, a }) => (
-              <div key={q} className="border-b border-white/[0.06] pb-6 last:border-0">
+              <div key={q} className="border-b border-slate-200 pb-6 last:border-0">
                 <dt className="text-sm font-semibold text-mk-text">{q}</dt>
                 <dd className="mt-2 text-sm text-mk-t3">{a}</dd>
               </div>
@@ -167,7 +167,7 @@ export default function PricingPage() {
           <div className="mt-8">
             <Link
               href="/faq"
-              className="text-sm font-medium text-blue-400 hover:text-blue-300"
+              className="text-sm font-medium text-blue-600 hover:text-blue-700"
             >
               Read all FAQs →
             </Link>

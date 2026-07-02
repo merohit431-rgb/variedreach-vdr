@@ -73,7 +73,7 @@ export default function SecurityPage() {
       {/* Hero */}
       <section className="py-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <span className="inline-block rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-400">
+          <span className="inline-block rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-600">
             Security Architecture
           </span>
           <h1 className="mt-5 text-4xl font-bold tracking-tight text-mk-text sm:text-5xl">
@@ -89,17 +89,17 @@ export default function SecurityPage() {
       {/* Security pillars */}
       <section className="bg-mk-s1 py-16">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <h2 className="mb-10 text-xs font-semibold uppercase tracking-widest text-blue-400">
+          <h2 className="mb-10 text-xs font-semibold uppercase tracking-widest text-blue-600">
             Security principles
           </h2>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {SECURITY_PILLARS.map(({ icon: Icon, title, description }) => (
               <div
                 key={title}
-                className="rounded-xl border border-white/[0.06] bg-mk-bg p-6 transition-colors hover:border-blue-500/20"
+                className="rounded-xl border border-slate-200 bg-mk-bg p-6 transition-colors hover:border-blue-500/20"
               >
                 <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
-                  <Icon className="h-5 w-5 text-blue-400" aria-hidden="true" />
+                  <Icon className="h-5 w-5 text-blue-600" aria-hidden="true" />
                 </div>
                 <h3 className="mb-2 text-sm font-semibold text-mk-text">{title}</h3>
                 <p className="text-sm leading-relaxed text-mk-t3">{description}</p>
@@ -112,7 +112,7 @@ export default function SecurityPage() {
       {/* Architecture */}
       <section className="bg-mk-bg py-16">
         <div className="mx-auto max-w-3xl px-4 sm:px-6">
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-widest text-blue-400">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-widest text-blue-600">
             Platform architecture
           </h2>
           <p className="mb-10 text-mk-t2">
@@ -122,14 +122,14 @@ export default function SecurityPage() {
             {ARCHITECTURE_LAYERS.map((layer, i) => (
               <div key={layer.label} className="flex items-start gap-4">
                 <div className="flex flex-col items-center">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full border border-blue-500/30 bg-blue-500/10 text-xs font-bold text-blue-400">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full border border-blue-500/30 bg-blue-500/10 text-xs font-bold text-blue-600">
                     {i + 1}
                   </div>
                   {i < ARCHITECTURE_LAYERS.length - 1 && (
-                    <div className="mt-1 h-6 w-px bg-white/[0.06]" aria-hidden="true" />
+                    <div className="mt-1 h-6 w-px bg-slate-100" aria-hidden="true" />
                   )}
                 </div>
-                <div className="rounded-xl border border-white/[0.06] bg-mk-s1 px-5 py-4 flex-1 -mt-0.5">
+                <div className="rounded-xl border border-slate-200 bg-mk-s1 px-5 py-4 flex-1 -mt-0.5">
                   <p className="text-sm font-semibold text-mk-text">{layer.label}</p>
                   <p className="mt-0.5 text-xs text-mk-t3">{layer.detail}</p>
                 </div>

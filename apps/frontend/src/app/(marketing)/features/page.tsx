@@ -96,7 +96,7 @@ export default function FeaturesPage() {
       {/* Hero */}
       <section className="py-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <span className="inline-block rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-400">
+          <span className="inline-block rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-600">
             Platform Features
           </span>
           <h1 className="mt-5 text-4xl font-bold tracking-tight text-mk-text sm:text-5xl">
@@ -115,7 +115,7 @@ export default function FeaturesPage() {
             </Link>
             <Link
               href="/pricing"
-              className="inline-flex items-center gap-2 rounded-md border border-white/[0.10] px-5 py-3 text-sm font-semibold text-mk-t2 transition-colors hover:text-white"
+              className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-5 py-3 text-sm font-semibold text-mk-t2 transition-colors hover:text-slate-900"
             >
               View pricing
             </Link>
@@ -130,17 +130,17 @@ export default function FeaturesPage() {
           className={catIdx % 2 === 0 ? 'bg-mk-s1 py-16' : 'bg-mk-bg py-16'}
         >
           <div className="mx-auto max-w-6xl px-4 sm:px-6">
-            <h2 className="mb-10 text-xs font-semibold uppercase tracking-widest text-blue-400">
+            <h2 className="mb-10 text-xs font-semibold uppercase tracking-widest text-blue-600">
               {cat.category}
             </h2>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {cat.features.map(({ icon: Icon, title, description }) => (
                 <div
                   key={title}
-                  className="rounded-xl border border-white/[0.06] bg-mk-s2 p-6 transition-colors hover:border-blue-500/20"
+                  className="rounded-xl border border-slate-200 bg-mk-s2 p-6 transition-colors hover:border-blue-500/20"
                 >
                   <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
-                    <Icon className="h-5 w-5 text-blue-400" aria-hidden="true" />
+                    <Icon className="h-5 w-5 text-blue-600" aria-hidden="true" />
                   </div>
                   <h3 className="mb-2 text-sm font-semibold text-mk-text">{title}</h3>
                   <p className="text-sm leading-relaxed text-mk-t3">{description}</p>
@@ -171,7 +171,7 @@ export default function FeaturesPage() {
               'Reports',
             ].map((f) => (
               <span key={f} className="flex items-center gap-1.5 text-sm text-mk-t2">
-                <Check className="h-3.5 w-3.5 text-green-400" aria-hidden="true" />
+                <Check className="h-3.5 w-3.5 text-green-600" aria-hidden="true" />
                 {f}
               </span>
             ))}

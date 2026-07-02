@@ -24,45 +24,45 @@ const COMPANY_LINKS = [
 
 export function MarketingFooter() {
   return (
-    <footer className="border-t border-white/[0.06] bg-mk-bg">
+    <footer className="border-t border-slate-800 bg-slate-900">
       <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-5">
           <div className="lg:col-span-2">
             <Logo size="sm" variant="light" />
-            <p className="mt-4 max-w-xs text-sm leading-relaxed text-mk-t3">
+            <p className="mt-4 max-w-xs text-sm leading-relaxed text-slate-400">
               Secure virtual data rooms built for CIRP, liquidation, M&amp;A due diligence, and every
               high-stakes Indian enterprise transaction.
             </p>
-            <div className="mt-6 flex flex-col gap-2.5 text-sm text-mk-t3">
+            <div className="mt-6 flex flex-col gap-2.5 text-sm text-slate-400">
               <a
                 href="mailto:rohit@variedreach.com"
-                className="flex items-center gap-2 transition-colors hover:text-white"
+                className="flex items-center gap-2 transition-colors hover:text-slate-200"
               >
-                <Mail className="h-4 w-4 flex-shrink-0 text-mk-t4" aria-hidden="true" />
+                <Mail className="h-4 w-4 flex-shrink-0 text-slate-500" aria-hidden="true" />
                 rohit@variedreach.com
               </a>
               <a
                 href="tel:+918851096461"
-                className="flex items-center gap-2 transition-colors hover:text-white"
+                className="flex items-center gap-2 transition-colors hover:text-slate-200"
               >
-                <Phone className="h-4 w-4 flex-shrink-0 text-mk-t4" aria-hidden="true" />
+                <Phone className="h-4 w-4 flex-shrink-0 text-slate-500" aria-hidden="true" />
                 +91 88510 96461
               </a>
               <span className="flex items-start gap-2">
-                <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-mk-t4" aria-hidden="true" />
+                <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-500" aria-hidden="true" />
                 S Block 376, Panchsheel Park, New Delhi 110017
               </span>
             </div>
           </div>
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-mk-t4">Product</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Product</p>
             <ul className="mt-4 space-y-2.5">
               {PRODUCT_LINKS.map((link) => (
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="text-sm text-mk-t3 transition-colors hover:text-white"
+                    className="text-sm text-slate-400 transition-colors hover:text-slate-200"
                   >
                     {link.label}
                   </Link>
@@ -72,13 +72,13 @@ export function MarketingFooter() {
           </div>
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-mk-t4">Solutions</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Solutions</p>
             <ul className="mt-4 space-y-2.5">
               {SOLUTIONS_LINKS.map((link) => (
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="text-sm text-mk-t3 transition-colors hover:text-white"
+                    className="text-sm text-slate-400 transition-colors hover:text-slate-200"
                   >
                     {link.label}
                   </Link>
@@ -88,13 +88,13 @@ export function MarketingFooter() {
           </div>
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-mk-t4">Company</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Company</p>
             <ul className="mt-4 space-y-2.5">
               {COMPANY_LINKS.map((link) => (
                 <li key={link.href}>
                   <Link
                     href={link.href}
-                    className="text-sm text-mk-t3 transition-colors hover:text-white"
+                    className="text-sm text-slate-400 transition-colors hover:text-slate-200"
                   >
                     {link.label}
                   </Link>
@@ -112,18 +112,18 @@ export function MarketingFooter() {
           </div>
         </div>
 
-        <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-white/[0.06] pt-8 sm:flex-row sm:items-center">
-          <p className="text-xs text-mk-t4">
+        <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-slate-800 pt-8 sm:flex-row sm:items-center">
+          <p className="text-xs text-slate-600">
             © {new Date().getFullYear()} Varied Reach. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
-            <Link href="/faq" className="text-xs text-mk-t4 transition-colors hover:text-white">
+            <Link href="/faq" className="text-xs text-slate-600 transition-colors hover:text-slate-400">
               FAQ
             </Link>
-            <Link href="/contact" className="text-xs text-mk-t4 transition-colors hover:text-white">
+            <Link href="/contact" className="text-xs text-slate-600 transition-colors hover:text-slate-400">
               Contact
             </Link>
-            <Link href="/about" className="text-xs text-mk-t4 transition-colors hover:text-white">
+            <Link href="/about" className="text-xs text-slate-600 transition-colors hover:text-slate-400">
               About
             </Link>
           </div>

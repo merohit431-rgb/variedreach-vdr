@@ -82,7 +82,7 @@ const FAQS = [
 function FAQItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-mk-bg">
+    <div className="rounded-xl border border-slate-200 bg-mk-bg">
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex w-full items-start justify-between gap-4 px-5 py-4 text-left"
@@ -98,7 +98,7 @@ function FAQItem({ q, a }: { q: string; a: string }) {
         />
       </button>
       {open && (
-        <p className="border-t border-white/[0.04] px-5 pb-4 pt-3 text-sm leading-relaxed text-mk-t2">
+        <p className="border-t border-slate-100 px-5 pb-4 pt-3 text-sm leading-relaxed text-mk-t2">
           {a}
         </p>
       )}
@@ -112,7 +112,7 @@ export default function FaqPage() {
       {/* Hero */}
       <section className="py-20">
         <div className="mx-auto max-w-3xl px-4 sm:px-6">
-          <span className="inline-block rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-400">
+          <span className="inline-block rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-600">
             FAQ
           </span>
           <h1 className="mt-5 text-4xl font-bold tracking-tight text-mk-text sm:text-5xl">
@@ -131,7 +131,7 @@ export default function FaqPage() {
           className={catIdx % 2 === 0 ? 'bg-mk-s1 py-12' : 'bg-mk-bg py-12'}
         >
           <div className="mx-auto max-w-3xl px-4 sm:px-6">
-            <h2 className="mb-6 text-xs font-semibold uppercase tracking-widest text-blue-400">
+            <h2 className="mb-6 text-xs font-semibold uppercase tracking-widest text-blue-600">
               {cat.category}
             </h2>
             <div className="space-y-2">
@@ -157,7 +157,7 @@ export default function FaqPage() {
             </Link>
             <Link
               href="/signup"
-              className="inline-flex rounded-md border border-white/[0.10] px-6 py-3 text-sm font-semibold text-mk-t2 transition-colors hover:text-white"
+              className="inline-flex rounded-md border border-slate-300 px-6 py-3 text-sm font-semibold text-mk-t2 transition-colors hover:text-slate-900"
             >
               Start free trial
             </Link>

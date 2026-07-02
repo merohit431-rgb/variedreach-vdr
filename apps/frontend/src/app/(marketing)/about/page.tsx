@@ -7,7 +7,7 @@ export default function AboutPage() {
       {/* Hero */}
       <section className="py-20">
         <div className="mx-auto max-w-4xl px-4 sm:px-6">
-          <span className="inline-block rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-400">
+          <span className="inline-block rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-600">
             About
           </span>
           <h1 className="mt-5 text-4xl font-bold tracking-tight text-mk-text sm:text-5xl">
@@ -69,7 +69,7 @@ export default function AboutPage() {
               ].map((p) => (
                 <div
                   key={p.title}
-                  className="rounded-xl border border-white/[0.06] bg-mk-bg px-5 py-4"
+                  className="rounded-xl border border-slate-200 bg-mk-bg px-5 py-4"
                 >
                   <p className="text-sm font-semibold text-mk-text">{p.title}</p>
                   <p className="mt-1 text-sm text-mk-t3">{p.desc}</p>
@@ -87,9 +87,9 @@ export default function AboutPage() {
           <div className="grid gap-5 sm:grid-cols-3">
             <a
               href="mailto:rohit@variedreach.com"
-              className="flex items-start gap-3 rounded-xl border border-white/[0.06] bg-mk-s1 px-5 py-4 transition-colors hover:border-blue-500/20"
+              className="flex items-start gap-3 rounded-xl border border-slate-200 bg-mk-s1 px-5 py-4 transition-colors hover:border-blue-500/20"
             >
-              <Mail className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-400" aria-hidden="true" />
+              <Mail className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" aria-hidden="true" />
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-mk-t4">Email</p>
                 <p className="mt-1 text-sm text-mk-t2">rohit@variedreach.com</p>
@@ -97,16 +97,16 @@ export default function AboutPage() {
             </a>
             <a
               href="tel:+918851096461"
-              className="flex items-start gap-3 rounded-xl border border-white/[0.06] bg-mk-s1 px-5 py-4 transition-colors hover:border-blue-500/20"
+              className="flex items-start gap-3 rounded-xl border border-slate-200 bg-mk-s1 px-5 py-4 transition-colors hover:border-blue-500/20"
             >
-              <Phone className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-400" aria-hidden="true" />
+              <Phone className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" aria-hidden="true" />
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-mk-t4">Phone</p>
                 <p className="mt-1 text-sm text-mk-t2">+91 88510 96461</p>
               </div>
             </a>
-            <div className="flex items-start gap-3 rounded-xl border border-white/[0.06] bg-mk-s1 px-5 py-4">
-              <MapPin className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-400" aria-hidden="true" />
+            <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-mk-s1 px-5 py-4">
+              <MapPin className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" aria-hidden="true" />
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-mk-t4">Office</p>
                 <p className="mt-1 text-sm text-mk-t2">
@@ -119,7 +119,7 @@ export default function AboutPage() {
           <div className="mt-8">
             <Link
               href="/contact"
-              className="text-sm font-medium text-blue-400 hover:text-blue-300"
+              className="text-sm font-medium text-blue-600 hover:text-blue-700"
             >
               Go to contact page →
             </Link>
