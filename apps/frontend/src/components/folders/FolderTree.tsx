@@ -2,7 +2,7 @@
 
 import { useMemo, useState, DragEvent } from 'react';
 import { useFolders, useCreateFolder, useUpdateFolder, useDeleteFolder, FolderNode } from '@/hooks/use-folders';
-import { useUpdateFile } from '@/hooks/use-files';
+import { useUpdateFile, downloadFolder } from '@/hooks/use-files';
 
 interface TreeNode extends FolderNode {
   children: TreeNode[];
@@ -35,6 +35,7 @@ interface FolderTreeProps {
   onSelect: (folderId: string | null) => void;
   canUpload: boolean;
   canDelete: boolean;
+  canDownload?: boolean;
 }
 
 export function FolderTree({
@@ -43,6 +44,7 @@ export function FolderTree({
   onSelect,
   canUpload,
   canDelete,
+  canDownload = false,
 }: FolderTreeProps) {
   const { data: folders, isLoading } = useFolders(dataRoomId);
   const createFolder = useCreateFolder(dataRoomId);
@@ -133,8 +135,17 @@ export function FolderTree({
           <button onClick={() => onSelect(node.id)} className="flex-1 truncate text-left">
             {node.name}
           </button>
-          {(canUpload || canDelete) && (
+          {(canUpload || canDelete || canDownload) && (
             <span className="hidden gap-1 group-hover:flex">
+              {canDownload && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); downloadFolder(dataRoomId, node.id, `${node.name}.zip`); }}
+                  title="Download folder as ZIP"
+                  className="text-xs text-slate-400 hover:text-slate-900"
+                >
+                  ⬇
+                </button>
+              )}
               {canUpload && (
                 <button
                   onClick={() => handleCreateChild(node.id)}

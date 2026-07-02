@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { QnaService } from './qna.service';
@@ -26,8 +27,9 @@ export class QnaController {
   list(
     @Param('dataRoomId') dataRoomId: string,
     @CurrentUser() user: AuthenticatedUser,
+    @Query('search') search?: string,
   ) {
-    return this.qnaService.list(dataRoomId, user);
+    return this.qnaService.list(dataRoomId, user, search);
   }
 
   @Post()

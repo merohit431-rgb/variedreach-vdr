@@ -29,6 +29,13 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { sendFileResponse } from '../../common/utils/http-file-response.util';
 import { BulkDownloadDto } from './dto/bulk-download.dto';
+import { IsOptional, IsString } from 'class-validator';
+
+class FolderDownloadDto {
+  @IsOptional()
+  @IsString()
+  folderId?: string;
+}
 
 const MAX_FILES_PER_UPLOAD = 50;
 
@@ -166,6 +173,26 @@ export class FilesController {
     const { buffer, filename } = await this.filesService.bulkDownload(
       dataRoomId,
       dto.fileIds,
+      user,
+      { ipAddress: req.ip ?? '0.0.0.0', userAgent: req.headers['user-agent'] as string | undefined },
+    );
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
+  }
+
+  @Post('folder-download')
+  async folderDownload(
+    @Param('dataRoomId') dataRoomId: string,
+    @Body() dto: FolderDownloadDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const { buffer, filename } = await this.filesService.folderDownload(
+      dataRoomId,
+      dto.folderId ?? null,
       user,
       { ipAddress: req.ip ?? '0.0.0.0', userAgent: req.headers['user-agent'] as string | undefined },
     );

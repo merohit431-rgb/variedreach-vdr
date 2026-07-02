@@ -5,6 +5,7 @@ import { AuditLogService } from '../audit/audit-log.service';
 import { DataRoomAccessService } from '../data-room-access/data-room-access.service';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { DATA_ROOM_MANAGER_ROLES } from '../../common/constants/content-roles';
+import { NotificationService } from '../notifications/notification.service';
 
 @Injectable()
 export class QnaService {
@@ -12,9 +13,10 @@ export class QnaService {
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
     private readonly dataRoomAccess: DataRoomAccessService,
+    private readonly notificationService: NotificationService,
   ) {}
 
-  async list(dataRoomId: string, actor: AuthenticatedUser) {
+  async list(dataRoomId: string, actor: AuthenticatedUser, search?: string) {
     const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor);
     const isManager = DATA_ROOM_MANAGER_ROLES.includes(effectiveRole);
 
@@ -22,6 +24,7 @@ export class QnaService {
       where: {
         dataRoomId,
         deletedAt: null,
+        ...(search ? { question: { contains: search, mode: 'insensitive' } } : {}),
         ...(isManager ? {} : {
           OR: [
             { isPrivate: false },
@@ -74,6 +77,18 @@ export class QnaService {
       resourceId: created.id,
     });
 
+    // Notify room managers (fire-and-forget — never fail the main response)
+    this.notificationService.createForRoomManagers(
+      dataRoomId,
+      {
+        type: 'QUESTION_ASKED',
+        title: 'New question posted',
+        message: `${actor.firstName} ${actor.lastName} asked: "${question.slice(0, 80)}${question.length > 80 ? '…' : ''}"`,
+        metadata: { questionId: created.id, isPrivate },
+      },
+      actor.id,
+    ).catch(() => undefined);
+
     return created;
   }
 
@@ -123,7 +138,7 @@ export class QnaService {
     answerText: string,
     actor: AuthenticatedUser,
   ) {
-    const { effectiveRole } = await this.dataRoomAccess.assertRoomManager(dataRoomId, actor);
+    await this.dataRoomAccess.assertRoomManager(dataRoomId, actor);
 
     const q = await this.prisma.question.findFirst({
       where: { id: questionId, dataRoomId, deletedAt: null },
@@ -151,6 +166,18 @@ export class QnaService {
       resourceId: questionId,
       metadata: { answerId: ans.id },
     });
+
+    // Notify the question asker (if not the same person answering)
+    if (q.askedBy !== actor.id) {
+      this.notificationService.create({
+        userId: q.askedBy,
+        type: 'QUESTION_ANSWERED',
+        dataRoomId,
+        title: 'Your question was answered',
+        message: `${actor.firstName} ${actor.lastName} answered your question.`,
+        metadata: { questionId, answerId: ans.id },
+      }).catch(() => undefined);
+    }
 
     return ans;
   }

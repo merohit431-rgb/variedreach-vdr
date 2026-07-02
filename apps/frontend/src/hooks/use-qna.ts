@@ -26,12 +26,15 @@ export interface QnaQuestion {
   updatedAt: string;
 }
 
-export function useQuestions(dataRoomId: string) {
+export function useQuestions(dataRoomId: string, search?: string) {
   return useQuery({
-    queryKey: ['data-rooms', dataRoomId, 'questions'],
+    queryKey: ['data-rooms', dataRoomId, 'questions', search],
     queryFn: async () => {
+      const params: Record<string, string> = {};
+      if (search) params.search = search;
       const response = await apiClient.get<{ data: QnaQuestion[] }>(
         `/data-rooms/${dataRoomId}/questions`,
+        { params },
       );
       return response.data.data;
     },

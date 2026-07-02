@@ -19,6 +19,7 @@ import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { UpdateFileDto } from './dto/update-file.dto';
 import { ListFilesQueryDto } from './dto/list-files-query.dto';
 import { StorageWarningLevel } from '../mail/templates/storage-warning.template';
+import { NotificationService } from '../notifications/notification.service';
 
 const STORAGE_ALERT_ORG_WIDE_ROLES: UserRole[] = [UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN];
 
@@ -39,6 +40,7 @@ export class FilesService {
     private readonly officeConversionService: OfficeConversionService,
     private readonly mailService: MailService,
     private readonly configService: ConfigService,
+    private readonly notificationService: NotificationService,
     @Inject(STORAGE_SERVICE) private readonly storage: IStorageService,
   ) {}
 
@@ -173,6 +175,18 @@ export class FilesService {
     }
 
     await this.checkStorageThreshold(dataRoomId);
+
+    // Notify room managers about new uploads (fire-and-forget)
+    const names = created.map((f) => f.name);
+    const msg =
+      names.length === 1
+        ? `"${names[0]}" was uploaded by ${actor.firstName} ${actor.lastName}`
+        : `${names.length} files were uploaded by ${actor.firstName} ${actor.lastName}`;
+    this.notificationService.createForRoomManagers(
+      dataRoomId,
+      { type: 'FILE_UPLOADED', title: 'Files uploaded', message: msg },
+      actor.id,
+    ).catch(() => undefined);
 
     return created;
   }
@@ -457,6 +471,117 @@ export class FilesService {
     });
 
     return { buffer, filename: `data-room-export-${dateStr}.zip` };
+  }
+
+  async folderDownload(
+    dataRoomId: string,
+    folderId: string | null,
+    actor: AuthenticatedUser,
+    context: { ipAddress: string; userAgent?: string },
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    await this.dataRoomAccess.assertCanDownload(dataRoomId, actor);
+
+    // Recursively collect all folder IDs in the subtree
+    const collectFolderIds = async (rootId: string | null): Promise<(string | null)[]> => {
+      const ids: (string | null)[] = [rootId];
+      const children = await this.prisma.folder.findMany({
+        where: { dataRoomId, parentId: rootId === null ? null : rootId, deletedAt: null },
+        select: { id: true },
+      });
+      for (const child of children) {
+        ids.push(...(await collectFolderIds(child.id)));
+      }
+      return ids;
+    };
+
+    const folderIds = await collectFolderIds(folderId);
+    const nonNullFolderIds = folderIds.filter((id): id is string => id !== null);
+    const includesRoot = folderIds.includes(null);
+
+    const allFiles = await this.prisma.file.findMany({
+      where: {
+        dataRoomId,
+        deletedAt: null,
+        OR: [
+          ...(nonNullFolderIds.length > 0 ? [{ folderId: { in: nonNullFolderIds } }] : []),
+          ...(includesRoot ? [{ folderId: null }] : []),
+        ],
+      },
+      include: {
+        currentVersion: true,
+        folder: { select: { path: true } },
+      },
+    });
+
+    if (allFiles.length === 0) {
+      throw new NotFoundException('No files found in the selected folder');
+    }
+
+    const folderInfo = folderId
+      ? await this.prisma.folder.findFirst({ where: { id: folderId }, select: { name: true, path: true } })
+      : null;
+
+    const elements = this.watermarkService.buildElements(actor, context.ipAddress);
+    const archive = createArchive('zip', { zlib: { level: 6 } });
+    const chunks: Buffer[] = [];
+    archive.on('data', (chunk: Buffer) => chunks.push(chunk));
+
+    for (const file of allFiles) {
+      if (!file.currentVersion) continue;
+
+      const version = file.currentVersion;
+      const isOffice = isOfficeConvertible(file.extension);
+      const sourceBuffer = isOffice
+        ? await this.getOrCreateConvertedPdf(dataRoomId, file, version)
+        : await this.storage.read(version.storagePath);
+
+      const watermarked = await this.watermarkService.apply(sourceBuffer, isOffice ? 'pdf' : file.extension, elements);
+      const entryName = isOffice ? getPreviewFilename(file.name, file.extension) : file.name;
+      const folderPath = file.folder?.path ?? '';
+      const zipPath = folderPath ? `${folderPath}/${entryName}` : entryName;
+      archive.append(watermarked, { name: zipPath });
+
+      const auditLog = await this.auditLogService.record({
+        action: 'FILE_DOWNLOADED',
+        dataRoomId,
+        userId: actor.id,
+        resourceType: 'File',
+        resourceId: file.id,
+        metadata: { name: file.name, versionNumber: version.versionNumber, folderDownload: true },
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+      });
+      await this.watermarkService.recordWatermark({
+        auditLogId: auditLog.id,
+        fileId: file.id,
+        fileVersionId: version.id,
+        userId: actor.id,
+        elements,
+      });
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      archive.on('end', resolve);
+      archive.on('error', reject);
+      archive.finalize();
+    });
+
+    const buffer = Buffer.concat(chunks);
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const safeName = (folderInfo?.name ?? 'data-room').replace(/[^a-z0-9-_]/gi, '_');
+
+    await this.auditLogService.record({
+      action: 'BULK_DOWNLOADED',
+      dataRoomId,
+      userId: actor.id,
+      resourceType: 'Folder',
+      resourceId: folderId ?? dataRoomId,
+      metadata: { folderPath: folderInfo?.path, count: allFiles.length },
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
+
+    return { buffer, filename: `${safeName}-${dateStr}.zip` };
   }
 
   // Office files (Word/Excel/PowerPoint) get converted to PDF once per

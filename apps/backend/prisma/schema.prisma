@@ -162,6 +162,7 @@ model User {
   ndaAcceptances      NdaAcceptance[]
   questionsAsked      Question[]           @relation("QuestionAsker")
   answersGiven        Answer[]             @relation("AnswerAuthor")
+  notifications       Notification[]
 
   @@index([organisationId])
   @@map("users")
@@ -292,6 +293,7 @@ model DataRoom {
   emailLogs       EmailLog[]
   ndaAcceptances  NdaAcceptance[]
   questions       Question[]
+  notifications   Notification[]
 
   @@index([organisationId, deletedAt])
   @@map("data_rooms")
@@ -706,4 +708,36 @@ model Answer {
 
   @@index([questionId, createdAt])
   @@map("answers")
+}
+
+// ═══════════════════════════════════════════════════════════
+// NOTIFICATION CENTER (Phase 2)
+// ═══════════════════════════════════════════════════════════
+
+enum NotificationType {
+  FILE_UPLOADED
+  MEMBER_INVITED
+  QUESTION_ASKED
+  QUESTION_ANSWERED
+  DATA_ROOM_UPDATED
+  PERMISSION_CHANGED
+}
+
+model Notification {
+  id         String           @id @default(uuid())
+  userId     String
+  type       NotificationType
+  dataRoomId String?
+  title      String
+  message    String
+  isRead     Boolean          @default(false)
+  metadata   Json?
+  createdAt  DateTime         @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dataRoom DataRoom? @relation(fields: [dataRoomId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@index([userId, createdAt])
+  @@map("notifications")
 }

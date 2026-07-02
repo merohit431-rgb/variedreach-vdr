@@ -5,6 +5,7 @@ import { ChevronDown, LogOut, Menu } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { Avatar } from '@/components/ui/Avatar';
 import { EnvironmentBadge } from '@/components/layout/EnvironmentBanner';
+import { NotificationBell } from '@/components/layout/NotificationBell';
 
 export function TopNav({ onOpenMobileMenu }: { onOpenMobileMenu: () => void }) {
   const { user, logout } = useAuth();
@@ -40,6 +41,8 @@ export function TopNav({ onOpenMobileMenu }: { onOpenMobileMenu: () => void }) {
 
       <EnvironmentBadge />
       <div className="flex-1" />
+
+      {user && <NotificationBell />}
 
       {user && (
         <div ref={menuRef} className="relative">

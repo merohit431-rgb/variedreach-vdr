@@ -170,7 +170,8 @@ export function QnaPanel({
   dataRoomId: string;
   isManager: boolean;
 }) {
-  const { data: questions, isLoading } = useQuestions(dataRoomId);
+  const [search, setSearch] = useState('');
+  const { data: questions, isLoading } = useQuestions(dataRoomId, search || undefined);
   const askQuestion = useAskQuestion(dataRoomId);
   const user = useAuthStore((s) => s.user);
 
@@ -194,16 +195,23 @@ export function QnaPanel({
 
   return (
     <div className="space-y-4 pt-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <MessageSquare className="h-5 w-5 text-slate-500" />
           <h2 className="text-sm font-semibold text-slate-900">Questions &amp; Answers</h2>
           {questions && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">{questions.length}</span>}
         </div>
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search questions…"
+          className="w-52 rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+        />
         {!asking && (
           <button
             onClick={() => setAsking(true)}
-            className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+            className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 whitespace-nowrap"
           >
             Ask a question
           </button>

@@ -32,6 +32,7 @@ import { PaymentModule } from './modules/payment/payment.module';
 import { SuperAdminModule } from './modules/super-admin/super-admin.module';
 import { NdaModule } from './modules/nda/nda.module';
 import { QnaModule } from './modules/qna/qna.module';
+import { NotificationModule } from './modules/notifications/notification.module';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { QnaModule } from './modules/qna/qna.module';
     SuperAdminModule,
     NdaModule,
     QnaModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [

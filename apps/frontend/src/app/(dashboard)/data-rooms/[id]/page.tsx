@@ -29,6 +29,7 @@ export default function DataRoomFilesPage() {
           onSelect={setSelectedFolderId}
           canUpload={canUpload}
           canDelete={canDelete}
+          canDownload={canDownload}
         />
         <div className="flex-1">
           <div className="mb-3 flex items-center justify-between">

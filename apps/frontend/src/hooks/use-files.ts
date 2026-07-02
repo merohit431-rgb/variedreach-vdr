@@ -190,3 +190,19 @@ export async function bulkDownloadFiles(dataRoomId: string, fileIds: string[], f
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
+export async function downloadFolder(dataRoomId: string, folderId: string | null, filename: string) {
+  const response = await apiClient.post<Blob>(
+    `/data-rooms/${dataRoomId}/files/folder-download`,
+    { folderId: folderId ?? undefined },
+    { responseType: 'blob' },
+  );
+  const url = URL.createObjectURL(response.data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
