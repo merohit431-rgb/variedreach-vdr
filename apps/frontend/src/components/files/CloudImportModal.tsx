@@ -17,7 +17,6 @@ import { useImportStore, ImportProvider } from '@/store/import-store';
 import { formatBytes } from '@/lib/format';
 import { getFileIcon } from '@/lib/file-icon';
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 declare global {
   interface Window {
     gapi: any;
@@ -146,6 +145,8 @@ function GoogleDriveTab({ selectedFiles, setSelectedFiles, scanning, setScanning
   const accessTokenRef = useRef<string | null>(null);
   const scanAbortRef = useRef<AbortController | null>(null);
 
+  useEffect(() => () => { scanAbortRef.current?.abort(); }, []);
+
   if (!GOOGLE_CLIENT_ID || !GOOGLE_API_KEY) return <NotConfiguredNotice provider="google-drive" />;
 
   async function connect() {
@@ -251,8 +252,6 @@ function GoogleDriveTab({ selectedFiles, setSelectedFiles, scanning, setScanning
       return [...prev, ...newFiles.filter((f) => !existingIds.has(f.googleFileId))];
     });
   }
-
-  useEffect(() => () => { scanAbortRef.current?.abort(); }, []);
 
   return (
     <div className="flex flex-col gap-4">
