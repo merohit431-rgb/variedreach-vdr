@@ -56,7 +56,8 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto, meta: RequestMeta): Promise<LoginResult> {
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const email = dto.email.toLowerCase().trim();
+    const user = await this.prisma.user.findUnique({ where: { email } });
 
     if (!user || user.deletedAt) {
       throw new UnauthorizedException('Invalid email or password');
@@ -307,7 +308,8 @@ export class AuthService {
     return { accessToken, refreshToken, refreshExpiresAt };
   }
 
-  async forgotPassword(email: string): Promise<void> {
+  async forgotPassword(rawEmail: string): Promise<void> {
+    const email = rawEmail.toLowerCase().trim();
     const user = await this.prisma.user.findUnique({ where: { email } });
 
     // Always behave the same way whether or not the email exists, so this

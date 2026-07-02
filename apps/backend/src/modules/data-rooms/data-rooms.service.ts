@@ -202,7 +202,8 @@ export class DataRoomsService {
   async inviteMember(dataRoomId: string, dto: InviteMemberDto, actor: AuthenticatedUser) {
     const dataRoom = await this.assertManager(dataRoomId, actor);
 
-    let user = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const email = dto.email.toLowerCase().trim();
+    let user = await this.prisma.user.findUnique({ where: { email } });
 
     if (user && user.organisationId !== actor.organisationId) {
       throw new ConflictException('This email is already registered to a different organisation');
@@ -216,7 +217,7 @@ export class DataRoomsService {
       user = await this.prisma.user.create({
         data: {
           organisationId: actor.organisationId,
-          email: dto.email,
+          email,
           password: generateOpaqueToken().hash, // unusable placeholder until invite is accepted
           firstName: dto.email.split('@')[0],
           lastName: '',

@@ -41,7 +41,8 @@ export class RegistrationService {
   ) {}
 
   async register(dto: CreateRegistrationDto): Promise<void> {
-    const existing = await this.prisma.registration.findUnique({ where: { email: dto.email } });
+    const email = dto.email.toLowerCase().trim();
+    const existing = await this.prisma.registration.findUnique({ where: { email } });
     if (existing) {
       throw new ConflictException('An account with this email has already been registered');
     }
@@ -52,7 +53,7 @@ export class RegistrationService {
       data: {
         fullName: dto.fullName,
         companyName: dto.companyName,
-        email: dto.email,
+        email,
         mobileNumber: dto.mobileNumber,
         passwordHash,
         gstNumber: dto.gstNumber,
@@ -86,7 +87,8 @@ export class RegistrationService {
     return { email: registration.email };
   }
 
-  async resendVerification(email: string): Promise<void> {
+  async resendVerification(rawEmail: string): Promise<void> {
+    const email = rawEmail.toLowerCase().trim();
     const registration = await this.prisma.registration.findUnique({ where: { email } });
 
     // Same shape regardless of whether the email exists or is already
@@ -99,7 +101,7 @@ export class RegistrationService {
   }
 
   async createOrder(dto: CreateOrderDto): Promise<{ orderId: string; amountPaisa: number; currency: string; keyId: string; planName: string; billingCycle: string }> {
-    const reg = await this.prisma.registration.findUnique({ where: { email: dto.email } });
+    const reg = await this.prisma.registration.findUnique({ where: { email: dto.email.toLowerCase().trim() } });
     if (!reg || !reg.verifiedAt) throw new BadRequestException('Email not verified or registration not found');
     if (reg.provisionedAt) throw new BadRequestException('Account already provisioned');
 
@@ -129,7 +131,7 @@ export class RegistrationService {
   }
 
   async complete(dto: CompleteRegistrationDto): Promise<{ accessToken: string; refreshToken: string; refreshExpiresAt: Date; user: { id: string; email: string; firstName: string; lastName: string; role: string; organisationId: string } }> {
-    const reg = await this.prisma.registration.findUnique({ where: { email: dto.email } });
+    const reg = await this.prisma.registration.findUnique({ where: { email: dto.email.toLowerCase().trim() } });
     if (!reg || !reg.verifiedAt) throw new BadRequestException('Email not verified or registration not found');
     if (reg.provisionedAt) throw new BadRequestException('Account already provisioned');
     if (reg.gatewayOrderId !== dto.gatewayOrderId) throw new BadRequestException('Order ID mismatch');
