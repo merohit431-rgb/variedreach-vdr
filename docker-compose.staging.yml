@@ -75,6 +75,7 @@ services:
     deploy:
       resources:
         limits:
+          cpus: '1.0'
           # Raised from 512M -- uploads now stream to disk (no longer
           # buffered in memory), but watermarking/previewing a large file
           # still loads it fully into memory, and files can now be up to
@@ -111,6 +112,7 @@ services:
     deploy:
       resources:
         limits:
+          cpus: '0.5'
           memory: 512M
     networks:
       vdr_network: {}

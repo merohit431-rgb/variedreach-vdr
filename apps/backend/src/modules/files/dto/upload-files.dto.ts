@@ -1,10 +1,11 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class UploadFilesDto {
   @ApiPropertyOptional({ description: 'Target parent folder id, omit for data room root' })
   @IsOptional()
   @IsString()
+  @MaxLength(36)
   folderId?: string;
 
   @ApiPropertyOptional({
@@ -14,5 +15,6 @@ export class UploadFilesDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   relativePaths?: string;
 }

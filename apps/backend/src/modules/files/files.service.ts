@@ -1,6 +1,6 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { rm } from 'fs/promises';
+import { rm, open } from 'fs/promises';
 import { File, UserRole } from '@prisma/client';
 import type { Archiver as ArchiverInstance, ArchiverOptions } from 'archiver';
 // archiver ships CommonJS; we use a typed cast so the factory is callable
@@ -111,6 +111,20 @@ export class FilesService {
         if (multerFile.size > rule.maxSizeBytes) {
           throw new BadRequestException(
             `"${fileName}" exceeds the ${Math.round(rule.maxSizeBytes / (1024 * 1024))}MB limit for ${rule.category}`,
+          );
+        }
+
+        // Magic byte check — read the first 12 bytes from the multer temp
+        // file on disk to verify the actual binary content matches the
+        // declared extension (extension spoofing guard: e.g. .exe renamed .pdf).
+        const magicBuf = Buffer.alloc(12);
+        const fdMagic = await open(multerFile.path, 'r');
+        await fdMagic.read(magicBuf, 0, 12, 0);
+        await fdMagic.close();
+        const magicResult = validateMagicBytes(magicBuf, extension);
+        if (!magicResult.valid) {
+          throw new BadRequestException(
+            `"${fileName}" file content does not match its declared type (.${extension})`,
           );
         }
 
@@ -275,6 +289,18 @@ export class FilesService {
           `New version would exceed the data room's ${dataRoomForVersion.storageLimitGb} GB storage quota`,
         );
       }
+    }
+
+    // Magic byte check for new version
+    const magicBufV = Buffer.alloc(12);
+    const fdMagicV = await open(multerFile.path, 'r');
+    await fdMagicV.read(magicBufV, 0, 12, 0);
+    await fdMagicV.close();
+    const magicResultV = validateMagicBytes(magicBufV, file.extension);
+    if (!magicResultV.valid) {
+      throw new BadRequestException(
+        `New version content does not match the expected file type (.${file.extension})`,
+      );
     }
 
     let saved;
