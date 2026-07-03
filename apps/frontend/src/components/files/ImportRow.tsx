@@ -26,28 +26,28 @@ export function ImportRow({ item }: { item: ImportItem }) {
 
   return (
     <div className="flex items-center gap-3 px-4 py-2.5">
-      <Icon className="h-5 w-5 flex-shrink-0 text-slate-400" aria-hidden="true" />
+      <Icon className="h-5 w-5 flex-shrink-0 text-app-t3" aria-hidden="true" />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <p className="truncate text-sm font-medium text-slate-900">{item.name}</p>
-          <span className="flex-shrink-0 text-xs text-slate-400">{formatBytes(item.sizeBytes)}</span>
+          <p className="truncate text-sm font-medium text-app-text">{item.name}</p>
+          <span className="flex-shrink-0 text-xs text-app-t3">{formatBytes(item.sizeBytes)}</span>
         </div>
 
         {isActive ? (
           <div className="mt-1.5">
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-app-s2">
               <div
                 className={`h-full rounded-full transition-all ${
                   item.status === 'importing'
-                    ? 'w-full animate-pulse bg-brand-600'
-                    : 'w-0 bg-brand-600'
+                    ? 'w-full animate-pulse bg-app-primary'
+                    : 'w-0 bg-app-primary'
                 }`}
               />
             </div>
-            <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+            <div className="mt-1 flex items-center gap-2 text-xs text-app-t3">
               <span>{STATUS_LABEL[item.status]}</span>
-              <span className="text-slate-300">·</span>
+              <span className="text-app-t4">·</span>
               <span>{PROVIDER_LABEL[item.provider]}</span>
             </div>
           </div>
@@ -55,10 +55,10 @@ export function ImportRow({ item }: { item: ImportItem }) {
           <p
             className={`mt-1 flex items-center gap-1 text-xs ${
               item.status === 'failed'
-                ? 'text-red-600'
+                ? 'text-red-400'
                 : item.status === 'ready'
-                  ? 'text-emerald-600'
-                  : 'text-slate-400'
+                  ? 'text-emerald-400'
+                  : 'text-app-t3'
             }`}
           >
             {item.status === 'ready' && <CheckCircle2 className="h-3 w-3" aria-hidden="true" />}
@@ -73,7 +73,7 @@ export function ImportRow({ item }: { item: ImportItem }) {
           <button
             onClick={() => cancel(item.id)}
             title="Cancel"
-            className="text-slate-400 hover:text-slate-700"
+            className="text-app-t3 hover:text-app-t2"
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -82,7 +82,7 @@ export function ImportRow({ item }: { item: ImportItem }) {
           <button
             onClick={() => retry(item.id)}
             title="Retry"
-            className="text-slate-400 hover:text-slate-700"
+            className="text-app-t3 hover:text-app-t2"
           >
             <RotateCw className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -91,7 +91,7 @@ export function ImportRow({ item }: { item: ImportItem }) {
           <button
             onClick={() => remove(item.id)}
             title="Dismiss"
-            className="text-slate-400 hover:text-slate-700"
+            className="text-app-t3 hover:text-app-t2"
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>

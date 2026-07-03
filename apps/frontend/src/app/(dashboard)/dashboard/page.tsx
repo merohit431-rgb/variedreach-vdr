@@ -36,10 +36,10 @@ export default function DashboardPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-slate-900">
+        <h1 className="text-xl font-bold text-app-text">
           {getGreeting()}{user ? `, ${user.firstName}` : ''}.
         </h1>
-        <p className="mt-0.5 text-sm text-slate-400">{formatDate()}</p>
+        <p className="mt-0.5 text-sm text-app-t3">{formatDate()}</p>
       </div>
 
       {/* Stat cards */}
@@ -58,7 +58,7 @@ export default function DashboardPage() {
         {/* Activity feed — takes 2/3 */}
         <div className="lg:col-span-2">
           {activityLoading || !activity ? (
-            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-soft">
+            <div className="rounded-xl border border-app-border bg-app-s1 p-5 shadow-dark-soft">
               <Skeleton className="h-3.5 w-32" />
               <div className="mt-4 space-y-3">
                 {[...Array(5)].map((_, i) => (

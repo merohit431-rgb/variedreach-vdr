@@ -252,13 +252,13 @@ export function FolderTree({
           onFocus={() => setFocusedId(node.id)}
           onKeyDown={(e) => handleKeyDown(e, node)}
           className={`group flex items-center gap-1 rounded-md px-2 py-1 text-sm outline-none focus-visible:ring-1 focus-visible:ring-slate-400 ${
-            isSelected ? 'bg-slate-100 text-slate-900' : 'text-slate-600 hover:bg-slate-50'
+            isSelected ? 'bg-app-s2 text-app-text' : 'text-app-t2 hover:bg-app-s2'
           } ${dragOverId === node.id ? 'ring-1 ring-slate-400' : ''}`}
         >
           <button
             onClick={() => toggle(node.id)}
             tabIndex={-1}
-            className="flex w-4 flex-shrink-0 items-center justify-center text-slate-400"
+            className="flex w-4 flex-shrink-0 items-center justify-center text-app-t3"
             aria-label={isExpanded ? 'Collapse' : 'Expand'}
           >
             {hasChildren ? (
@@ -266,9 +266,9 @@ export function FolderTree({
             ) : null}
           </button>
           {isExpanded ? (
-            <FolderOpen className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" aria-hidden="true" />
+            <FolderOpen className="h-3.5 w-3.5 flex-shrink-0 text-app-t3" aria-hidden="true" />
           ) : (
-            <FolderIcon className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" aria-hidden="true" />
+            <FolderIcon className="h-3.5 w-3.5 flex-shrink-0 text-app-t3" aria-hidden="true" />
           )}
           <button onClick={() => onSelect(node.id)} tabIndex={-1} className="flex-1 truncate text-left">
             {node.name}
@@ -279,7 +279,7 @@ export function FolderTree({
                 <button
                   onClick={(e) => { e.stopPropagation(); downloadFolder(dataRoomId, node.id, `${node.name}.zip`); }}
                   title="Download folder as ZIP"
-                  className="text-xs text-slate-400 hover:text-slate-900"
+                  className="text-xs text-app-t3 hover:text-app-text"
                 >
                   ⬇
                 </button>
@@ -289,7 +289,7 @@ export function FolderTree({
                   onClick={() => handleCreateChild(node.id)}
                   tabIndex={-1}
                   title="New subfolder"
-                  className="text-xs text-slate-400 hover:text-slate-900"
+                  className="text-xs text-app-t3 hover:text-app-text"
                 >
                   +
                 </button>
@@ -299,7 +299,7 @@ export function FolderTree({
                   onClick={() => handleRename(node)}
                   tabIndex={-1}
                   title="Rename"
-                  className="text-xs text-slate-400 hover:text-slate-900"
+                  className="text-xs text-app-t3 hover:text-app-text"
                 >
                   ✎
                 </button>
@@ -309,7 +309,7 @@ export function FolderTree({
                   onClick={() => handleDelete(node)}
                   tabIndex={-1}
                   title="Delete"
-                  className="text-xs text-slate-400 hover:text-red-600"
+                  className="text-xs text-app-t3 hover:text-red-400"
                 >
                   ×
                 </button>
@@ -318,7 +318,7 @@ export function FolderTree({
           )}
         </div>
         {isExpanded && hasChildren && (
-          <ul role="group" className="ml-4 border-l border-slate-100 pl-2">
+          <ul role="group" className="ml-4 border-l border-app-border pl-2">
             {node.children.map(renderNode)}
           </ul>
         )}
@@ -327,7 +327,7 @@ export function FolderTree({
   }
 
   if (isLoading) {
-    return <p className="text-sm text-slate-400">Loading folders…</p>;
+    return <p className="text-sm text-app-t3">Loading folders…</p>;
   }
 
   const contextNode = contextMenu ? findNode(tree, contextMenu.folderId) : null;
@@ -335,9 +335,9 @@ export function FolderTree({
   return (
     <div className="w-64 flex-shrink-0">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-medium uppercase text-slate-500">Folders</p>
+        <p className="text-xs font-medium uppercase text-app-t3">Folders</p>
         {canUpload && (
-          <button onClick={handleCreateRoot} className="text-xs text-slate-500 hover:text-slate-900">
+          <button onClick={handleCreateRoot} className="text-xs text-app-t3 hover:text-app-text">
             + New
           </button>
         )}
@@ -354,7 +354,7 @@ export function FolderTree({
         <button
           onClick={() => onSelect(null)}
           className={`mb-1 block w-full rounded-md px-2 py-1 text-left text-sm ${
-            selectedFolderId === null ? 'bg-slate-100 text-slate-900' : 'text-slate-600 hover:bg-slate-50'
+            selectedFolderId === null ? 'bg-app-s2 text-app-text' : 'text-app-t2 hover:bg-app-s2'
           }`}
         >
           All files
@@ -369,7 +369,7 @@ export function FolderTree({
         createPortal(
           <div
             role="menu"
-            className="fixed z-50 w-44 rounded-md border border-slate-200 bg-white py-1 text-sm shadow-lg"
+            className="fixed z-50 w-44 rounded-md border border-app-border bg-app-s1 py-1 text-sm shadow-lg"
             style={{ top: contextMenu.y, left: contextMenu.x }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -380,9 +380,9 @@ export function FolderTree({
                   handleCreateChild(contextNode.id);
                   setContextMenu(null);
                 }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-slate-700 hover:bg-slate-50"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-app-t2 hover:bg-app-s2"
               >
-                <FolderPlus className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                <FolderPlus className="h-3.5 w-3.5 text-app-t3" aria-hidden="true" />
                 New subfolder
               </button>
             )}
@@ -393,9 +393,9 @@ export function FolderTree({
                   handleRename(contextNode);
                   setContextMenu(null);
                 }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-slate-700 hover:bg-slate-50"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-app-t2 hover:bg-app-s2"
               >
-                <Pencil className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                <Pencil className="h-3.5 w-3.5 text-app-t3" aria-hidden="true" />
                 Rename
               </button>
             )}
@@ -406,9 +406,9 @@ export function FolderTree({
                   handleCopy(contextNode);
                   setContextMenu(null);
                 }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-slate-700 hover:bg-slate-50"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-app-t2 hover:bg-app-s2"
               >
-                <Copy className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                <Copy className="h-3.5 w-3.5 text-app-t3" aria-hidden="true" />
                 Copy
               </button>
             )}
@@ -419,7 +419,7 @@ export function FolderTree({
                   handleDelete(contextNode);
                   setContextMenu(null);
                 }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-red-600 hover:bg-red-50"
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-red-400 hover:bg-red-500/10"
               >
                 <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                 Delete

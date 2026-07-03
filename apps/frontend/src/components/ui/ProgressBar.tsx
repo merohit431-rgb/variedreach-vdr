@@ -13,9 +13,9 @@ export function ProgressBar({ value, max = 100, tone, className, label }: Progre
   const resolvedTone = tone ?? (percent >= 90 ? 'danger' : percent >= 70 ? 'warning' : 'brand');
 
   const barColor = {
-    brand: 'bg-brand-600',
-    warning: 'bg-amber-500',
-    danger: 'bg-rose-500',
+    brand: 'bg-app-primary',
+    warning: 'bg-amber-500/100',
+    danger: 'bg-rose-500/100',
   }[resolvedTone];
 
   return (
@@ -26,7 +26,7 @@ export function ProgressBar({ value, max = 100, tone, className, label }: Progre
         aria-valuemin={0}
         aria-valuemax={100}
         aria-label={label}
-        className="h-2 w-full overflow-hidden rounded-full bg-slate-100"
+        className="h-2 w-full overflow-hidden rounded-full bg-app-s2"
       >
         <div
           className={cn('h-full rounded-full transition-all duration-500 ease-out', barColor)}

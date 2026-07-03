@@ -27,20 +27,20 @@ export function Breadcrumb({ items, trailing }: { items: BreadcrumbItem[]; trail
                 {item.onClick && !isLast ? (
                   <button
                     onClick={item.onClick}
-                    className="truncate text-slate-500 hover:text-brand-600"
+                    className="truncate text-app-t3 hover:text-app-primary"
                   >
                     {item.label}
                   </button>
                 ) : (
                   <span
-                    className={isLast ? 'truncate font-medium text-slate-900' : 'truncate text-slate-500'}
+                    className={isLast ? 'truncate font-medium text-app-text' : 'truncate text-app-t3'}
                     aria-current={isLast ? 'page' : undefined}
                   >
                     {item.label}
                   </span>
                 )}
               </li>
-              {!isLast && <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-slate-300" aria-hidden="true" />}
+              {!isLast && <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-app-t4" aria-hidden="true" />}
             </Fragment>
           );
         })}

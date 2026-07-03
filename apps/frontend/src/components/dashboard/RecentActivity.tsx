@@ -15,13 +15,13 @@ function relativeTime(dateString: string): string {
 
 function getActionMeta(action: string): { dotColor: string; label: string } {
   const u = action.toUpperCase();
-  if (u.includes('UPLOAD') || u.includes('CREATE')) return { dotColor: 'bg-emerald-500', label: 'created' };
-  if (u.includes('DELETE') || u.includes('REMOVE')) return { dotColor: 'bg-red-400', label: 'deleted' };
-  if (u.includes('DOWNLOAD')) return { dotColor: 'bg-blue-500', label: 'downloaded' };
-  if (u.includes('INVITE') || u.includes('MEMBER')) return { dotColor: 'bg-violet-500', label: 'invited' };
+  if (u.includes('UPLOAD') || u.includes('CREATE')) return { dotColor: 'bg-emerald-500/100', label: 'created' };
+  if (u.includes('DELETE') || u.includes('REMOVE')) return { dotColor: 'bg-red-500', label: 'deleted' };
+  if (u.includes('DOWNLOAD')) return { dotColor: 'bg-blue-500/100', label: 'downloaded' };
+  if (u.includes('INVITE') || u.includes('MEMBER')) return { dotColor: 'bg-violet-500/100', label: 'invited' };
   if (u.includes('UPDATE') || u.includes('EDIT')) return { dotColor: 'bg-amber-400', label: 'updated' };
   if (u.includes('VIEW') || u.includes('ACCESS')) return { dotColor: 'bg-slate-400', label: 'viewed' };
-  return { dotColor: 'bg-slate-300', label: action.toLowerCase().replace(/_/g, ' ') };
+  return { dotColor: 'bg-app-s3', label: action.toLowerCase().replace(/_/g, ' ') };
 }
 
 function actorLabel(item: ActivityItem): string {
@@ -31,19 +31,19 @@ function actorLabel(item: ActivityItem): string {
 
 export function RecentActivity({ items }: { items: ActivityItem[] }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-soft">
+    <div className="rounded-xl border border-app-border bg-app-s1 p-5 shadow-dark-soft">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Recent Activity</p>
-        <Activity className="h-4 w-4 text-slate-300" aria-hidden="true" />
+        <p className="text-xs font-semibold uppercase tracking-wide text-app-t3">Recent Activity</p>
+        <Activity className="h-4 w-4 text-app-t4" aria-hidden="true" />
       </div>
 
       {items.length === 0 ? (
         <div className="mt-6 flex flex-col items-center justify-center py-6 text-center">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
-            <Activity className="h-5 w-5 text-slate-400" aria-hidden="true" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-app-s2">
+            <Activity className="h-5 w-5 text-app-t3" aria-hidden="true" />
           </div>
-          <p className="mt-3 text-sm font-medium text-slate-600">No activity yet</p>
-          <p className="mt-1 text-xs text-slate-400">Actions across your data rooms will appear here.</p>
+          <p className="mt-3 text-sm font-medium text-app-t2">No activity yet</p>
+          <p className="mt-1 text-xs text-app-t3">Actions across your data rooms will appear here.</p>
         </div>
       ) : (
         <ul className="mt-4 space-y-3">
@@ -53,21 +53,21 @@ export function RecentActivity({ items }: { items: ActivityItem[] }) {
               <li key={item.id} className="flex items-start gap-3">
                 <span className={cn('mt-1.5 h-2 w-2 flex-shrink-0 rounded-full', meta.dotColor)} />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm text-slate-700">
+                  <p className="text-sm text-app-t2">
                     <span className="font-medium">{actorLabel(item)}</span>
                     {' '}
-                    <span className="text-slate-500">{meta.label}</span>
+                    <span className="text-app-t3">{meta.label}</span>
                     {item.dataRoom && (
                       <>
                         {' '}
-                        <span className="text-slate-400">in</span>
+                        <span className="text-app-t3">in</span>
                         {' '}
-                        <span className="font-medium text-slate-600">{item.dataRoom.name}</span>
+                        <span className="font-medium text-app-t2">{item.dataRoom.name}</span>
                       </>
                     )}
                   </p>
                 </div>
-                <span className="flex-shrink-0 whitespace-nowrap text-xs text-slate-400">
+                <span className="flex-shrink-0 whitespace-nowrap text-xs text-app-t3">
                   {relativeTime(item.createdAt)}
                 </span>
               </li>

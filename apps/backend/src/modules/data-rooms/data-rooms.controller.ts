@@ -47,6 +47,11 @@ export class DataRoomsController {
     return this.dataRoomsService.getMyAccess(id, user);
   }
 
+  @Get(':id/stats')
+  getStats(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.dataRoomsService.getStats(id, user);
+  }
+
   @Roles(...MANAGER_ROLES)
   @Patch(':id')
   update(

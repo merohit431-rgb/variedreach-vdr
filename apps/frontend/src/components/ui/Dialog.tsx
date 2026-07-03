@@ -69,7 +69,7 @@ export function Dialog({ open, onClose, title, description, children, className 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 animate-fade-in bg-slate-900/40 backdrop-blur-[2px]"
+        className="absolute inset-0 animate-fade-in bg-black/60 backdrop-blur-[2px]"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -80,22 +80,22 @@ export function Dialog({ open, onClose, title, description, children, className 
         aria-labelledby="dialog-title"
         aria-describedby={description ? 'dialog-description' : undefined}
         className={cn(
-          'relative w-full max-w-md animate-scale-in rounded-xl bg-white p-6 shadow-popover',
+          'relative w-full max-w-md animate-scale-in rounded-xl bg-app-s1 p-6 shadow-dark-popover',
           className,
         )}
       >
         <button
           onClick={onClose}
           aria-label="Close dialog"
-          className="absolute right-4 top-4 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          className="absolute right-4 top-4 rounded-md p-1 text-app-t3 hover:bg-app-s2 hover:text-app-t2"
         >
           <X className="h-4 w-4" />
         </button>
-        <h2 id="dialog-title" className="text-base font-semibold text-slate-900">
+        <h2 id="dialog-title" className="text-base font-semibold text-app-text">
           {title}
         </h2>
         {description && (
-          <p id="dialog-description" className="mt-1 text-sm text-slate-500">
+          <p id="dialog-description" className="mt-1 text-sm text-app-t3">
             {description}
           </p>
         )}

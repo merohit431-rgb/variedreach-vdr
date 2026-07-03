@@ -21,23 +21,23 @@ export function UploadRow({ item }: { item: UploadItem }) {
 
   return (
     <div className="flex items-center gap-3 px-4 py-2.5">
-      <Icon className="h-5 w-5 flex-shrink-0 text-slate-400" aria-hidden="true" />
+      <Icon className="h-5 w-5 flex-shrink-0 text-app-t3" aria-hidden="true" />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <p className="truncate text-sm font-medium text-slate-900">{item.file.name}</p>
-          <span className="flex-shrink-0 text-xs text-slate-400">{formatBytes(item.file.size)}</span>
+          <p className="truncate text-sm font-medium text-app-text">{item.file.name}</p>
+          <span className="flex-shrink-0 text-xs text-app-t3">{formatBytes(item.file.size)}</span>
         </div>
 
         {isActive ? (
           <div className="mt-1.5">
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-app-s2">
               <div
-                className="h-full rounded-full bg-brand-600 transition-all"
+                className="h-full rounded-full bg-app-primary transition-all"
                 style={{ width: `${item.status === 'processing' ? 100 : item.progressPercent}%` }}
               />
             </div>
-            <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+            <div className="mt-1 flex items-center gap-2 text-xs text-app-t3">
               <span>{UPLOAD_STATUS_LABEL[item.status]}</span>
               {item.status === 'uploading' && (
                 <>
@@ -52,10 +52,10 @@ export function UploadRow({ item }: { item: UploadItem }) {
           <p
             className={`mt-1 flex items-center gap-1 text-xs ${
               item.status === 'failed'
-                ? 'text-red-600'
+                ? 'text-red-400'
                 : item.status === 'ready'
-                  ? 'text-emerald-600'
-                  : 'text-slate-400'
+                  ? 'text-emerald-400'
+                  : 'text-app-t3'
             }`}
           >
             {item.status === 'ready' && <CheckCircle2 className="h-3 w-3" aria-hidden="true" />}
@@ -67,17 +67,17 @@ export function UploadRow({ item }: { item: UploadItem }) {
 
       <div className="flex flex-shrink-0 items-center gap-2">
         {isActive && (
-          <button onClick={() => cancel(item.id)} title="Cancel" className="text-slate-400 hover:text-slate-700">
+          <button onClick={() => cancel(item.id)} title="Cancel" className="text-app-t3 hover:text-app-t2">
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         )}
         {item.status === 'failed' && (
-          <button onClick={() => retry(item.id)} title="Retry" className="text-slate-400 hover:text-slate-700">
+          <button onClick={() => retry(item.id)} title="Retry" className="text-app-t3 hover:text-app-t2">
             <RotateCw className="h-4 w-4" aria-hidden="true" />
           </button>
         )}
         {(item.status === 'failed' || item.status === 'canceled') && (
-          <button onClick={() => remove(item.id)} title="Dismiss" className="text-slate-400 hover:text-slate-700">
+          <button onClick={() => remove(item.id)} title="Dismiss" className="text-app-t3 hover:text-app-t2">
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         )}

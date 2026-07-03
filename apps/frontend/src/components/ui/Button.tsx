@@ -12,10 +12,12 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANT_STYLES: Record<ButtonVariant, string> = {
-  primary: 'bg-brand-600 text-white hover:bg-brand-700 focus-visible:outline-brand-600',
+  primary:
+    'bg-brand-600 text-white hover:bg-brand-700 focus-visible:outline-brand-600 dark:bg-app-primary dark:hover:bg-blue-500 dark:focus-visible:outline-app-primary',
   secondary:
-    'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 focus-visible:outline-brand-600',
-  ghost: 'bg-transparent text-slate-600 hover:bg-slate-100 focus-visible:outline-brand-600',
+    'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 focus-visible:outline-brand-600 dark:border-app-border dark:bg-app-s2 dark:text-app-t2 dark:hover:bg-app-s3 dark:focus-visible:outline-app-primary',
+  ghost:
+    'bg-transparent text-slate-600 hover:bg-slate-100 focus-visible:outline-brand-600 dark:text-app-t3 dark:hover:bg-app-s2 dark:focus-visible:outline-app-primary',
   destructive: 'bg-rose-600 text-white hover:bg-rose-700 focus-visible:outline-rose-600',
 };
 

@@ -2,7 +2,7 @@ import { TrendPoint } from '@/hooks/use-reports';
 
 export function TrendBarChart({ data }: { data: TrendPoint[] }) {
   if (!data.length) {
-    return <p className="py-8 text-center text-sm text-slate-400">No activity in this period.</p>;
+    return <p className="py-8 text-center text-sm text-app-t3">No activity in this period.</p>;
   }
 
   const maxVal = Math.max(...data.map((d) => d.downloads + d.views), 1);
@@ -19,13 +19,13 @@ export function TrendBarChart({ data }: { data: TrendPoint[] }) {
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap items-center gap-4 text-xs text-slate-500">
+      <div className="mb-3 flex flex-wrap items-center gap-4 text-xs text-app-t3">
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-2.5 w-2.5 rounded-sm bg-slate-800" />
           Downloads ({totalDownloads})
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-slate-300" />
+          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-app-s3" />
           Views ({totalViews})
         </span>
       </div>

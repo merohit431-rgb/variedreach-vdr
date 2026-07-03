@@ -70,50 +70,50 @@ export function ReportDataTable({ headers, rows, pageSize = 25 }: ReportDataTabl
           value={search}
           onChange={(e) => handleSearch(e.target.value)}
           placeholder="Search within results…"
-          className="w-64 rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          className="w-64 rounded-md border border-app-border2 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
         />
-        <p className="flex-shrink-0 text-xs text-slate-400">
+        <p className="flex-shrink-0 text-xs text-app-t3">
           {sorted.length} {sorted.length === 1 ? 'row' : 'rows'}
           {search && ` matching "${search}"`}
         </p>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-lg border border-app-border bg-app-s1">
         <table className="w-full text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+          <thead className="border-b border-app-border bg-app-s2 text-xs uppercase text-app-t3">
             <tr>
               {headers.map((header, i) => (
                 <th
                   key={header}
                   onClick={() => handleSortHeader(i)}
-                  className="cursor-pointer select-none whitespace-nowrap px-4 py-3 hover:text-slate-900"
+                  className="cursor-pointer select-none whitespace-nowrap px-4 py-3 hover:text-app-text"
                 >
                   {header}
                   {sortCol === i ? (
                     sortDir === 'asc' ? (
-                      <ArrowUp className="ml-1 inline h-3 w-3 text-slate-700" aria-hidden="true" />
+                      <ArrowUp className="ml-1 inline h-3 w-3 text-app-t2" aria-hidden="true" />
                     ) : (
-                      <ArrowDown className="ml-1 inline h-3 w-3 text-slate-700" aria-hidden="true" />
+                      <ArrowDown className="ml-1 inline h-3 w-3 text-app-t2" aria-hidden="true" />
                     )
                   ) : (
-                    <ArrowUpDown className="ml-1 inline h-3 w-3 text-slate-400" aria-hidden="true" />
+                    <ArrowUpDown className="ml-1 inline h-3 w-3 text-app-t3" aria-hidden="true" />
                   )}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-app-border">
             {pageRows.length === 0 ? (
               <tr>
-                <td colSpan={headers.length} className="px-4 py-8 text-center text-sm text-slate-400">
+                <td colSpan={headers.length} className="px-4 py-8 text-center text-sm text-app-t3">
                   No results.
                 </td>
               </tr>
             ) : (
               pageRows.map((row, rowIdx) => (
-                <tr key={rowIdx} className="hover:bg-slate-50">
+                <tr key={rowIdx} className="hover:bg-app-s2">
                   {row.map((cell, cellIdx) => (
-                    <td key={cellIdx} className="whitespace-nowrap px-4 py-3 text-slate-600">
+                    <td key={cellIdx} className="whitespace-nowrap px-4 py-3 text-app-t2">
                       {formatCell(cell)}
                     </td>
                   ))}
@@ -130,17 +130,17 @@ export function ReportDataTable({ headers, rows, pageSize = 25 }: ReportDataTabl
           <button
             onClick={() => setPage((p) => Math.max(0, p - 1))}
             disabled={page === 0}
-            className="rounded-md border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md border border-app-border px-3 py-1.5 text-app-t2 hover:bg-app-s2 disabled:cursor-not-allowed disabled:opacity-40"
           >
             ← Previous
           </button>
-          <span className="text-slate-500">
+          <span className="text-app-t3">
             Page {page + 1} of {pageCount}
           </span>
           <button
             onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
             disabled={page === pageCount - 1}
-            className="rounded-md border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md border border-app-border px-3 py-1.5 text-app-t2 hover:bg-app-s2 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Next →
           </button>

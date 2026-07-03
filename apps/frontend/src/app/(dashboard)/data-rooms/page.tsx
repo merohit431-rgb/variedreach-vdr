@@ -17,11 +17,11 @@ export default function DataRoomsPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">
+          <h1 className="text-xl font-bold text-app-text">
             {isExternal ? 'My Assignments' : 'Data Rooms'}
           </h1>
           {count > 0 && (
-            <p className="mt-0.5 text-sm text-slate-400">
+            <p className="mt-0.5 text-sm text-app-t3">
               {count} {count === 1 ? 'room' : 'rooms'}
             </p>
           )}
@@ -29,7 +29,7 @@ export default function DataRoomsPage() {
         {!isExternal && (
           <Link
             href="/data-rooms/new"
-            className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+            className="flex items-center gap-1.5 rounded-lg bg-app-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500/100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
             Create Data Room

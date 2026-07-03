@@ -169,14 +169,14 @@ function NotConfiguredNotice({ provider }: { provider: ImportProvider }) {
       : 'NEXT_PUBLIC_MICROSOFT_CLIENT_ID';
   return (
     <div className="flex flex-col items-center gap-4 py-10 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-50">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10">
         <Info className="h-6 w-6 text-amber-500" aria-hidden="true" />
       </div>
       <div>
-        <p className="font-semibold text-slate-800">{name} not configured</p>
-        <p className="mt-1.5 text-sm text-slate-500">
+        <p className="font-semibold text-app-text">{name} not configured</p>
+        <p className="mt-1.5 text-sm text-app-t3">
           Set{' '}
-          <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-xs">{vars}</code>{' '}
+          <code className="rounded bg-app-s2 px-1 py-0.5 font-mono text-xs">{vars}</code>{' '}
           in your environment to enable this integration.
         </p>
       </div>
@@ -200,14 +200,14 @@ function FolderSelector({
 
   return (
     <div>
-      <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+      <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-app-t3">
         <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" />
         Destination folder in VDR
       </label>
       <select
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value || null)}
-        className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900"
+        className="w-full rounded-md border border-app-border bg-app-s1 px-3 py-2 text-sm text-app-t2 focus:outline-none focus:ring-2 focus:ring-slate-900"
       >
         <option value="">/ Root</option>
         {sorted.map((f) => (
@@ -246,27 +246,27 @@ function ImportSummaryScreen({
 
   return (
     <div className="flex flex-col items-center gap-6 px-8 py-10 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50">
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10">
         <CheckCircle2 className="h-8 w-8 text-emerald-500" aria-hidden="true" />
       </div>
       <div className="flex flex-col gap-1">
-        <h3 className="text-lg font-semibold text-slate-900">Import started</h3>
-        <p className="text-sm text-slate-600">
+        <h3 className="text-lg font-semibold text-app-text">Import started</h3>
+        <p className="text-sm text-app-t2">
           <span className="font-medium">{summary.count}</span>{' '}
           file{summary.count !== 1 ? 's' : ''} queued from {providerName}
         </p>
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-app-t2">
           {formatBytes(summary.totalBytes)} total &middot; Importing into{' '}
           <span className="font-medium">{summary.folderName}</span>
         </p>
       </div>
-      <div className="flex items-center gap-1.5 text-sm text-slate-400">
+      <div className="flex items-center gap-1.5 text-sm text-app-t3">
         <Clock className="h-4 w-4" aria-hidden="true" />
         Track progress in the Transfers panel
       </div>
       <button
         onClick={onClose}
-        className="rounded-md border border-slate-200 px-6 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+        className="rounded-md border border-app-border px-6 py-2 text-sm font-medium text-app-t2 hover:bg-app-s2"
       >
         Close ({secondsLeft}s)
       </button>
@@ -454,7 +454,7 @@ function GoogleDriveTab({
   return (
     <div className="flex flex-col gap-4">
       {error && (
-        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
           <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
           {error}
         </div>
@@ -463,7 +463,7 @@ function GoogleDriveTab({
       <div className="flex flex-wrap items-center gap-3">
         {connected ? (
           <>
-            <span className="flex items-center gap-1.5 text-sm text-emerald-600">
+            <span className="flex items-center gap-1.5 text-sm text-emerald-400">
               <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
               Connected to Google Drive
             </span>
@@ -481,7 +481,7 @@ function GoogleDriveTab({
             </button>
             <button
               onClick={handleDisconnect}
-              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-red-500"
+              className="flex items-center gap-1.5 text-xs text-app-t3 hover:text-red-400"
               title="Disconnect Google Drive"
             >
               <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
@@ -503,7 +503,7 @@ function GoogleDriveTab({
           </button>
         )}
         {scanning && (
-          <span className="flex items-center gap-1.5 text-sm text-slate-500">
+          <span className="flex items-center gap-1.5 text-sm text-app-t3">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             Scanning folders…
           </span>
@@ -511,14 +511,14 @@ function GoogleDriveTab({
       </div>
 
       {!connected && !loading && (
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-app-t3">
           Sign in with Google to browse your Drive. Imported folders preserve their full
           hierarchy inside the VDR. Your connection will be remembered for 55 minutes.
         </p>
       )}
 
       {skipped.length > 0 && (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-500/10 p-3 text-sm text-amber-400">
           <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
           <span>
             {skipped.length} Google Docs/Sheets/Slides file
@@ -597,14 +597,14 @@ function OneDriveTab({
   return (
     <div className="flex flex-col gap-4">
       {error && (
-        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
           <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
           {error}
         </div>
       )}
       <div className="flex flex-wrap items-center gap-3">
         {connected && (
-          <span className="flex items-center gap-1.5 text-sm text-emerald-600">
+          <span className="flex items-center gap-1.5 text-sm text-emerald-400">
             <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
             Connected to OneDrive
           </span>
@@ -623,7 +623,7 @@ function OneDriveTab({
         </button>
       </div>
       {!connected && !loading && (
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-app-t3">
           Opens a Microsoft sign-in window. Navigate into folders to select files; use
           Ctrl/Cmd+click to select multiple items at once.
         </p>
@@ -647,33 +647,33 @@ function SelectedFilesList({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-slate-700">
+        <span className="text-sm font-medium text-app-t2">
           {files.length} file{files.length !== 1 ? 's' : ''} selected
         </span>
-        <span className="text-sm text-slate-500">{formatBytes(totalBytes)} total</span>
+        <span className="text-sm text-app-t3">{formatBytes(totalBytes)} total</span>
       </div>
-      <div className="max-h-56 divide-y divide-slate-50 overflow-y-auto rounded-lg border border-slate-200 bg-white">
+      <div className="max-h-56 divide-y divide-slate-50 overflow-y-auto rounded-lg border border-app-border bg-app-s1">
         {files.map((file, idx) => {
           const ext = file.name.split('.').pop() ?? '';
           const Icon = getFileIcon(ext);
           return (
             <div key={idx} className="flex items-center gap-3 px-3 py-2">
-              <Icon className="h-4 w-4 flex-shrink-0 text-slate-400" aria-hidden="true" />
+              <Icon className="h-4 w-4 flex-shrink-0 text-app-t3" aria-hidden="true" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm text-slate-800">{file.name}</p>
+                <p className="truncate text-sm text-app-text">{file.name}</p>
                 {file.relativePath !== file.name && (
-                  <p className="flex items-center gap-1 truncate text-xs text-slate-400">
+                  <p className="flex items-center gap-1 truncate text-xs text-app-t3">
                     <ChevronRight className="h-2.5 w-2.5 flex-shrink-0" aria-hidden="true" />
                     {file.relativePath}
                   </p>
                 )}
               </div>
-              <span className="flex-shrink-0 text-xs text-slate-400">
+              <span className="flex-shrink-0 text-xs text-app-t3">
                 {formatBytes(file.sizeBytes)}
               </span>
               <button
                 onClick={() => onRemove(idx)}
-                className="flex-shrink-0 text-slate-300 hover:text-red-500"
+                className="flex-shrink-0 text-app-t4 hover:text-red-400"
                 title="Remove from selection"
               >
                 <X className="h-3.5 w-3.5" aria-hidden="true" />
@@ -765,25 +765,25 @@ export function CloudImportModal({
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
 
       <div
-        className={`relative flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl transition-all duration-200 ${
+        className={`relative flex flex-col overflow-hidden rounded-xl border border-app-border bg-app-s1 shadow-2xl transition-all duration-200 ${
           importSummary ? 'w-full max-w-md' : 'w-full max-w-xl'
         }`}
       >
         {/* Header — always visible */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-app-border px-6 py-4">
           <div>
-            <h2 className="text-base font-semibold text-slate-900">
+            <h2 className="text-base font-semibold text-app-text">
               Import from Cloud Storage
             </h2>
             {!importSummary && (
-              <p className="mt-0.5 text-xs text-slate-500">
+              <p className="mt-0.5 text-xs text-app-t3">
                 Files become native VDR documents — no link to the cloud source after import
               </p>
             )}
           </div>
           <button
             onClick={onClose}
-            className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-md p-1 text-app-t3 hover:bg-app-s2 hover:text-app-t2"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -794,7 +794,7 @@ export function CloudImportModal({
         ) : (
           <>
             {/* Provider tabs */}
-            <div className="flex border-b border-slate-100">
+            <div className="flex border-b border-app-border">
               {(
                 [
                   { id: 'google-drive' as const, label: 'Google Drive' },
@@ -806,8 +806,8 @@ export function CloudImportModal({
                   onClick={() => setActiveProvider(tab.id)}
                   className={`flex flex-1 items-center justify-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
                     activeProvider === tab.id
-                      ? 'border-slate-900 text-slate-900'
-                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                      ? 'border-slate-900 text-app-text'
+                      : 'border-transparent text-app-t3 hover:text-app-text'
                   }`}
                 >
                   <Cloud className="h-4 w-4" aria-hidden="true" />
@@ -828,7 +828,7 @@ export function CloudImportModal({
                 onChange={setDestinationFolderId}
               />
 
-              <div className="border-t border-slate-100" />
+              <div className="border-t border-app-border" />
 
               {/* Provider content */}
               {activeProvider === 'google-drive' ? (
@@ -844,15 +844,15 @@ export function CloudImportModal({
               )}
 
               {/* Selected files */}
-              {selectedFiles.length > 0 && <div className="border-t border-slate-100" />}
+              {selectedFiles.length > 0 && <div className="border-t border-app-border" />}
               <SelectedFilesList files={selectedFiles} onRemove={removeFile} />
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50 px-6 py-4">
-              <p className="text-sm text-slate-500">
+            <div className="flex items-center justify-between border-t border-app-border bg-app-s2 px-6 py-4">
+              <p className="text-sm text-app-t3">
                 {selectedFiles.length > 0 ? (
-                  <span className="flex items-center gap-1.5 font-medium text-slate-700">
+                  <span className="flex items-center gap-1.5 font-medium text-app-t2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" />
                     {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''} ready
                     &nbsp;&middot;&nbsp;
@@ -865,7 +865,7 @@ export function CloudImportModal({
               <div className="flex items-center gap-3">
                 <button
                   onClick={onClose}
-                  className="rounded-md border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100"
+                  className="rounded-md border border-app-border px-4 py-2 text-sm text-app-t2 hover:bg-app-s2"
                 >
                   Cancel
                 </button>

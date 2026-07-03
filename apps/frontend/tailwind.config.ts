@@ -2,6 +2,9 @@ import type { Config } from 'tailwindcss';
 
 const config: Config = {
   content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],
+  // Shared primitives (Button, Card, Input…) adapt via dark: variants when
+  // rendered inside the dashboard's .app-dark scope; marketing/auth stay light.
+  darkMode: ['class', '.app-dark'],
   theme: {
     extend: {
       colors: {
@@ -44,6 +47,21 @@ const config: Config = {
           gold: '#d97706',
           green: '#10b981',
         },
+        // Dashboard dark-theme tokens (deep navy reference palette) — app
+        // surfaces only, never in marketing
+        app: {
+          bg: '#0b1020',
+          s1: '#0f1629',
+          s2: '#141d33',
+          s3: '#1a2440',
+          border: '#1f2937',
+          border2: '#2b3a55',
+          text: '#f1f5f9',
+          t2: '#cbd5e1',
+          t3: '#94a3b8',
+          t4: '#64748b',
+          primary: '#3b82f6',
+        },
       },
       fontFamily: {
         sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
@@ -52,6 +70,8 @@ const config: Config = {
         soft: '0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 8px -2px rgb(15 23 42 / 0.06)',
         card: '0 2px 4px -1px rgb(15 23 42 / 0.04), 0 4px 16px -4px rgb(15 23 42 / 0.08)',
         popover: '0 8px 24px -4px rgb(15 23 42 / 0.12), 0 2px 8px -2px rgb(15 23 42 / 0.08)',
+        'dark-soft': '0 1px 2px 0 rgb(0 0 0 / 0.4), 0 2px 12px -2px rgb(0 0 0 / 0.45)',
+        'dark-popover': '0 12px 32px -6px rgb(0 0 0 / 0.6), 0 2px 8px -2px rgb(0 0 0 / 0.5)',
       },
       borderRadius: {
         xl: '0.875rem',

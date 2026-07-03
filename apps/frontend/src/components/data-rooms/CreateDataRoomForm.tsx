@@ -33,13 +33,13 @@ export function CreateDataRoomForm() {
   return (
     <form onSubmit={handleSubmit} className="max-w-md space-y-4">
       {error && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+        <p className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-400" role="alert">
           {error}
         </p>
       )}
 
       <div>
-        <label htmlFor="name" className="block text-sm font-medium text-slate-700">
+        <label htmlFor="name" className="block text-sm font-medium text-app-t2">
           Name
         </label>
         <input
@@ -49,19 +49,19 @@ export function CreateDataRoomForm() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. ABC Steel Ltd — CIRP 2026"
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          className="mt-1 w-full rounded-md border border-app-border2 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
         />
       </div>
 
       <div>
-        <label htmlFor="type" className="block text-sm font-medium text-slate-700">
+        <label htmlFor="type" className="block text-sm font-medium text-app-t2">
           Type
         </label>
         <select
           id="type"
           value={type}
           onChange={(e) => setType(e.target.value as DataRoomType)}
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          className="mt-1 w-full rounded-md border border-app-border2 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
         >
           {DATA_ROOM_TYPES.map((value) => (
             <option key={value} value={value}>
@@ -70,21 +70,21 @@ export function CreateDataRoomForm() {
           ))}
         </select>
         {type === 'CIRP' && (
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-app-t3">
             A standard CIRP folder structure will be created automatically.
           </p>
         )}
       </div>
 
       <div>
-        <label htmlFor="caseNumber" className="block text-sm font-medium text-slate-700">
-          Case number <span className="text-slate-400">(optional)</span>
+        <label htmlFor="caseNumber" className="block text-sm font-medium text-app-t2">
+          Case number <span className="text-app-t3">(optional)</span>
         </label>
         <input
           id="caseNumber"
           value={caseNumber}
           onChange={(e) => setCaseNumber(e.target.value)}
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          className="mt-1 w-full rounded-md border border-app-border2 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
         />
       </div>
 

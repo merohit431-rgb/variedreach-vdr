@@ -43,7 +43,7 @@ export function PromptDialog({
   return (
     <Dialog open={open} onClose={onCancel} title={title} description={description}>
       <form onSubmit={handleSubmit}>
-        <label htmlFor="prompt-dialog-input" className="block text-sm font-medium text-slate-700">
+        <label htmlFor="prompt-dialog-input" className="block text-sm font-medium text-app-t2">
           {label}
         </label>
         <Input

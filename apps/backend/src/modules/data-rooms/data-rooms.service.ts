@@ -414,6 +414,47 @@ export class DataRoomsService {
     await this.authService.forgotPassword(member.user.email);
   }
 
+  // Member-visible workspace stats for the room header cards and sidebar
+  // folder counts. Counts only -- no document contents -- so plain membership
+  // (any role) is the right gate, unlike listMembers which stays manager-only.
+  async getStats(dataRoomId: string, actor: AuthenticatedUser) {
+    await this.assertMember(dataRoomId, actor);
+
+    const [room, documents, members, lastActivity, folderGroups] = await Promise.all([
+      this.prisma.dataRoom.findUniqueOrThrow({
+        where: { id: dataRoomId },
+        select: { storageUsedBytes: true, storageLimitGb: true },
+      }),
+      this.prisma.file.count({ where: { dataRoomId, deletedAt: null } }),
+      this.prisma.dataRoomMember.count({ where: { dataRoomId, removedAt: null } }),
+      this.prisma.auditLog.findFirst({
+        where: { dataRoomId },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true, action: true },
+      }),
+      this.prisma.file.groupBy({
+        by: ['folderId'],
+        where: { dataRoomId, deletedAt: null },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const folderCounts: Record<string, number> = {};
+    for (const group of folderGroups) {
+      if (group.folderId) folderCounts[group.folderId] = group._count._all;
+    }
+
+    return {
+      documents,
+      members,
+      storageUsedBytes: room.storageUsedBytes.toString(),
+      storageLimitGb: room.storageLimitGb,
+      lastActivityAt: lastActivity?.createdAt ?? null,
+      lastActivityAction: lastActivity?.action ?? null,
+      folderCounts,
+    };
+  }
+
   private async assertMember(dataRoomId: string, actor: AuthenticatedUser): Promise<void> {
     if (ADMIN_ROLES.includes(actor.role)) {
       return;

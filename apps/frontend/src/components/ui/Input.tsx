@@ -12,6 +12,9 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
           'focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100',
           'disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400',
           'aria-[invalid=true]:border-rose-400 aria-[invalid=true]:focus:ring-rose-100',
+          'dark:border-app-border dark:bg-app-s2 dark:text-app-text dark:placeholder:text-app-t4',
+          'dark:focus:border-app-primary dark:focus:ring-app-primary/20',
+          'dark:disabled:bg-app-s1 dark:disabled:text-app-t4',
           className,
         )}
         {...props}

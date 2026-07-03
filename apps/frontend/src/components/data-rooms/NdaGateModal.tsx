@@ -19,7 +19,7 @@ export function NdaGateModal({
   const [error, setError] = useState<string | null>(null);
 
   if (isLoading) {
-    return <p className="text-sm text-slate-400">Loading…</p>;
+    return <p className="text-sm text-app-t3">Loading…</p>;
   }
 
   if (!nda || !nda.enabled || nda.hasAccepted) {
@@ -36,14 +36,14 @@ export function NdaGateModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-xl rounded-xl bg-white shadow-xl">
-        <div className="flex items-center gap-3 border-b border-slate-200 px-6 py-4">
-          <div className="rounded-lg bg-brand-50 p-2">
-            <Shield className="h-5 w-5 text-brand-600" />
+      <div className="w-full max-w-xl rounded-xl bg-app-s1 shadow-xl">
+        <div className="flex items-center gap-3 border-b border-app-border px-6 py-4">
+          <div className="rounded-lg bg-app-primary/10 p-2">
+            <Shield className="h-5 w-5 text-app-primary" />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-slate-900">Non-Disclosure Agreement</h2>
-            <p className="text-sm text-slate-500">You must accept the NDA to access this data room.</p>
+            <h2 className="text-base font-semibold text-app-text">Non-Disclosure Agreement</h2>
+            <p className="text-sm text-app-t3">You must accept the NDA to access this data room.</p>
           </div>
         </div>
 
@@ -52,15 +52,15 @@ export function NdaGateModal({
 
           {nda.text ? (
             <div className="flex items-start gap-2">
-              <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400" />
+              <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-app-t3" />
               <div
-                className="max-h-64 overflow-y-auto rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 whitespace-pre-wrap"
+                className="max-h-64 overflow-y-auto rounded-md border border-app-border bg-app-s2 p-4 text-sm text-app-t2 whitespace-pre-wrap"
               >
                 {nda.text}
               </div>
             </div>
           ) : (
-            <p className="rounded-md bg-slate-50 p-4 text-sm text-slate-600">
+            <p className="rounded-md bg-app-s2 p-4 text-sm text-app-t2">
               By clicking &ldquo;Accept&rdquo;, you agree to keep all information within this data
               room confidential and not to disclose it to any third party without prior written
               consent.
@@ -68,7 +68,7 @@ export function NdaGateModal({
           )}
         </div>
 
-        <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
+        <div className="flex justify-end gap-3 border-t border-app-border px-6 py-4">
           <Button
             onClick={handleAccept}
             isLoading={acceptNda.isPending}

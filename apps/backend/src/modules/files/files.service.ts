@@ -56,7 +56,10 @@ export class FilesService {
           ? { name: { contains: query.search, mode: 'insensitive' } }
           : { folderId: query.folderId ?? null }),
       },
-      include: { currentVersion: true },
+      include: {
+        currentVersion: true,
+        uploader: { select: { id: true, firstName: true, lastName: true } },
+      },
       orderBy: { name: 'asc' },
     });
   }

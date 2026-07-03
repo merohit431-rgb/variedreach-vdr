@@ -9,10 +9,10 @@ import { extractErrorMessage } from '@/lib/error-message';
 import { useAuthStore } from '@/store/auth-store';
 
 const STATUS_BADGE: Record<QnaQuestion['status'], string> = {
-  PENDING: 'bg-amber-50 text-amber-700',
-  ANSWERED: 'bg-green-50 text-green-700',
-  REJECTED: 'bg-red-50 text-red-700',
-  WITHDRAWN: 'bg-slate-100 text-slate-500',
+  PENDING: 'bg-amber-500/10 text-amber-400',
+  ANSWERED: 'bg-green-500/10 text-green-400',
+  REJECTED: 'bg-red-500/10 text-red-400',
+  WITHDRAWN: 'bg-app-s2 text-app-t3',
 };
 
 const MANAGER_ROLES = ['SUPER_ADMIN', 'ORG_ADMIN', 'RP_LIQUIDATOR'];
@@ -59,7 +59,7 @@ function QuestionRow({
   const isOwn = q.askedBy === currentUserId;
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white">
+    <div className="rounded-lg border border-app-border bg-app-s1">
       <div
         className="flex cursor-pointer items-start gap-3 px-4 py-3"
         onClick={() => setExpanded((v) => !v)}
@@ -70,44 +70,44 @@ function QuestionRow({
               {q.status}
             </span>
             {q.isPrivate && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+              <span className="inline-flex items-center gap-1 rounded-full bg-app-s2 px-2 py-0.5 text-xs text-app-t3">
                 <Lock className="h-3 w-3" /> Private
               </span>
             )}
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-app-t3">
               {q.asker.firstName} {q.asker.lastName} · {new Date(q.createdAt).toLocaleDateString()}
             </span>
           </div>
-          <p className="mt-1 text-sm font-medium text-slate-900">{q.question}</p>
+          <p className="mt-1 text-sm font-medium text-app-text">{q.question}</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <span className="text-xs text-slate-400">{q.answers.length} {q.answers.length === 1 ? 'answer' : 'answers'}</span>
-          {expanded ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+          <span className="text-xs text-app-t3">{q.answers.length} {q.answers.length === 1 ? 'answer' : 'answers'}</span>
+          {expanded ? <ChevronUp className="h-4 w-4 text-app-t3" /> : <ChevronDown className="h-4 w-4 text-app-t3" />}
         </div>
       </div>
 
       {expanded && (
-        <div className="border-t border-slate-100 px-4 pb-3 pt-3 space-y-3">
+        <div className="border-t border-app-border px-4 pb-3 pt-3 space-y-3">
           {error && <Alert tone="danger">{error}</Alert>}
 
           {q.answers.map((ans) => (
-            <div key={ans.id} className="rounded-md bg-slate-50 px-3 py-2">
-              <p className="text-xs text-slate-500 mb-1">
+            <div key={ans.id} className="rounded-md bg-app-s2 px-3 py-2">
+              <p className="text-xs text-app-t3 mb-1">
                 {ans.answerer.firstName} {ans.answerer.lastName} · {new Date(ans.createdAt).toLocaleDateString()}
               </p>
-              <p className="text-sm text-slate-800 whitespace-pre-wrap">{ans.answer}</p>
+              <p className="text-sm text-app-text whitespace-pre-wrap">{ans.answer}</p>
             </div>
           ))}
 
           {q.answers.length === 0 && q.status === 'PENDING' && (
-            <p className="text-sm text-slate-400">No answers yet.</p>
+            <p className="text-sm text-app-t3">No answers yet.</p>
           )}
 
           <div className="flex flex-wrap gap-2">
             {isManager && q.status === 'PENDING' && !answering && (
               <button
                 onClick={() => setAnswering(true)}
-                className="text-xs font-medium text-brand-600 hover:text-brand-700"
+                className="text-xs font-medium text-app-primary hover:text-blue-300"
               >
                 Answer
               </button>
@@ -115,7 +115,7 @@ function QuestionRow({
             {isManager && q.status === 'PENDING' && (
               <button
                 onClick={() => handleStatusChange('REJECTED')}
-                className="text-xs font-medium text-red-600 hover:text-red-700"
+                className="text-xs font-medium text-red-400 hover:text-red-400"
               >
                 Reject
               </button>
@@ -123,7 +123,7 @@ function QuestionRow({
             {isOwn && q.status === 'PENDING' && (
               <button
                 onClick={() => handleStatusChange('WITHDRAWN')}
-                className="text-xs text-slate-500 hover:text-slate-700"
+                className="text-xs text-app-t3 hover:text-app-t2"
               >
                 Withdraw
               </button>
@@ -131,7 +131,7 @@ function QuestionRow({
             {(isOwn || isManager) && (
               <button
                 onClick={() => deleteQuestion.mutate(q.id)}
-                className="text-xs text-red-500 hover:text-red-700"
+                className="text-xs text-red-400 hover:text-red-400"
               >
                 Delete
               </button>
@@ -145,7 +145,7 @@ function QuestionRow({
                 onChange={(e) => setAnswerText(e.target.value)}
                 placeholder="Type your answer…"
                 rows={4}
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                className="w-full rounded-md border border-app-border2 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
               />
               <div className="flex gap-2">
                 <Button size="sm" onClick={handleAnswer} isLoading={answerQuestion.isPending} disabled={!answerText.trim()}>
@@ -197,16 +197,16 @@ export function QnaPanel({
     <div className="space-y-4 pt-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <MessageSquare className="h-5 w-5 text-slate-500" />
-          <h2 className="text-sm font-semibold text-slate-900">Questions &amp; Answers</h2>
-          {questions && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">{questions.length}</span>}
+          <MessageSquare className="h-5 w-5 text-app-t3" />
+          <h2 className="text-sm font-semibold text-app-text">Questions &amp; Answers</h2>
+          {questions && <span className="rounded-full bg-app-s2 px-2 py-0.5 text-xs text-app-t3">{questions.length}</span>}
         </div>
         <input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search questions…"
-          className="w-52 rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          className="w-52 rounded-md border border-app-border2 px-3 py-1.5 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
         />
         {!asking && (
           <button
@@ -219,7 +219,7 @@ export function QnaPanel({
       </div>
 
       {asking && (
-        <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
+        <div className="rounded-lg border border-app-border bg-app-s1 p-4 space-y-3">
           {error && <Alert tone="danger">{error}</Alert>}
           <textarea
             value={questionText}
@@ -227,17 +227,17 @@ export function QnaPanel({
             placeholder="Ask your due-diligence question…"
             rows={3}
             maxLength={2000}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+            className="w-full rounded-md border border-app-border2 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
           />
           <div className="flex items-center justify-between">
-            <label className="flex items-center gap-2 text-sm text-slate-600">
+            <label className="flex items-center gap-2 text-sm text-app-t2">
               <input
                 type="checkbox"
                 checked={isPrivate}
                 onChange={(e) => setIsPrivate(e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300"
+                className="h-4 w-4 rounded border-app-border2"
               />
-              <Lock className="h-3.5 w-3.5 text-slate-400" />
+              <Lock className="h-3.5 w-3.5 text-app-t3" />
               Private (only visible to managers)
             </label>
             <div className="flex gap-2">
@@ -253,9 +253,9 @@ export function QnaPanel({
       )}
 
       {isLoading ? (
-        <p className="text-sm text-slate-400">Loading questions…</p>
+        <p className="text-sm text-app-t3">Loading questions…</p>
       ) : !questions || questions.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">
+        <div className="rounded-lg border border-dashed border-app-border p-8 text-center text-sm text-app-t3">
           No questions yet. Ask one above.
         </div>
       ) : (

@@ -27,14 +27,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (isInitializing || !user || user.role === 'SUPER_ADMIN') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">
+      <div className="app-dark flex min-h-screen items-center justify-center bg-app-bg text-sm text-app-t3">
         Loading…
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50">
+    <div className="app-dark flex min-h-screen flex-col bg-app-bg text-app-text">
       <EnvironmentBanner />
       <div className="flex flex-1">
         <Sidebar

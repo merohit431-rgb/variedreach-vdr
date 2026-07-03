@@ -25,6 +25,7 @@ export interface FileRecord {
   currentVersion: FileVersionSummary | null;
   isLocked: boolean;
   uploadedBy: string;
+  uploader?: { id: string; firstName: string; lastName: string } | null;
   createdAt: string;
   updatedAt: string;
 }

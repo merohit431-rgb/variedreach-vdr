@@ -51,6 +51,28 @@ export function useDataRoom(id: string) {
   });
 }
 
+export interface DataRoomStats {
+  documents: number;
+  members: number;
+  storageUsedBytes: string;
+  storageLimitGb: number;
+  lastActivityAt: string | null;
+  lastActivityAction: string | null;
+  folderCounts: Record<string, number>;
+}
+
+export function useDataRoomStats(id: string) {
+  return useQuery({
+    queryKey: ['data-rooms', id, 'stats'],
+    queryFn: async () => {
+      const response = await apiClient.get<{ data: DataRoomStats }>(`/data-rooms/${id}/stats`);
+      return response.data.data;
+    },
+    enabled: Boolean(id),
+    refetchInterval: 60_000,
+  });
+}
+
 export function useDataRoomAccess(id: string) {
   return useQuery({
     queryKey: ['data-rooms', id, 'access'],

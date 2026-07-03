@@ -4,8 +4,8 @@ import { StatCard } from '@/components/dashboard/StatCard';
 
 export function StatsCards({ stats }: { stats: DashboardStats }) {
   if ('activeDataRooms' in stats) {
-    const storageIconColor = stats.storage.percentUsed >= 80 ? 'text-amber-600' : 'text-emerald-600';
-    const storageIconBg = stats.storage.percentUsed >= 80 ? 'bg-amber-50' : 'bg-emerald-50';
+    const storageIconColor = stats.storage.percentUsed >= 80 ? 'text-amber-400' : 'text-emerald-400';
+    const storageIconBg = stats.storage.percentUsed >= 80 ? 'bg-amber-500/10' : 'bg-emerald-500/10';
 
     return (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -13,16 +13,16 @@ export function StatsCards({ stats }: { stats: DashboardStats }) {
           label="Active Data Rooms"
           value={stats.activeDataRooms}
           icon={FolderLock}
-          iconColor="text-blue-600"
-          iconBg="bg-blue-50"
+          iconColor="text-blue-400"
+          iconBg="bg-blue-500/10"
           description="Currently open for review"
         />
         <StatCard
           label="Total Users"
           value={stats.totalUsers}
           icon={Users}
-          iconColor="text-violet-600"
-          iconBg="bg-violet-50"
+          iconColor="text-violet-400"
+          iconBg="bg-violet-500/10"
           description="Members across all rooms"
         />
         <StatCard
@@ -43,8 +43,8 @@ export function StatsCards({ stats }: { stats: DashboardStats }) {
         label="Your Assignments"
         value={stats.assignedDataRooms}
         icon={FolderLock}
-        iconColor="text-blue-600"
-        iconBg="bg-blue-50"
+        iconColor="text-blue-400"
+        iconBg="bg-blue-500/10"
         description="Data rooms you have access to"
       />
     </div>

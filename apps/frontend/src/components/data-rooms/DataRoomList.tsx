@@ -9,27 +9,27 @@ import { cn } from '@/lib/cn';
 
 const STATUS_CONFIG: Record<DataRoom['status'], { dot: string; badge: string; label: string }> = {
   ACTIVE: {
-    dot: 'bg-emerald-400',
-    badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+    dot: 'bg-emerald-500',
+    badge: 'bg-emerald-500/10 text-emerald-400 ring-emerald-500/30',
     label: 'Active',
   },
   ARCHIVED: {
-    dot: 'bg-slate-300',
-    badge: 'bg-slate-100 text-slate-600 ring-slate-200',
+    dot: 'bg-app-s3',
+    badge: 'bg-app-s2 text-app-t2 ring-app-border',
     label: 'Archived',
   },
   SUSPENDED: {
-    dot: 'bg-red-400',
-    badge: 'bg-red-50 text-red-700 ring-red-200',
+    dot: 'bg-red-500',
+    badge: 'bg-red-500/10 text-red-400 ring-red-500/30',
     label: 'Suspended',
   },
 };
 
 const TYPE_COLORS: Record<DataRoomType, string> = {
-  CIRP: 'bg-blue-50 text-blue-700',
-  LIQUIDATION: 'bg-orange-50 text-orange-700',
-  MA_DUE_DILIGENCE: 'bg-violet-50 text-violet-700',
-  OTHER: 'bg-slate-100 text-slate-600',
+  CIRP: 'bg-blue-500/10 text-blue-300',
+  LIQUIDATION: 'bg-orange-500/10 text-orange-300',
+  MA_DUE_DILIGENCE: 'bg-violet-500/10 text-violet-300',
+  OTHER: 'bg-app-s2 text-app-t2',
 };
 
 function formatBytes(bytesStr: string): string {
@@ -55,12 +55,12 @@ function relativeDate(dateStr: string): string {
 
 function DataRoomCard({ room }: { room: DataRoom }) {
   const status = STATUS_CONFIG[room.status];
-  const typeColor = TYPE_COLORS[room.type as DataRoomType] ?? 'bg-slate-100 text-slate-600';
+  const typeColor = TYPE_COLORS[room.type as DataRoomType] ?? 'bg-app-s2 text-app-t2';
 
   return (
     <Link
       href={`/data-rooms/${room.id}`}
-      className="group relative flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-soft transition-all hover:border-slate-300 hover:shadow-card"
+      className="group relative flex flex-col rounded-xl border border-app-border bg-app-s1 p-5 shadow-dark-soft transition-all hover:border-app-border2 hover:shadow-dark-soft"
     >
       {/* Top: type pill + status badge */}
       <div className="flex items-start justify-between gap-2">
@@ -80,23 +80,23 @@ function DataRoomCard({ room }: { room: DataRoom }) {
 
       {/* Room name + case number */}
       <div className="mt-3 flex-1">
-        <h3 className="line-clamp-2 text-sm font-semibold text-slate-900 transition-colors group-hover:text-brand-700">
+        <h3 className="line-clamp-2 text-sm font-semibold text-app-text transition-colors group-hover:text-blue-300">
           {room.name}
         </h3>
         {room.caseNumber && (
-          <p className="mt-0.5 text-xs text-slate-400">Case: {room.caseNumber}</p>
+          <p className="mt-0.5 text-xs text-app-t3">Case: {room.caseNumber}</p>
         )}
       </div>
 
       {/* Footer */}
-      <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
-        <div className="flex items-center gap-2.5 text-xs text-slate-400">
+      <div className="mt-4 flex items-center justify-between border-t border-app-border pt-3">
+        <div className="flex items-center gap-2.5 text-xs text-app-t3">
           <span>{formatBytes(room.storageUsedBytes)}</span>
           <span aria-hidden="true">·</span>
           <span>Created {relativeDate(room.createdAt)}</span>
         </div>
         <ArrowRight
-          className="h-3.5 w-3.5 flex-shrink-0 text-slate-300 opacity-0 transition-all group-hover:opacity-100 group-hover:text-brand-500"
+          className="h-3.5 w-3.5 flex-shrink-0 text-app-t4 opacity-0 transition-all group-hover:opacity-100 group-hover:text-app-primary"
           aria-hidden="true"
         />
       </div>
@@ -106,7 +106,7 @@ function DataRoomCard({ room }: { room: DataRoom }) {
 
 function DataRoomCardSkeleton() {
   return (
-    <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-soft">
+    <div className="flex flex-col rounded-xl border border-app-border bg-app-s1 p-5 shadow-dark-soft">
       <div className="flex items-start justify-between gap-2">
         <Skeleton className="h-5 w-24 rounded-md" />
         <Skeleton className="h-5 w-16 rounded-full" />
@@ -115,7 +115,7 @@ function DataRoomCardSkeleton() {
         <Skeleton className="h-4 w-3/4" />
         <Skeleton className="h-3 w-1/3" />
       </div>
-      <div className="mt-4 border-t border-slate-100 pt-3">
+      <div className="mt-4 border-t border-app-border pt-3">
         <Skeleton className="h-3 w-1/2" />
       </div>
     </div>
@@ -137,15 +137,15 @@ export function DataRoomList() {
 
   if (!dataRooms || dataRooms.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 p-12 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
-          <FolderLock className="h-6 w-6 text-slate-400" aria-hidden="true" />
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-app-border2 p-12 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-app-s2">
+          <FolderLock className="h-6 w-6 text-app-t3" aria-hidden="true" />
         </div>
-        <p className="mt-3 text-sm font-semibold text-slate-700">No data rooms yet</p>
-        <p className="mt-1 text-xs text-slate-400">Create your first data room to get started.</p>
+        <p className="mt-3 text-sm font-semibold text-app-t2">No data rooms yet</p>
+        <p className="mt-1 text-xs text-app-t3">Create your first data room to get started.</p>
         <Link
           href="/data-rooms/new"
-          className="mt-5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
+          className="mt-5 rounded-lg bg-app-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500/100"
         >
           Create Data Room
         </Link>

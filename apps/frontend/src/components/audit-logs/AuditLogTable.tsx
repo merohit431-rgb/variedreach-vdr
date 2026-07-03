@@ -39,14 +39,14 @@ export function AuditLogTable({ dataRoomId }: { dataRoomId: string }) {
       // never a 403, so this is a real "you're not in this room" case.
       return <NotAuthorized description="You don't have access to this data room's activity." />;
     }
-    return <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{extractErrorMessage(error)}</p>;
+    return <p className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-400">{extractErrorMessage(error)}</p>;
   }
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-5 shadow-soft">
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-app-border bg-app-s1 p-5 shadow-dark-soft">
         <div>
-          <label htmlFor="action-filter" className="block text-xs font-medium text-slate-700">
+          <label htmlFor="action-filter" className="block text-xs font-medium text-app-t2">
             Action
           </label>
           <select
@@ -56,7 +56,7 @@ export function AuditLogTable({ dataRoomId }: { dataRoomId: string }) {
               setAction(e.target.value as AuditActionType | '');
               resetToFirstPage();
             }}
-            className="mt-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            className="mt-1.5 rounded-lg border border-app-border px-2.5 py-1.5 text-sm text-app-text focus:border-app-primary focus:outline-none focus:ring-2 focus:ring-app-primary/20"
           >
             <option value="">All actions</option>
             {AUDIT_ACTIONS.map((a) => (
@@ -67,7 +67,7 @@ export function AuditLogTable({ dataRoomId }: { dataRoomId: string }) {
           </select>
         </div>
         <div>
-          <label htmlFor="from-filter" className="block text-xs font-medium text-slate-700">
+          <label htmlFor="from-filter" className="block text-xs font-medium text-app-t2">
             From
           </label>
           <input
@@ -78,11 +78,11 @@ export function AuditLogTable({ dataRoomId }: { dataRoomId: string }) {
               setFrom(e.target.value);
               resetToFirstPage();
             }}
-            className="mt-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            className="mt-1.5 rounded-lg border border-app-border px-2.5 py-1.5 text-sm text-app-text focus:border-app-primary focus:outline-none focus:ring-2 focus:ring-app-primary/20"
           />
         </div>
         <div>
-          <label htmlFor="to-filter" className="block text-xs font-medium text-slate-700">
+          <label htmlFor="to-filter" className="block text-xs font-medium text-app-t2">
             To
           </label>
           <input
@@ -93,7 +93,7 @@ export function AuditLogTable({ dataRoomId }: { dataRoomId: string }) {
               setTo(e.target.value);
               resetToFirstPage();
             }}
-            className="mt-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-800 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            className="mt-1.5 rounded-lg border border-app-border px-2.5 py-1.5 text-sm text-app-text focus:border-app-primary focus:outline-none focus:ring-2 focus:ring-app-primary/20"
           />
         </div>
       </div>
@@ -101,7 +101,7 @@ export function AuditLogTable({ dataRoomId }: { dataRoomId: string }) {
       {isLoading ? (
         <div className="space-y-2">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <div key={i} className="flex items-center gap-4 rounded-xl border border-app-border bg-app-s1 px-4 py-3">
               <Skeleton className="h-3 w-32 rounded" />
               <Skeleton className="h-3 w-28 rounded" />
               <Skeleton className="h-3 w-24 rounded" />
@@ -111,34 +111,34 @@ export function AuditLogTable({ dataRoomId }: { dataRoomId: string }) {
           ))}
         </div>
       ) : !data || data.data.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-400">
+        <div className="rounded-xl border border-dashed border-app-border2 p-8 text-center text-sm text-app-t3">
           No activity matches these filters.
         </div>
       ) : (
         <>
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-soft">
+          <div className="overflow-hidden rounded-xl border border-app-border bg-app-s1 shadow-dark-soft">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-100 bg-slate-50/80 text-xs">
+              <thead className="border-b border-app-border bg-app-s2/60 text-xs">
                 <tr>
-                  <th className="px-4 py-3 font-semibold uppercase tracking-wide text-slate-400">Time</th>
-                  <th className="px-4 py-3 font-semibold uppercase tracking-wide text-slate-400">User</th>
-                  <th className="px-4 py-3 font-semibold uppercase tracking-wide text-slate-400">Action</th>
-                  <th className="px-4 py-3 font-semibold uppercase tracking-wide text-slate-400">Resource</th>
-                  <th className="px-4 py-3 font-semibold uppercase tracking-wide text-slate-400">IP Address</th>
+                  <th className="px-4 py-3 font-semibold uppercase tracking-wide text-app-t3">Time</th>
+                  <th className="px-4 py-3 font-semibold uppercase tracking-wide text-app-t3">User</th>
+                  <th className="px-4 py-3 font-semibold uppercase tracking-wide text-app-t3">Action</th>
+                  <th className="px-4 py-3 font-semibold uppercase tracking-wide text-app-t3">Resource</th>
+                  <th className="px-4 py-3 font-semibold uppercase tracking-wide text-app-t3">IP Address</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-app-border">
                 {data.data.map((entry, i) => (
-                  <tr key={entry.id} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}>
-                    <td className="px-4 py-3 text-slate-500">{new Date(entry.createdAt).toLocaleString()}</td>
-                    <td className="px-4 py-3 font-medium text-slate-900">
+                  <tr key={entry.id} className={i % 2 === 0 ? 'bg-app-s1' : 'bg-app-s2/40'}>
+                    <td className="px-4 py-3 text-app-t3">{new Date(entry.createdAt).toLocaleString()}</td>
+                    <td className="px-4 py-3 font-medium text-app-text">
                       {entry.user ? `${entry.user.firstName} ${entry.user.lastName}` : 'System'}
                     </td>
-                    <td className="px-4 py-3 text-slate-600">
+                    <td className="px-4 py-3 text-app-t2">
                       {AUDIT_ACTION_LABELS[entry.action as AuditActionType] ?? entry.action}
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{describeResource(entry)}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-400">{entry.ipAddress ?? '—'}</td>
+                    <td className="px-4 py-3 text-app-t2">{describeResource(entry)}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-app-t3">{entry.ipAddress ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -146,21 +146,21 @@ export function AuditLogTable({ dataRoomId }: { dataRoomId: string }) {
           </div>
 
           <div className="flex items-center justify-between">
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-app-t3">
               Page {data.meta.page} of {Math.max(1, data.meta.totalPages)} · {data.meta.total} events
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={page <= 1}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                className="rounded-lg border border-app-border bg-app-s1 px-3 py-1.5 text-xs font-medium text-app-t2 hover:bg-app-s2 disabled:opacity-40"
               >
                 ← Previous
               </button>
               <button
                 onClick={() => setPage((p) => p + 1)}
                 disabled={page >= data.meta.totalPages}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                className="rounded-lg border border-app-border bg-app-s1 px-3 py-1.5 text-xs font-medium text-app-t2 hover:bg-app-s2 disabled:opacity-40"
               >
                 Next →
               </button>

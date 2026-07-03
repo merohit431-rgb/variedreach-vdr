@@ -115,29 +115,29 @@ export function ReportsView({ dataRoomId }: { dataRoomId: string }) {
     <div className="space-y-5">
       {/* Header row */}
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-lg font-semibold text-slate-900">Analytics &amp; Reports</h2>
+        <h2 className="text-lg font-semibold text-app-text">Analytics &amp; Reports</h2>
 
         {activeReportName && activeTab !== 'overview' && (
           <div className="relative">
             <button
               onClick={() => setShowExportMenu((v) => !v)}
               disabled={isExporting !== null}
-              className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg border border-app-border bg-app-s1 px-3 py-2 text-sm font-medium text-app-t2 shadow-sm hover:bg-app-s2 disabled:opacity-50"
             >
               <Download className="h-4 w-4" aria-hidden="true" />
               {isExporting ? 'Exporting…' : 'Export'}
-              <span className="text-slate-400 text-xs">▾</span>
+              <span className="text-app-t3 text-xs">▾</span>
             </button>
             {showExportMenu && (
               <>
                 {/* Click-outside backdrop */}
                 <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
-                <div className="absolute right-0 top-full z-20 mt-1 w-32 rounded-xl border border-slate-200 bg-white py-1.5 shadow-popover">
+                <div className="absolute right-0 top-full z-20 mt-1 w-32 rounded-xl border border-app-border bg-app-s1 py-1.5 shadow-dark-popover">
                   {EXPORT_FORMATS.map((fmt) => (
                     <button
                       key={fmt.value}
                       onClick={() => handleExport(fmt.value)}
-                      className="block w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                      className="block w-full px-3 py-2 text-left text-sm text-app-t2 hover:bg-app-s2"
                     >
                       {fmt.label}
                     </button>
@@ -157,8 +157,8 @@ export function ReportsView({ dataRoomId }: { dataRoomId: string }) {
             onClick={() => setDatePreset(preset.value)}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
               datePreset === preset.value
-                ? 'bg-brand-600 text-white'
-                : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                ? 'bg-app-primary text-white'
+                : 'border border-app-border bg-app-s1 text-app-t2 hover:bg-app-s2'
             }`}
           >
             {preset.label}
@@ -170,14 +170,14 @@ export function ReportsView({ dataRoomId }: { dataRoomId: string }) {
               type="date"
               value={customFrom}
               onChange={(e) => setCustomFrom(e.target.value)}
-              className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+              className="rounded-md border border-app-border2 px-2 py-1.5 text-sm"
             />
-            <span className="text-sm text-slate-400">to</span>
+            <span className="text-sm text-app-t3">to</span>
             <input
               type="date"
               value={customTo}
               onChange={(e) => setCustomTo(e.target.value)}
-              className="rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+              className="rounded-md border border-app-border2 px-2 py-1.5 text-sm"
             />
           </div>
         )}
@@ -221,7 +221,7 @@ export function ReportsView({ dataRoomId }: { dataRoomId: string }) {
       </div>
 
       {/* Tab bar */}
-      <div className="border-b border-slate-200">
+      <div className="border-b border-app-border">
         <nav className="-mb-px flex">
           {TABS.map((tab) => (
             <button
@@ -229,8 +229,8 @@ export function ReportsView({ dataRoomId }: { dataRoomId: string }) {
               onClick={() => setActiveTab(tab.value)}
               className={`px-5 py-2.5 text-sm font-medium transition-colors ${
                 activeTab === tab.value
-                  ? 'border-b-2 border-brand-600 text-brand-700'
-                  : 'text-slate-500 hover:text-slate-800'
+                  ? 'border-b-2 border-app-primary text-blue-300'
+                  : 'text-app-t3 hover:text-app-text'
               }`}
             >
               {tab.label}
@@ -241,15 +241,15 @@ export function ReportsView({ dataRoomId }: { dataRoomId: string }) {
 
       {/* ── Overview tab ── */}
       {activeTab === 'overview' && (
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-soft">
+        <div className="rounded-xl border border-app-border bg-app-s1 p-5 shadow-dark-soft">
           <div className="mb-1 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-700">Download &amp; View Activity</h3>
-            <span className="text-xs text-slate-400">
+            <h3 className="text-sm font-semibold text-app-t2">Download &amp; View Activity</h3>
+            <span className="text-xs text-app-t3">
               {datePreset === 'all' ? 'Last 30 days' : DATE_PRESETS.find((p) => p.value === datePreset)?.label}
             </span>
           </div>
           {trendsLoading ? (
-            <div className="mt-4 h-24 animate-pulse rounded-md bg-slate-100" />
+            <div className="mt-4 h-24 animate-pulse rounded-md bg-app-s2" />
           ) : (
             <TrendBarChart data={trends ?? []} />
           )}
@@ -262,13 +262,13 @@ export function ReportsView({ dataRoomId }: { dataRoomId: string }) {
           {tableLoading ? (
             <div className="space-y-2">
               {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-10 animate-pulse rounded-md bg-slate-100" />
+                <div key={i} className="h-10 animate-pulse rounded-md bg-app-s2" />
               ))}
             </div>
           ) : !reportTable || reportTable.rows.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-slate-300 p-12 text-center">
-              <p className="text-sm font-medium text-slate-600">No download events in this period</p>
-              <p className="mt-1 text-sm text-slate-400">Try expanding the date range.</p>
+            <div className="rounded-lg border border-dashed border-app-border2 p-12 text-center">
+              <p className="text-sm font-medium text-app-t2">No download events in this period</p>
+              <p className="mt-1 text-sm text-app-t3">Try expanding the date range.</p>
             </div>
           ) : (
             <ReportDataTable headers={reportTable.headers} rows={reportTable.rows} />
@@ -282,13 +282,13 @@ export function ReportsView({ dataRoomId }: { dataRoomId: string }) {
           {tableLoading ? (
             <div className="space-y-2">
               {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-10 animate-pulse rounded-md bg-slate-100" />
+                <div key={i} className="h-10 animate-pulse rounded-md bg-app-s2" />
               ))}
             </div>
           ) : !reportTable || reportTable.rows.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-slate-300 p-12 text-center">
-              <p className="text-sm font-medium text-slate-600">No member activity recorded yet</p>
-              <p className="mt-1 text-sm text-slate-400">Activity appears once members access the data room.</p>
+            <div className="rounded-lg border border-dashed border-app-border2 p-12 text-center">
+              <p className="text-sm font-medium text-app-t2">No member activity recorded yet</p>
+              <p className="mt-1 text-sm text-app-t3">Activity appears once members access the data room.</p>
             </div>
           ) : (
             <ReportDataTable headers={reportTable.headers} rows={reportTable.rows} />
@@ -300,7 +300,7 @@ export function ReportsView({ dataRoomId }: { dataRoomId: string }) {
       {activeTab === 'storage' && (
         <>
           {tableLoading ? (
-            <div className="h-40 animate-pulse rounded-lg bg-slate-100" />
+            <div className="h-40 animate-pulse rounded-lg bg-app-s2" />
           ) : storageTable?.summary ? (
             <div className="space-y-5">
               <StorageSummaryCard
@@ -311,7 +311,7 @@ export function ReportsView({ dataRoomId }: { dataRoomId: string }) {
               />
               {storageTable.rows.length > 0 && (
                 <div>
-                  <h3 className="mb-3 text-sm font-semibold text-slate-700">Top Files by Size</h3>
+                  <h3 className="mb-3 text-sm font-semibold text-app-t2">Top Files by Size</h3>
                   <ReportDataTable
                     headers={storageTable.headers}
                     rows={storageTable.rows}
@@ -321,8 +321,8 @@ export function ReportsView({ dataRoomId }: { dataRoomId: string }) {
               )}
             </div>
           ) : (
-            <div className="rounded-lg border border-dashed border-slate-300 p-12 text-center">
-              <p className="text-sm text-slate-400">No files uploaded yet.</p>
+            <div className="rounded-lg border border-dashed border-app-border2 p-12 text-center">
+              <p className="text-sm text-app-t3">No files uploaded yet.</p>
             </div>
           )}
         </>

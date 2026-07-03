@@ -10,7 +10,7 @@ export default function DataRoomReportsPage() {
   const { data: access, isLoading } = useDataRoomAccess(id);
 
   if (isLoading) {
-    return <p className="pt-4 text-sm text-slate-400">Loading…</p>;
+    return <p className="pt-4 text-sm text-app-t3">Loading…</p>;
   }
 
   if (!access?.canManageRoom) {

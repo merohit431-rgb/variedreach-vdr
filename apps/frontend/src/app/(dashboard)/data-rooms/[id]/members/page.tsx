@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 function MembersPageSkeleton() {
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-soft">
+      <div className="rounded-xl border border-app-border bg-app-s1 p-5 shadow-dark-soft">
         <Skeleton className="h-3 w-24" />
         <div className="mt-4 flex flex-wrap gap-3">
           <Skeleton className="h-9 w-56 rounded-lg" />
@@ -17,11 +17,11 @@ function MembersPageSkeleton() {
           <Skeleton className="h-9 w-24 rounded-lg" />
         </div>
       </div>
-      <div className="rounded-xl border border-slate-200 bg-white shadow-soft">
-        <div className="border-b border-slate-100 px-5 py-3.5">
+      <div className="rounded-xl border border-app-border bg-app-s1 shadow-dark-soft">
+        <div className="border-b border-app-border px-5 py-3.5">
           <Skeleton className="h-3 w-20" />
         </div>
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-app-border">
           {[...Array(3)].map((_, i) => (
             <div key={i} className="flex items-center gap-3 px-4 py-3">
               <Skeleton className="h-8 w-8 rounded-full" />

@@ -64,31 +64,31 @@ export function SecuritySettingsPanel({ dataRoomId }: { dataRoomId: string }) {
       {saved && <Alert tone="success">Security settings saved.</Alert>}
 
       {/* IP Allowlisting */}
-      <div className="rounded-lg border border-slate-200 bg-white p-5">
+      <div className="rounded-lg border border-app-border bg-app-s1 p-5">
         <div className="flex items-start gap-3">
-          <Globe className="mt-0.5 h-5 w-5 text-slate-500 flex-shrink-0" />
+          <Globe className="mt-0.5 h-5 w-5 text-app-t3 flex-shrink-0" />
           <div className="flex-1">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-slate-900">IP Allowlisting</h3>
-                <p className="mt-0.5 text-xs text-slate-500">
+                <h3 className="text-sm font-semibold text-app-text">IP Allowlisting</h3>
+                <p className="mt-0.5 text-xs text-app-t3">
                   Restrict access to this data room to specific IP addresses or CIDR ranges.
                   Org admins are never blocked.
                 </p>
               </div>
               <label className="flex cursor-pointer items-center gap-2">
-                <span className="text-xs text-slate-500">{ipEnabled ? 'Enabled' : 'Disabled'}</span>
+                <span className="text-xs text-app-t3">{ipEnabled ? 'Enabled' : 'Disabled'}</span>
                 <div
                   onClick={() => setIpEnabled((v) => !v)}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${ipEnabled ? 'bg-brand-600' : 'bg-slate-300'}`}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${ipEnabled ? 'bg-app-primary' : 'bg-app-s3'}`}
                 >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${ipEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-app-s1 shadow transition-transform ${ipEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
                 </div>
               </label>
             </div>
             {ipEnabled && (
               <div className="mt-3">
-                <label className="text-xs font-medium text-slate-700">
+                <label className="text-xs font-medium text-app-t2">
                   Allowed IPs / CIDR ranges (one per line)
                 </label>
                 <textarea
@@ -96,9 +96,9 @@ export function SecuritySettingsPanel({ dataRoomId }: { dataRoomId: string }) {
                   onChange={(e) => setIpsText(e.target.value)}
                   rows={5}
                   placeholder={'192.168.1.0/24\n10.0.0.1\n2001:db8::/32'}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-xs focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                  className="mt-1 w-full rounded-md border border-app-border2 px-3 py-2 font-mono text-xs focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
                 />
-                <p className="mt-1 text-xs text-slate-400">
+                <p className="mt-1 text-xs text-app-t3">
                   Leave empty to allow all IPs (disables restriction even when enabled).
                 </p>
               </div>
@@ -108,30 +108,30 @@ export function SecuritySettingsPanel({ dataRoomId }: { dataRoomId: string }) {
       </div>
 
       {/* NDA Gate */}
-      <div className="rounded-lg border border-slate-200 bg-white p-5">
+      <div className="rounded-lg border border-app-border bg-app-s1 p-5">
         <div className="flex items-start gap-3">
-          <FileText className="mt-0.5 h-5 w-5 text-slate-500 flex-shrink-0" />
+          <FileText className="mt-0.5 h-5 w-5 text-app-t3 flex-shrink-0" />
           <div className="flex-1">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-slate-900">NDA Gate</h3>
-                <p className="mt-0.5 text-xs text-slate-500">
+                <h3 className="text-sm font-semibold text-app-text">NDA Gate</h3>
+                <p className="mt-0.5 text-xs text-app-t3">
                   Require members to accept a non-disclosure agreement before viewing content.
                 </p>
               </div>
               <label className="flex cursor-pointer items-center gap-2">
-                <span className="text-xs text-slate-500">{ndaEnabled ? 'Enabled' : 'Disabled'}</span>
+                <span className="text-xs text-app-t3">{ndaEnabled ? 'Enabled' : 'Disabled'}</span>
                 <div
                   onClick={() => setNdaEnabled((v) => !v)}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${ndaEnabled ? 'bg-brand-600' : 'bg-slate-300'}`}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${ndaEnabled ? 'bg-app-primary' : 'bg-app-s3'}`}
                 >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${ndaEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-app-s1 shadow transition-transform ${ndaEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
                 </div>
               </label>
             </div>
             {ndaEnabled && (
               <div className="mt-3">
-                <label className="text-xs font-medium text-slate-700">
+                <label className="text-xs font-medium text-app-t2">
                   NDA text (optional — leave blank for default)
                 </label>
                 <textarea
@@ -139,7 +139,7 @@ export function SecuritySettingsPanel({ dataRoomId }: { dataRoomId: string }) {
                   onChange={(e) => setNdaText(e.target.value)}
                   rows={6}
                   placeholder="By accepting, you agree to keep all information confidential…"
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                  className="mt-1 w-full rounded-md border border-app-border2 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
                 />
               </div>
             )}

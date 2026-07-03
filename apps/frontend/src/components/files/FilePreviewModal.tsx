@@ -61,29 +61,29 @@ export function FilePreviewModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
-        className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-lg bg-white shadow-xl"
+        className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-lg bg-app-s1 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-          <p className="truncate text-sm font-medium text-slate-900">{file.name}</p>
+        <div className="flex items-center justify-between border-b border-app-border px-4 py-3">
+          <p className="truncate text-sm font-medium text-app-text">{file.name}</p>
           <div className="flex items-center gap-3">
             {canDownload && (
               <button
                 onClick={() => downloadFile(dataRoomId, file.id, getPreviewFilename(file.name, file.extension))}
-                className="text-sm text-slate-600 hover:text-slate-900"
+                className="text-sm text-app-t2 hover:text-app-text"
               >
                 Download
               </button>
             )}
-            <button onClick={onClose} className="text-slate-400 hover:text-slate-700" aria-label="Close">
+            <button onClick={onClose} className="text-app-t3 hover:text-app-t2" aria-label="Close">
               ✕
             </button>
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto bg-slate-50 p-4">
+        <div className="flex-1 overflow-auto bg-app-s2 p-4">
           {!previewable && (
-            <div className="flex h-64 flex-col items-center justify-center gap-2 text-center text-sm text-slate-500">
+            <div className="flex h-64 flex-col items-center justify-center gap-2 text-center text-sm text-app-t3">
               <p>Preview isn&apos;t available for this file type.</p>
               {canDownload && (
                 <button
@@ -96,8 +96,8 @@ export function FilePreviewModal({
             </div>
           )}
 
-          {previewable && isLoading && <p className="text-sm text-slate-400">Loading preview…</p>}
-          {previewable && error && <p className="text-sm text-red-600">{error}</p>}
+          {previewable && isLoading && <p className="text-sm text-app-t3">Loading preview…</p>}
+          {previewable && error && <p className="text-sm text-red-400">{error}</p>}
 
           {previewable &&
             !isLoading &&
@@ -117,7 +117,7 @@ export function FilePreviewModal({
             )}
 
           {previewable && !isLoading && !error && textContent !== null && (
-            <pre className="whitespace-pre-wrap rounded-md bg-white p-4 text-xs text-slate-800">
+            <pre className="whitespace-pre-wrap rounded-md bg-app-s1 p-4 text-xs text-app-text">
               {textContent}
             </pre>
           )}
