@@ -1,24 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { BUSINESS_INFO } from '../../common/constants/business-info';
 import { UpdateBusinessProfileDto } from './dto/update-business-profile.dto';
 
-// Mirror of packages/shared/src/constants/business.constants.ts — the backend
-// ships no shared build step, so the seed/fallback is duplicated here (same
-// pattern as PRICING_PLANS in provisioning.service.ts). This is the fallback
-// used before the single BusinessProfile row is seeded; after that the DB row
-// is authoritative.
-export const BUSINESS_PROFILE_DEFAULT = {
-  id: 'default',
-  businessName: 'Varied Reach',
-  tagline: 'Secure Virtual Data Room',
-  legalName: 'Rohit Dubey',
-  pan: 'CDJPR3842R',
-  gstNumber: null as string | null,
-  address: 'S Block 376, Panchsheel Park, New Delhi 110017',
-  supportEmail: 'support@variedreach.com',
-  supportPhone: '+91 88510 96461',
-  website: 'vdr.variedreach.com',
-};
+// Fallback used before the single BusinessProfile row is seeded; after that
+// the DB row is authoritative. Sourced from the shared backend BUSINESS_INFO
+// constant so email templates and this service never drift.
+export const BUSINESS_PROFILE_DEFAULT = { id: 'default', ...BUSINESS_INFO };
 
 export type BusinessProfileData = typeof BUSINESS_PROFILE_DEFAULT & { updatedAt?: Date };
 

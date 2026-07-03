@@ -26,12 +26,16 @@ const PRICING_PLANS: Record<string, { name: string; ratePerGbPerMonth: number; m
 const GST_RATE = 0.18;
 const GST_ENABLED = false;
 
+// Returns the amount in TRUE paise (1 INR = 100 paise). The plan rates are in
+// rupees, so ×100 — this is what the payment gateway is charged and what the
+// invoice stores, so displays (which divide by 100) render the real rupee
+// amount and Razorpay charges the correct sum.
 function computeTotal(planId: string, storageGb: number, isYearly: boolean): number {
   const plan = PRICING_PLANS[planId];
   const billableGb = Math.max(storageGb, plan.minimumStorageGb);
-  const monthlyBase = billableGb * plan.ratePerGbPerMonth;
-  const base = isYearly ? Math.round(monthlyBase * 12 * 0.9) : monthlyBase;
-  return GST_ENABLED ? base + Math.round(base * GST_RATE) : base;
+  const monthlyBasePaise = billableGb * plan.ratePerGbPerMonth * 100;
+  const basePaise = isYearly ? Math.round(monthlyBasePaise * 12 * 0.9) : monthlyBasePaise;
+  return GST_ENABLED ? basePaise + Math.round(basePaise * GST_RATE) : basePaise;
 }
 
 @Injectable()

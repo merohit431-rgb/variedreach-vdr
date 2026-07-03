@@ -7,6 +7,8 @@
 // strip <head>) for broad email-client compatibility, max-width 600px,
 // single column, mobile-responsive by virtue of being narrow and fluid.
 
+import { BUSINESS_INFO } from '../../../common/constants/business-info';
+
 const BRAND_700 = '#083E84';
 const BRAND_600 = '#0A4DA3';
 const SLATE_900 = '#0F172A';
@@ -67,7 +69,7 @@ export function renderEmailHtml(options: EmailLayoutOptions): string {
                 VARIED REACH
               </p>
               <p style="margin: 2px 0 0 0; font-family: Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 500; color: ${SLATE_500};">
-                Virtual Data Room
+                ${BUSINESS_INFO.tagline}
               </p>
             </td>
           </tr>
@@ -79,11 +81,19 @@ export function renderEmailHtml(options: EmailLayoutOptions): string {
           ${ctaHtml}
           <tr>
             <td style="padding: 24px 40px 32px 40px; border-top: 1px solid ${SLATE_200};">
-              <p style="margin: 0; font-family: Helvetica, Arial, sans-serif; font-size: 12px; color: ${SLATE_400};">
-                Varied Reach &mdash; Virtual Data Room
+              <p style="margin: 0; font-family: Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 600; color: ${SLATE_900};">
+                ${BUSINESS_INFO.businessName} &mdash; ${BUSINESS_INFO.tagline}
               </p>
-              <p style="margin: 4px 0 0 0; font-family: Helvetica, Arial, sans-serif; font-size: 12px; color: ${SLATE_400};">
-                This is an automated message. Please do not reply to this email.
+              <p style="margin: 6px 0 0 0; font-family: Helvetica, Arial, sans-serif; font-size: 12px; color: ${SLATE_500};">
+                Need help? <a href="mailto:${BUSINESS_INFO.supportEmail}" style="color: ${BRAND_600}; text-decoration: none;">${BUSINESS_INFO.supportEmail}</a>
+                &nbsp;&bull;&nbsp; ${BUSINESS_INFO.supportPhone}
+                &nbsp;&bull;&nbsp; <a href="https://${BUSINESS_INFO.website}" style="color: ${BRAND_600}; text-decoration: none;">${BUSINESS_INFO.website}</a>
+              </p>
+              <p style="margin: 10px 0 0 0; font-family: Helvetica, Arial, sans-serif; font-size: 11px; color: ${SLATE_400};">
+                ${BUSINESS_INFO.address}
+              </p>
+              <p style="margin: 6px 0 0 0; font-family: Helvetica, Arial, sans-serif; font-size: 11px; color: ${SLATE_400};">
+                &copy; ${new Date().getFullYear()} ${BUSINESS_INFO.businessName}. This is an automated message.
               </p>
             </td>
           </tr>
@@ -105,10 +115,11 @@ export function renderEmailText(options: EmailLayoutTextOptions): string {
   const { bodyText, ctaLabel, ctaUrl } = options;
   const ctaText = ctaLabel && ctaUrl ? `\n\n${ctaLabel}: ${ctaUrl}` : '';
 
-  return `VARIED REACH — Virtual Data Room
+  return `${BUSINESS_INFO.businessName.toUpperCase()} — ${BUSINESS_INFO.tagline}
 
 ${bodyText}${ctaText}
 
 ---
-This is an automated message. Please do not reply to this email.`;
+Need help? ${BUSINESS_INFO.supportEmail} · ${BUSINESS_INFO.supportPhone} · ${BUSINESS_INFO.website}
+© ${new Date().getFullYear()} ${BUSINESS_INFO.businessName}. This is an automated message.`;
 }

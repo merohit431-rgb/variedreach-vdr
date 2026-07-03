@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { Download } from 'lucide-react';
 import { useSuperAdmin } from '@/hooks/use-super-admin';
+import { useBilling } from '@/hooks/use-billing';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { TableContainer, Table, Thead, Tbody, Tr, Th, Td } from '@/components/ui/Table';
@@ -20,9 +22,20 @@ const STATUS_TONE: Record<string, 'success' | 'warning' | 'danger' | 'neutral'> 
 
 export default function InvoicesPage() {
   const { getInvoices } = useSuperAdmin();
+  const { downloadInvoiceAsAdmin } = useBilling();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  async function handleDownload(id: string, invoiceNumber: string) {
+    setDownloading(id);
+    try {
+      await downloadInvoiceAsAdmin(id, invoiceNumber);
+    } finally {
+      setDownloading(null);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,12 +68,13 @@ export default function InvoicesPage() {
               <Th>Status</Th>
               <Th>Issued</Th>
               <Th>Paid</Th>
+              <Th> </Th>
             </tr>
           </Thead>
           <Tbody>
-            {loading && <Tr><Td colSpan={6} className="text-center py-8 text-slate-400">Loading…</Td></Tr>}
+            {loading && <Tr><Td colSpan={7} className="text-center py-8 text-slate-400">Loading…</Td></Tr>}
             {!loading && data?.items?.length === 0 && (
-              <Tr><Td colSpan={6} className="text-center py-8 text-slate-400">No invoices yet.</Td></Tr>
+              <Tr><Td colSpan={7} className="text-center py-8 text-slate-400">No invoices yet.</Td></Tr>
             )}
             {!loading && data?.items?.map((inv: any) => (
               <Tr key={inv.id}>
@@ -72,6 +86,16 @@ export default function InvoicesPage() {
                 </Td>
                 <Td className="text-slate-500 whitespace-nowrap">{formatDate(inv.issuedAt)}</Td>
                 <Td className="text-slate-500 whitespace-nowrap">{formatDate(inv.paidAt)}</Td>
+                <Td className="text-right">
+                  <button
+                    onClick={() => handleDownload(inv.id, inv.invoiceNumber)}
+                    disabled={downloading === inv.id}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                    {downloading === inv.id ? '…' : 'PDF'}
+                  </button>
+                </Td>
               </Tr>
             ))}
           </Tbody>

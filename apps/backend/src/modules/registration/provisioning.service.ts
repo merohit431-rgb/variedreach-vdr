@@ -17,10 +17,13 @@ const PRICING_PLANS: Record<string, { name: string; ratePerGbPerMonth: number; m
 const GST_RATE = 0.18;
 const GST_ENABLED = false;
 
+// All amounts in TRUE paise (1 INR = 100 paise) — the *Paisa columns and the
+// gateway order must agree, and every money display divides by 100. Plan
+// rates are rupees, hence ×100.
 function computeAmounts(planId: string, storageGb: number, isYearly: boolean) {
   const plan = PRICING_PLANS[planId];
   const billableGb = Math.max(storageGb, plan.minimumStorageGb);
-  const monthlyBase = billableGb * plan.ratePerGbPerMonth;
+  const monthlyBase = billableGb * plan.ratePerGbPerMonth * 100;
   const base = isYearly ? Math.round(monthlyBase * 12 * 0.9) : monthlyBase;
   const gst = GST_ENABLED ? Math.round(base * GST_RATE) : 0;
   return { billableGb, monthlyBase, base, gst, total: base + gst };
@@ -49,7 +52,7 @@ export class ProvisioningService {
     const periodEnd = new Date(now);
     isYearly ? periodEnd.setFullYear(periodEnd.getFullYear() + 1) : periodEnd.setMonth(periodEnd.getMonth() + 1);
 
-    const { org, user } = await this.prisma.$transaction(async (tx) => {
+    const { org, user, invoiceNumber } = await this.prisma.$transaction(async (tx) => {
       // Unique slug from companyName
       const base = reg.companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
       let slug = base;
@@ -148,11 +151,20 @@ export class ProvisioningService {
         data: { provisionedAt: now },
       });
 
-      return { org, user };
+      return { org, user, invoiceNumber };
     });
 
-    // Fire-and-forget welcome email
-    void this.mailService.sendSubscriptionActivatedEmail(reg.email, reg.fullName, plan.name, { userId: user.id });
+    // Fire-and-forget payment-success + welcome email with the receipt summary.
+    const frontendUrl = this.configService.get<string>('app.frontendUrl');
+    const amountLabel = `INR ${(amounts.total / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+    void this.mailService.sendSubscriptionActivatedEmail(reg.email, reg.fullName, plan.name, {
+      userId: user.id,
+      invoiceNumber,
+      amountLabel,
+      storageGb: amounts.billableGb,
+      billingCycle: isYearly ? 'Yearly' : 'Monthly',
+      loginUrl: frontendUrl ? `${frontendUrl}/dashboard` : undefined,
+    });
 
     return { organisationId: org.id, userId: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role };
   }

@@ -178,10 +178,18 @@ export class MailService {
     to: string,
     recipientName: string,
     planName: string,
-    context: { userId?: string } = {},
+    context: {
+      userId?: string;
+      invoiceNumber?: string;
+      amountLabel?: string;
+      storageGb?: number;
+      billingCycle?: string;
+      loginUrl?: string;
+    } = {},
   ): Promise<SendResult> {
-    const rendered = subscriptionActivatedTemplate({ recipientName, planName });
-    return this.dispatch({ template: 'SUBSCRIPTION_ACTIVATED', to, ...context }, rendered);
+    const { userId, ...details } = context;
+    const rendered = subscriptionActivatedTemplate({ recipientName, planName, ...details });
+    return this.dispatch({ template: 'SUBSCRIPTION_ACTIVATED', to, userId }, rendered);
   }
 
   // Dormant -- no caller invokes this today. See subscription-renewal-reminder.template.ts.

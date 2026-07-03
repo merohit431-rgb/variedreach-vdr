@@ -36,6 +36,7 @@ import { NotificationModule } from './modules/notifications/notification.module'
 import { CloudImportModule } from './modules/cloud-import/cloud-import.module';
 import { ContactModule } from './modules/contact/contact.module';
 import { BusinessProfileModule } from './modules/business-profile/business-profile.module';
+import { BillingModule } from './modules/billing/billing.module';
 
 @Module({
   imports: [
@@ -82,6 +83,7 @@ import { BusinessProfileModule } from './modules/business-profile/business-profi
     CloudImportModule,
     ContactModule,
     BusinessProfileModule,
+    BillingModule,
   ],
   controllers: [AppController],
   providers: [

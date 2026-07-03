@@ -20,6 +20,7 @@ import {
   BarChart3,
   MessagesSquare,
   Settings,
+  Receipt,
   Plus,
   X,
 } from 'lucide-react';
@@ -65,7 +66,10 @@ function getAppNavSections(role: UserRole): NavSection[] {
   if (role === 'ORG_ADMIN') {
     sections.push({
       label: 'Administration',
-      items: [{ href: '/roles', label: 'Roles & Permissions', icon: ShieldCheck }],
+      items: [
+        { href: '/roles', label: 'Roles & Permissions', icon: ShieldCheck },
+        { href: '/settings/billing', label: 'Billing', icon: Receipt },
+      ],
     });
   }
 
