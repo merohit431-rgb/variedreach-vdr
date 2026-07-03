@@ -122,7 +122,7 @@ export class MailService {
     fields: ContactRequestField[],
     replyTo?: string,
   ): Promise<SendResult> {
-    const to = this.configService.get<string>('mail.contactRecipient') || 'merohit431@gmail.com';
+    const to = this.configService.get<string>('mail.contactRecipient') || 'rohit@variedreach.com';
     const rendered = contactRequestTemplate({ kind: 'DEMO', requesterName, fields });
     return this.dispatch({ template: 'DEMO_REQUEST', to, replyTo }, rendered);
   }
@@ -132,7 +132,7 @@ export class MailService {
     fields: ContactRequestField[],
     replyTo?: string,
   ): Promise<SendResult> {
-    const to = this.configService.get<string>('mail.contactRecipient') || 'merohit431@gmail.com';
+    const to = this.configService.get<string>('mail.contactRecipient') || 'rohit@variedreach.com';
     const rendered = contactRequestTemplate({ kind: 'CALLBACK', requesterName, fields });
     return this.dispatch({ template: 'CALLBACK_REQUEST', to, replyTo }, rendered);
   }
