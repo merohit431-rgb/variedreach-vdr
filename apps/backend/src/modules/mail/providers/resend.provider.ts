@@ -22,11 +22,15 @@ export class ResendMailProvider implements IMailProvider {
 
   async send(message: MailMessage): Promise<MailSendResult> {
     const result = await this.resend.emails.send({
-      from: `"${this.fromName}" <${this.fromAddress}>`,
+      // Resend's canonical format is `Name <email>` with NO surrounding
+      // quotes on the display name -- quoting it (nodemailer style) produces
+      // a non-standard From header that hurts inbox placement.
+      from: `${this.fromName} <${this.fromAddress}>`,
       to: message.to,
       subject: message.subject,
       html: message.html,
       text: message.text,
+      ...(message.replyTo ? { replyTo: message.replyTo } : {}),
     });
 
     if (result.error) {

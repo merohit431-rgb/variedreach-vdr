@@ -36,6 +36,7 @@ export class NodemailerMailProvider implements IMailProvider {
         subject: message.subject,
         html: message.html,
         text: message.text,
+        ...(message.replyTo ? { replyTo: message.replyTo } : {}),
       });
       return { success: true };
     } catch (error) {

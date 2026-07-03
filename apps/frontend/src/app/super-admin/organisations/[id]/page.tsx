@@ -61,8 +61,22 @@ export default function OrgDetailPage() {
       planSlug: editPlan || undefined,
     });
     setSaving(false);
-    if (res.success) { setSaveMsg('Saved successfully.'); setOrg(res.data); }
-    else setSaveError(res.message);
+    if (res.success) {
+      setSaveMsg('Changes saved successfully.');
+      // Merge, never replace: guard against any response that omits the
+      // users/invoices/payments relations the table below renders.
+      const updated = res.data as any;
+      setOrg((prev: any) => ({
+        ...prev,
+        ...updated,
+        users: updated.users ?? prev.users,
+        invoices: updated.invoices ?? prev.invoices,
+        payments: updated.payments ?? prev.payments,
+        subscription: updated.subscription ?? prev.subscription,
+      }));
+    } else {
+      setSaveError(res.message || 'Could not save changes. Please try again.');
+    }
   }
 
   if (loading) return <div className="h-8 w-48 rounded bg-slate-200 animate-pulse" />;

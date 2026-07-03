@@ -24,7 +24,7 @@ export class ContactService {
     if (dto.preferredSlot) fields.push({ label: 'Preferred time', value: TIME_SLOT_LABELS[dto.preferredSlot] ?? dto.preferredSlot });
     if (dto.message) fields.push({ label: 'Message', value: dto.message });
 
-    const result = await this.mailService.sendDemoRequestEmail(dto.fullName, fields);
+    const result = await this.mailService.sendDemoRequestEmail(dto.fullName, fields, dto.workEmail);
     return { received: result.sent };
   }
 

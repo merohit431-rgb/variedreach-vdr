@@ -132,27 +132,34 @@ export class SuperAdminService {
     return { items: data, total, page, limit };
   }
 
+  // Shared so getOrganisationById and updateOrganisation return an identical
+  // shape. The detail page renders org.users/invoices/payments/subscription
+  // directly, so any endpoint that feeds setOrg() MUST include these
+  // relations -- returning the bare organisation row makes the page crash on
+  // the next render (org.users is undefined).
+  private readonly ORG_DETAIL_INCLUDE = {
+    subscription: true,
+    users: {
+      where: { deletedAt: null },
+      select: { id: true, email: true, firstName: true, lastName: true, role: true, status: true, lastLoginAt: true, createdAt: true },
+      orderBy: { createdAt: 'desc' as const },
+    },
+    invoices: {
+      take: 10,
+      orderBy: { createdAt: 'desc' as const },
+      select: { id: true, invoiceNumber: true, totalAmountPaisa: true, status: true, issuedAt: true, paidAt: true },
+    },
+    payments: {
+      take: 10,
+      orderBy: { createdAt: 'desc' as const },
+      select: { id: true, amountPaisa: true, status: true, paidAt: true, gatewayPaymentId: true, createdAt: true },
+    },
+  };
+
   async getOrganisationById(id: string) {
     const org = await this.prisma.organisation.findUnique({
       where: { id },
-      include: {
-        subscription: true,
-        users: {
-          where: { deletedAt: null },
-          select: { id: true, email: true, firstName: true, lastName: true, role: true, status: true, lastLoginAt: true, createdAt: true },
-          orderBy: { createdAt: 'desc' },
-        },
-        invoices: {
-          take: 10,
-          orderBy: { createdAt: 'desc' },
-          select: { id: true, invoiceNumber: true, totalAmountPaisa: true, status: true, issuedAt: true, paidAt: true },
-        },
-        payments: {
-          take: 10,
-          orderBy: { createdAt: 'desc' },
-          select: { id: true, amountPaisa: true, status: true, paidAt: true, gatewayPaymentId: true, createdAt: true },
-        },
-      },
+      include: this.ORG_DETAIL_INCLUDE,
     });
     if (!org) throw new NotFoundException('Organisation not found');
     return org;
@@ -161,7 +168,13 @@ export class SuperAdminService {
   async updateOrganisation(id: string, dto: UpdateOrgDto) {
     const org = await this.prisma.organisation.findUnique({ where: { id } });
     if (!org) throw new NotFoundException('Organisation not found');
-    return this.prisma.organisation.update({ where: { id }, data: dto });
+    // Return the full detail shape (with relations) so the client can swap it
+    // straight into state without a follow-up refetch or a crash.
+    return this.prisma.organisation.update({
+      where: { id },
+      data: dto,
+      include: this.ORG_DETAIL_INCLUDE,
+    });
   }
 
   async getRegistrations(page: number, limit: number) {

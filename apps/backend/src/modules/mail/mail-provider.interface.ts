@@ -3,6 +3,9 @@ export interface MailMessage {
   subject: string;
   html: string;
   text: string;
+  // Optional Reply-To. Used by the contact endpoints so the sales team can
+  // reply straight to the requester instead of the noreply sender.
+  replyTo?: string;
 }
 
 export interface MailSendResult {

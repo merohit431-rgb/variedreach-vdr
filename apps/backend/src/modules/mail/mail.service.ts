@@ -24,6 +24,7 @@ interface DispatchContext {
   userId?: string;
   dataRoomId?: string;
   resentFromId?: string;
+  replyTo?: string;
 }
 
 @Injectable()
@@ -49,7 +50,13 @@ export class MailService {
     rendered: { subject: string; html: string; text: string },
   ): Promise<SendResult> {
     const subject = `${this.subjectPrefix}${rendered.subject}`;
-    const result = await this.provider.send({ to: context.to, subject, html: rendered.html, text: rendered.text });
+    const result = await this.provider.send({
+      to: context.to,
+      subject,
+      html: rendered.html,
+      text: rendered.text,
+      replyTo: context.replyTo,
+    });
 
     await this.emailLogService.record({
       template: context.template,
@@ -110,16 +117,24 @@ export class MailService {
     return this.dispatch({ template: 'WELCOME_EMAIL', to, ...context }, rendered);
   }
 
-  async sendDemoRequestEmail(requesterName: string, fields: ContactRequestField[]): Promise<SendResult> {
+  async sendDemoRequestEmail(
+    requesterName: string,
+    fields: ContactRequestField[],
+    replyTo?: string,
+  ): Promise<SendResult> {
     const to = this.configService.get<string>('mail.contactRecipient') || 'merohit431@gmail.com';
     const rendered = contactRequestTemplate({ kind: 'DEMO', requesterName, fields });
-    return this.dispatch({ template: 'DEMO_REQUEST', to }, rendered);
+    return this.dispatch({ template: 'DEMO_REQUEST', to, replyTo }, rendered);
   }
 
-  async sendCallbackRequestEmail(requesterName: string, fields: ContactRequestField[]): Promise<SendResult> {
+  async sendCallbackRequestEmail(
+    requesterName: string,
+    fields: ContactRequestField[],
+    replyTo?: string,
+  ): Promise<SendResult> {
     const to = this.configService.get<string>('mail.contactRecipient') || 'merohit431@gmail.com';
     const rendered = contactRequestTemplate({ kind: 'CALLBACK', requesterName, fields });
-    return this.dispatch({ template: 'CALLBACK_REQUEST', to }, rendered);
+    return this.dispatch({ template: 'CALLBACK_REQUEST', to, replyTo }, rendered);
   }
 
   // Dormant -- no caller invokes this today. See email-verification.template.ts.
