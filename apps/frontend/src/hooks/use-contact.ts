@@ -25,8 +25,9 @@ export interface CallbackRequestInput {
 export function useContact() {
   const requestDemo = useCallback(async (input: DemoRequestInput) => {
     try {
-      const res = await apiClient.post<{ received: boolean }>('/contact/demo', input);
-      return { success: true as const, received: res.data.received };
+      // Responses arrive in the global envelope: { success, statusCode, data: {...} }
+      const res = await apiClient.post<{ data: { received: boolean } }>('/contact/demo', input);
+      return { success: true as const, received: res.data.data.received };
     } catch (error) {
       return { success: false as const, message: extractErrorMessage(error) };
     }
@@ -34,8 +35,8 @@ export function useContact() {
 
   const requestCallback = useCallback(async (input: CallbackRequestInput) => {
     try {
-      const res = await apiClient.post<{ received: boolean }>('/contact/callback', input);
-      return { success: true as const, received: res.data.received };
+      const res = await apiClient.post<{ data: { received: boolean } }>('/contact/callback', input);
+      return { success: true as const, received: res.data.data.received };
     } catch (error) {
       return { success: false as const, message: extractErrorMessage(error) };
     }
