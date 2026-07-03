@@ -34,6 +34,7 @@ import { NdaModule } from './modules/nda/nda.module';
 import { QnaModule } from './modules/qna/qna.module';
 import { NotificationModule } from './modules/notifications/notification.module';
 import { CloudImportModule } from './modules/cloud-import/cloud-import.module';
+import { ContactModule } from './modules/contact/contact.module';
 
 @Module({
   imports: [
@@ -78,6 +79,7 @@ import { CloudImportModule } from './modules/cloud-import/cloud-import.module';
     QnaModule,
     NotificationModule,
     CloudImportModule,
+    ContactModule,
   ],
   controllers: [AppController],
   providers: [

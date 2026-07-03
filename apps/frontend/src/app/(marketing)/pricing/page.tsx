@@ -2,14 +2,10 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Check } from 'lucide-react';
 import { PLAN_IDS, PRICING_PLANS, type PlanId } from '@variedreach-vdr/shared';
 import { PricingCalculator } from '@/components/marketing/PricingCalculator';
+import { PlanCard } from '@/components/marketing/PlanCard';
 import { cn } from '@/lib/cn';
-
-function formatInr(amount: number): string {
-  return `₹${amount.toLocaleString('en-IN')}`;
-}
 
 export default function PricingPage() {
   const router = useRouter();
@@ -23,7 +19,7 @@ export default function PricingPage() {
       {/* Hero */}
       <section className="py-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <span className="inline-block rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-600">
+          <span className="inline-block rounded-full border border-blue-600/25 bg-blue-600/[0.08] px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-700">
             Pricing
           </span>
           <h1 className="mt-5 text-4xl font-bold tracking-tight text-mk-text sm:text-5xl">
@@ -36,7 +32,7 @@ export default function PricingPage() {
         </div>
       </section>
 
-      {/* Plan cards */}
+      {/* Plan cards — rendered from the shared PRICING_PLANS constant */}
       <section className="bg-mk-s1 py-16">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="grid gap-6 lg:grid-cols-3">
@@ -44,59 +40,32 @@ export default function PricingPage() {
               const plan = PRICING_PLANS[id];
               const isHighlighted = id === 'PROFESSIONAL';
               return (
-                <div
+                <PlanCard
                   key={id}
-                  className={cn(
-                    'flex flex-col rounded-xl border p-7',
-                    isHighlighted
-                      ? 'border-blue-500/40 bg-blue-500/[0.06]'
-                      : 'border-slate-200 bg-mk-bg',
-                  )}
-                >
-                  {isHighlighted && (
-                    <span className="mb-3 self-start rounded-full bg-blue-500/20 px-2.5 py-0.5 text-xs font-semibold text-blue-600">
-                      Most popular
-                    </span>
-                  )}
-                  <h2 className="text-xl font-bold text-mk-text">{plan.name}</h2>
-                  <p className="mt-1 text-xs text-mk-t4">Minimum {plan.minimumStorageGb} GB storage</p>
-
-                  <div className="mt-5">
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-bold text-mk-text">
-                        {formatInr(plan.ratePerGbPerMonth)}
-                      </span>
-                      <span className="text-sm text-mk-t3">/ GB / month</span>
+                  planId={id}
+                  highlighted={isHighlighted}
+                  cta={
+                    <div>
+                      <button
+                        onClick={() => goToSignup(id, plan.minimumStorageGb)}
+                        className={cn(
+                          'w-full rounded-md py-3 text-sm font-semibold transition-colors',
+                          isHighlighted
+                            ? 'bg-slate-900 text-white hover:bg-slate-700'
+                            : 'border border-slate-300 text-mk-t2 hover:border-slate-400 hover:text-slate-900',
+                        )}
+                      >
+                        Choose {plan.name}
+                      </button>
+                      <Link
+                        href="/book-demo"
+                        className="mt-2.5 block text-center text-xs font-medium text-mk-t3 transition-colors hover:text-slate-900"
+                      >
+                        or book a live demo first →
+                      </Link>
                     </div>
-                    <p className="mt-1 text-xs text-mk-t4">
-                      Min. {formatInr(plan.minimumMonthlyBilling)} / month + 18% GST
-                    </p>
-                  </div>
-
-                  <ul className="mt-6 flex-1 space-y-2.5">
-                    {plan.features.map((feature) => (
-                      <li key={feature} className="flex items-start gap-2.5 text-sm text-mk-t2">
-                        <Check
-                          className="mt-0.5 h-4 w-4 flex-shrink-0 text-green-600"
-                          aria-hidden="true"
-                        />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-
-                  <button
-                    onClick={() => goToSignup(id, plan.minimumStorageGb)}
-                    className={cn(
-                      'mt-6 w-full rounded-md py-3 text-sm font-semibold transition-colors',
-                      isHighlighted
-                        ? 'bg-blue-600 text-white hover:bg-blue-500'
-                        : 'border border-slate-300 text-mk-t2 hover:border-slate-300 hover:text-slate-900',
-                    )}
-                  >
-                    Choose {plan.name}
-                  </button>
-                </div>
+                  }
+                />
               );
             })}
           </div>
@@ -122,7 +91,7 @@ export default function PricingPage() {
               </p>
               <p className="mt-4 text-sm text-mk-t3">
                 Need more than 50 GB or custom terms?{' '}
-                <Link href="/contact" className="text-blue-600 hover:text-blue-700">
+                <Link href="/contact" className="text-blue-700 hover:text-blue-800">
                   Talk to us
                 </Link>
                 .
@@ -143,7 +112,7 @@ export default function PricingPage() {
             {[
               {
                 q: 'Is there a free trial?',
-                a: 'Yes. Create an account and run your first data room before committing to a paid plan. No credit card required to start.',
+                a: 'No — and that is deliberate. Instead of an empty trial account, we run a guided start: book a live demo, see the platform against your own use case, and be live with a working data room within a day of signing up.',
               },
               {
                 q: 'Does pricing include all features?',
@@ -164,12 +133,12 @@ export default function PricingPage() {
               </div>
             ))}
           </div>
-          <div className="mt-8">
-            <Link
-              href="/faq"
-              className="text-sm font-medium text-blue-600 hover:text-blue-700"
-            >
+          <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
+            <Link href="/faq" className="text-sm font-medium text-blue-700 hover:text-blue-800">
               Read all FAQs →
+            </Link>
+            <Link href="/book-demo" className="text-sm font-medium text-blue-700 hover:text-blue-800">
+              Book a live demo →
             </Link>
           </div>
         </div>

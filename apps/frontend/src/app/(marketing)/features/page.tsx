@@ -108,10 +108,10 @@ export default function FeaturesPage() {
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
-              href="/signup"
-              className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
+              href="/book-demo"
+              className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-700"
             >
-              Start free trial
+              Book a live demo
             </Link>
             <Link
               href="/pricing"
@@ -178,10 +178,10 @@ export default function FeaturesPage() {
           </div>
           <div className="mt-8">
             <Link
-              href="/signup"
-              className="inline-flex rounded-md bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
+              href="/book-demo"
+              className="inline-flex rounded-md bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-700"
             >
-              Start free trial
+              Book a live demo
             </Link>
           </div>
         </div>

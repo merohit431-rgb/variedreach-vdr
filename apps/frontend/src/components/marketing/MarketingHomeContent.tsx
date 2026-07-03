@@ -1,137 +1,165 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { motion, useInView, AnimatePresence } from 'framer-motion';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
-  Shield,
-  Stamp,
-  KeyRound,
-  History,
-  Eye,
-  FileText,
-  BarChart3,
-  CloudUpload,
-  ChevronDown,
-  ChevronRight,
-  Check,
-  Folder,
-  Users,
   ArrowRight,
+  BarChart3,
+  Check,
+  Cloud,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  FileUp,
+  Folder,
+  FolderLock,
+  FolderPlus,
+  Gavel,
+  History,
+  KeyRound,
+  LayoutDashboard,
   Lock,
-  Zap,
-  Globe,
+  Minus,
+  PenLine,
+  Stamp,
+  Upload,
+  Users,
 } from 'lucide-react';
+import { PLAN_IDS } from '@variedreach-vdr/shared';
 import { cn } from '@/lib/cn';
-
-// ─── Scroll-reveal wrapper ────────────────────────────────────────────────────
-
-function Reveal({
-  children,
-  delay = 0,
-  className,
-}: {
-  children: React.ReactNode;
-  delay?: number;
-  className?: string;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 28 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-80px' }}
-      transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-// ─── CountUp hook ─────────────────────────────────────────────────────────────
-
-function useCountUp(target: number, enabled: boolean, decimals = 0) {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    if (!enabled) return;
-    const start = Date.now();
-    const duration = 1800;
-    const tick = setInterval(() => {
-      const progress = Math.min((Date.now() - start) / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      const value = eased * target;
-      setCount(decimals ? Math.round(value * 10) / 10 : Math.round(value));
-      if (progress >= 1) clearInterval(tick);
-    }, 16);
-    return () => clearInterval(tick);
-  }, [enabled, target, decimals]);
-  return count;
-}
-
-// ─── Section label ────────────────────────────────────────────────────────────
+import { PlanCard } from './PlanCard';
+import { AnimatePresence, m, MotionProvider, Reveal, useReducedMotion } from './motion';
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-block rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-600">
+    <span className="inline-block rounded-full border border-blue-600/25 bg-blue-600/[0.08] px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-700">
       {children}
     </span>
   );
 }
 
-// ─── 1. Hero ──────────────────────────────────────────────────────────────────
+// ─── 1. Hero — the product is the hero ───────────────────────────────────────
 
-const HERO_FOLDERS = [
-  { name: '01  Financials', badge: 'Encrypted', badgeCls: 'bg-green-500/10 text-green-600' },
-  { name: '02  Legal Documents', badge: 'Watermarked', badgeCls: 'bg-amber-500/10 text-amber-600' },
-  { name: '03  Claims Register', badge: 'View Only', badgeCls: 'bg-blue-500/10 text-blue-600' },
-  { name: '04  Resolution Plan', badge: 'Restricted', badgeCls: 'bg-red-500/10 text-red-400' },
+const FRAME_NAV = [
+  { icon: LayoutDashboard, label: 'Dashboard' },
+  { icon: Folder, label: 'Files', active: true },
+  { icon: Users, label: 'Members' },
+  { icon: History, label: 'Activity' },
+  { icon: BarChart3, label: 'Reports' },
 ];
 
-function VDRCard() {
+const FRAME_ROWS = [
+  { icon: Folder, name: '01 · Financial Statements', meta: '24 files', date: 'Today' },
+  { icon: Folder, name: '02 · Claims Register', meta: '18 files', date: 'Yesterday' },
+  { icon: FileText, name: 'Information Memorandum.pdf', meta: '4.2 MB', date: '2 Jul', badge: true },
+  { icon: FileSpreadsheet, name: 'Asset Schedule.xlsx', meta: '12.8 MB', date: '1 Jul' },
+  { icon: FileText, name: 'Valuation Report — Draft.docx', meta: '2.1 MB', date: '28 Jun' },
+];
+
+const FRAME_AUDIT = [
+  { dot: 'bg-blue-500', text: 'Priya S. viewed Information Memorandum', time: 'now' },
+  { dot: 'bg-emerald-500', text: 'Rahul M. downloaded Asset Schedule', time: '1m' },
+  { dot: 'bg-violet-500', text: 'CoC member invited to the room', time: '4m' },
+  { dot: 'bg-amber-500', text: 'PRA access set to view-only', time: '9m' },
+];
+
+function AppFrame() {
+  const reduceMotion = useReducedMotion();
+
   return (
-    <div
-      className="relative w-full max-w-sm rounded-xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-300/50"
-      style={{ transform: 'perspective(1000px) rotateY(-8deg) rotateX(3deg)' }}
-    >
-      <div className="mb-4 flex items-center gap-1.5">
-        <div className="h-2.5 w-2.5 rounded-full bg-red-500/60" />
-        <div className="h-2.5 w-2.5 rounded-full bg-amber-400/60" />
-        <div className="h-2.5 w-2.5 rounded-full bg-green-400/60" />
-        <span className="ml-2 text-[10px] font-semibold uppercase tracking-widest text-mk-t3">
-          CIRP #4471 — Data Room
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-card">
+      {/* Window chrome */}
+      <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-4 py-2.5">
+        <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+        <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+        <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+        <span className="ml-3 text-xs font-medium text-slate-400">
+          app.variedreach.com — CIRP #4471
+        </span>
+        <span className="ml-auto hidden items-center gap-1.5 text-[11px] font-medium text-slate-400 sm:flex">
+          <Lock className="h-3 w-3" aria-hidden="true" />
+          TLS 1.3 · AES-256
         </span>
       </div>
-      <div className="space-y-1">
-        {HERO_FOLDERS.map((folder, i) => (
-          <motion.div
-            key={folder.name}
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.5 + i * 0.12, duration: 0.4 }}
-            className="flex items-center justify-between rounded-lg px-3 py-2.5 transition-colors hover:bg-slate-50"
-          >
-            <div className="flex items-center gap-2.5">
-              <Folder className="h-3.5 w-3.5 text-blue-600" aria-hidden="true" />
-              <span className="text-sm text-mk-t2">{folder.name}</span>
+
+      <div className="flex">
+        {/* Sidebar */}
+        <div className="hidden w-44 flex-shrink-0 border-r border-slate-100 p-3 sm:block">
+          <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-300">
+            Data room
+          </p>
+          {FRAME_NAV.map((item) => (
+            <div
+              key={item.label}
+              className={cn(
+                'flex items-center gap-2 rounded-md px-2 py-1.5 text-xs',
+                item.active ? 'bg-slate-100 font-semibold text-slate-900' : 'text-slate-400',
+              )}
+            >
+              <item.icon className="h-3.5 w-3.5" aria-hidden="true" />
+              {item.label}
             </div>
-            <span className={cn('rounded px-2 py-0.5 text-[10px] font-semibold', folder.badgeCls)}>
-              {folder.badge}
+          ))}
+        </div>
+
+        {/* File table */}
+        <div className="min-w-0 flex-1 p-4">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white">
+              <Upload className="h-3 w-3" aria-hidden="true" />
+              Upload
             </span>
-          </motion.div>
-        ))}
-      </div>
-      <div className="mt-4 grid grid-cols-3 border-t border-slate-200 pt-4 text-center">
-        <div>
-          <div className="text-sm font-bold text-blue-600">24</div>
-          <div className="text-[10px] text-mk-t3">Members</div>
+            <span className="hidden w-40 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs text-slate-400 md:block">
+              Search documents…
+            </span>
+            <span className="ml-auto text-[11px] text-slate-400">847 documents</span>
+          </div>
+          <div className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-100">
+            {FRAME_ROWS.map((row) => (
+              <div key={row.name} className="flex items-center gap-2.5 px-3 py-2.5">
+                <row.icon className="h-4 w-4 flex-shrink-0 text-slate-400" aria-hidden="true" />
+                <span className="truncate text-xs font-medium text-slate-700">{row.name}</span>
+                {row.badge && (
+                  <span className="hidden flex-shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 sm:block">
+                    Watermarked
+                  </span>
+                )}
+                <span className="ml-auto flex-shrink-0 text-[11px] text-slate-400">{row.meta}</span>
+                <span className="hidden w-16 flex-shrink-0 text-right text-[11px] text-slate-400 md:block">
+                  {row.date}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
-        <div>
-          <div className="text-sm font-bold text-blue-600">847</div>
-          <div className="text-[10px] text-mk-t3">Documents</div>
-        </div>
-        <div>
-          <div className="text-sm font-bold text-green-600">Live</div>
-          <div className="text-[10px] text-mk-t3">Status</div>
+
+        {/* Audit rail */}
+        <div className="hidden w-56 flex-shrink-0 border-l border-slate-100 p-4 lg:block">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            Live audit trail
+          </p>
+          <div className="mt-3 space-y-3">
+            {FRAME_AUDIT.map((entry) => (
+              <div key={entry.text} className="flex items-start gap-2">
+                <span className={cn('mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full', entry.dot)} />
+                <div className="min-w-0">
+                  <p className="text-[11px] leading-snug text-slate-600">{entry.text}</p>
+                  <p className="text-[10px] text-slate-300">{entry.time}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <m.div
+            className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-2.5"
+            animate={reduceMotion ? undefined : { opacity: [0, 1, 1, 0], y: [8, 0, 0, -4] }}
+            transition={{ duration: 5, times: [0, 0.08, 0.85, 1], repeat: Infinity, repeatDelay: 2.5, delay: 1.2 }}
+          >
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold text-blue-700">
+              <Stamp className="h-3 w-3" aria-hidden="true" />
+              Watermark applied
+            </p>
+            <p className="mt-0.5 text-[10px] text-blue-600/80">rahul.m@lenders.in · Asset Schedule.xlsx</p>
+          </m.div>
         </div>
       </div>
     </div>
@@ -139,1176 +167,717 @@ function VDRCard() {
 }
 
 function HeroSection() {
+  const reduceMotion = useReducedMotion();
+  const anim = (delay: number) =>
+    reduceMotion
+      ? {}
+      : {
+          initial: { opacity: 0, y: 18 },
+          animate: { opacity: 1, y: 0 },
+          transition: { duration: 0.55, delay, ease: [0.22, 1, 0.36, 1] as const },
+        };
+
   return (
-    <section
-      className="relative flex min-h-screen items-center overflow-hidden bg-mk-bg pt-16"
-      aria-labelledby="hero-headline"
-    >
-      {/* Dot-grid background */}
+    <section className="relative overflow-hidden bg-mk-bg pt-16" aria-labelledby="hero-headline">
       <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage: 'radial-gradient(circle, #cbd5e1 1px, transparent 1px)',
-          backgroundSize: '28px 28px',
-        }}
         aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-[560px] bg-[radial-gradient(60%_50%_at_50%_0%,#f1f5f9_0%,transparent_100%)]"
       />
-
-      <div className="relative mx-auto w-full max-w-6xl px-4 py-20 sm:px-6">
-        <div className="grid items-center gap-14 lg:grid-cols-2">
-          {/* Left */}
-          <div>
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-            >
-              <SectionLabel>Virtual Data Room</SectionLabel>
-            </motion.div>
-
-            <motion.h1
-              id="hero-headline"
-              className="mt-5 text-4xl font-bold leading-tight tracking-tight text-mk-text sm:text-5xl lg:text-[3.25rem]"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            >
-              Secure, audited data rooms.{' '}
-              <span className="text-blue-600">Built for Indian enterprise.</span>
-            </motion.h1>
-
-            <motion.p
-              className="mt-5 text-lg leading-relaxed text-mk-t2"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.35 }}
-            >
-              Purpose-built for CIRP, liquidation, M&amp;A due diligence, and confidential transactions.
-              Dynamic watermarking, eight-level access control, and a complete tamper-evident audit trail
-              — in one platform.
-            </motion.p>
-
-            <motion.div
-              className="mt-8 flex flex-wrap gap-3"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.5 }}
-            >
-              <Link
-                href="/signup"
-                className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
-              >
-                Start free trial
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-              <Link
-                href="/contact"
-                className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-slate-50 px-5 py-3 text-sm font-semibold text-mk-t2 transition-colors hover:border-slate-300 hover:text-slate-900"
-              >
-                Book a live demo
-              </Link>
-            </motion.div>
-
-            <motion.p
-              className="mt-6 text-xs text-mk-t3"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.7 }}
-            >
-              No credit card required &nbsp;·&nbsp; Room live in under 5 minutes &nbsp;·&nbsp; Cancel anytime
-            </motion.p>
-          </div>
-
-          {/* Right — VDR card */}
-          <motion.div
-            className="flex justify-center lg:justify-end"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.7, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-14 sm:px-6 sm:pb-20 sm:pt-20">
+        <div className="mx-auto max-w-3xl text-center">
+          <m.div {...anim(0.05)}>
+            <SectionLabel>Enterprise virtual data room</SectionLabel>
+          </m.div>
+          <m.h1
+            id="hero-headline"
+            {...anim(0.15)}
+            className="mt-5 text-4xl font-bold leading-[1.1] tracking-tight text-mk-text sm:text-5xl lg:text-[3.4rem]"
           >
-            <VDRCard />
-          </motion.div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── 2. Problem ───────────────────────────────────────────────────────────────
-
-const OLD_WAY = [
-  {
-    title: 'Email file sharing',
-    icon: '📧',
-    pains: [
-      'Attachments forwarded without your knowledge',
-      'No version control — which PDF is the latest?',
-      'Zero audit trail — impossible to prove who saw what',
-      'A single forward can expose the entire deal',
-    ],
-  },
-  {
-    title: 'Shared drives & folders',
-    icon: '📁',
-    pains: [
-      'Anyone with access can share with anyone else',
-      'No watermarking — leaks are untraceable',
-      'No role hierarchy — one permission level for all',
-      'Compliance evidence is non-existent',
-    ],
-  },
-  {
-    title: 'Generic cloud storage',
-    icon: '☁️',
-    pains: [
-      'Not built for legal or regulatory compliance',
-      'No per-user download policy enforcement',
-      'No legal-grade audit export for courts or NCLT',
-      'Security is an afterthought',
-    ],
-  },
-];
-
-function ProblemSection() {
-  return (
-    <section className="bg-mk-bg py-24">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <Reveal className="text-center">
-          <SectionLabel>The problem</SectionLabel>
-          <h2 className="mt-4 text-3xl font-bold text-mk-text sm:text-4xl">
-            Stop sharing sensitive documents over email.
-          </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-mk-t2">
-            For CIRP proceedings, M&amp;A due diligence, and high-stakes transactions, the stakes are too high
-            for workarounds. The old way fails you in ways you may not even see until it&apos;s too late.
-          </p>
-        </Reveal>
-
-        <div className="mt-14 grid gap-6 md:grid-cols-3">
-          {OLD_WAY.map((item, i) => (
-            <Reveal key={item.title} delay={i * 0.1}>
-              <div className="h-full rounded-xl border border-red-500/10 bg-mk-s1 p-6">
-                <div className="mb-3 text-2xl">{item.icon}</div>
-                <h3 className="mb-4 text-base font-semibold text-mk-text">{item.title}</h3>
-                <ul className="space-y-2.5">
-                  {item.pains.map((pain) => (
-                    <li key={pain} className="flex items-start gap-2.5 text-sm text-mk-t2">
-                      <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-red-500/60" />
-                      {pain}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-
-        <Reveal delay={0.3}>
-          <div className="mt-6 rounded-xl border border-blue-500/20 bg-blue-500/[0.06] p-6 text-center">
-            <p className="text-sm font-medium text-blue-600">
-              Varied Reach VDR solves every one of these problems — out of the box, for every data room you
-              create.
-            </p>
-          </div>
-        </Reveal>
-      </div>
-    </section>
-  );
-}
-
-// ─── 3. Stats ─────────────────────────────────────────────────────────────────
-
-const STATS = [
-  { label: 'Room setup time', value: 5, suffix: ' min', prefix: '<' },
-  { label: 'Access role levels', value: 8, suffix: '', prefix: '' },
-  { label: 'Audit traceability', value: 100, suffix: '%', prefix: '' },
-  { label: 'Max file size', value: 2, suffix: ' GB', prefix: '' },
-  { label: 'Platform availability', value: 99.9, suffix: '%', prefix: '', decimals: 1 },
-];
-
-function StatCard({ stat, enabled }: { stat: (typeof STATS)[0]; enabled: boolean }) {
-  const count = useCountUp(stat.value, enabled, stat.decimals);
-  return (
-    <div className="rounded-xl border border-slate-200 bg-mk-s1 p-6 text-center">
-      <div className="text-3xl font-bold text-blue-600 sm:text-4xl">
-        {stat.prefix}
-        {count}
-        {stat.suffix}
-      </div>
-      <div className="mt-2 text-sm text-mk-t3">{stat.label}</div>
-    </div>
-  );
-}
-
-function StatsSection() {
-  const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-100px' });
-  return (
-    <section className="bg-mk-s1 py-20" ref={ref}>
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <Reveal className="mb-10 text-center">
-          <p className="text-sm font-semibold uppercase tracking-widest text-mk-t3">
-            Platform capabilities
-          </p>
-        </Reveal>
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-          {STATS.map((stat, i) => (
-            <motion.div
-              key={stat.label}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.08, duration: 0.5 }}
-            >
-              <StatCard stat={stat} enabled={inView} />
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── 4. Platform Demo ─────────────────────────────────────────────────────────
-
-const DEMO_STEPS = [
-  {
-    num: '01',
-    title: 'Create your data room',
-    desc: 'Name your room, select a type (CIRP, M&A, Liquidation), and choose your document access policy. Up and running in under 5 minutes.',
-    illustration: (
-      <div className="rounded-lg bg-mk-s1 p-5">
-        <p className="mb-4 text-xs font-semibold text-mk-t4">New Data Room</p>
-        <div className="space-y-3">
-          {['Room name', 'Type', 'Download policy'].map((label) => (
-            <div key={label}>
-              <div className="mb-1 text-[10px] text-mk-t3">{label}</div>
-              <div className="rounded border border-slate-200 bg-mk-bg px-3 py-2 text-xs text-mk-t2">
-                {label === 'Room name' && 'CIRP Proceedings #4471'}
-                {label === 'Type' && 'Insolvency & CIRP  ▾'}
-                {label === 'Download policy' && 'Watermarked Only  ▾'}
-              </div>
-            </div>
-          ))}
-          <button className="mt-2 w-full rounded-md bg-blue-600 py-2 text-xs font-semibold text-white">
-            Create Data Room
-          </button>
-        </div>
-      </div>
-    ),
-  },
-  {
-    num: '02',
-    title: 'Organize with folders',
-    desc: 'Drag-and-drop files or upload entire folder trees. Organize by section — Financials, Legal, Claims, Resolution Plans. Structure your room to mirror your process.',
-    illustration: (
-      <div className="rounded-lg bg-mk-s1 p-5">
-        <p className="mb-3 text-xs font-semibold text-mk-t4">CIRP #4471</p>
-        {['01 Financials', '02 Legal Documents', '03 Claims Register', '04 Resolution Plan'].map(
-          (name, i) => (
-            <div
-              key={name}
-              className="mb-1 flex items-center justify-between rounded-md px-3 py-2 hover:bg-slate-50"
-            >
-              <div className="flex items-center gap-2">
-                <Folder className="h-3.5 w-3.5 text-blue-600" aria-hidden="true" />
-                <span className="text-xs text-mk-t2">{name}</span>
-              </div>
-              <span className="text-[10px] text-mk-t3">{[24, 8, 156, 3][i]} files</span>
-            </div>
-          ),
-        )}
-      </div>
-    ),
-  },
-  {
-    num: '03',
-    title: 'Invite by role',
-    desc: 'Assign each stakeholder an exact role — RP, CoC Member, Auditor, Resolution Applicant, or Guest. Each role sees only what they are explicitly authorized to see.',
-    illustration: (
-      <div className="rounded-lg bg-mk-s1 p-5">
-        <p className="mb-3 text-xs font-semibold text-mk-t4">Invite Members</p>
-        <div className="mb-3 flex gap-2">
-          <div className="flex-1 rounded border border-slate-200 bg-mk-bg px-2 py-1.5 text-[11px] text-mk-t3">
-            email@example.com
-          </div>
-          <div className="rounded border border-slate-200 bg-mk-bg px-2 py-1.5 text-[11px] text-mk-t2">
-            CoC Member ▾
-          </div>
-        </div>
-        <div className="space-y-1.5">
-          {[
-            { name: 'Rajiv Sharma', role: 'RP', color: 'text-blue-600' },
-            { name: 'Meera Iyer', role: 'CoC Member', color: 'text-green-600' },
-            { name: 'Anil Bansal', role: 'Auditor', color: 'text-amber-600' },
-          ].map((u) => (
-            <div key={u.name} className="flex items-center justify-between rounded-md bg-mk-bg px-3 py-2">
-              <span className="text-[11px] text-mk-t2">{u.name}</span>
-              <span className={cn('text-[10px] font-semibold', u.color)}>{u.role}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    ),
-  },
-  {
-    num: '04',
-    title: 'Preview with watermark',
-    desc: "Every preview and download is watermarked on the fly with the viewer's name, email, and timestamp. If a document leaks, you know exactly who downloaded it.",
-    illustration: (
-      <div className="relative overflow-hidden rounded-lg bg-mk-s1 p-5">
-        <p className="mb-3 text-xs font-semibold text-mk-t4">Document Preview</p>
-        <div className="relative rounded border border-slate-200 bg-mk-bg p-4">
-          <div className="mb-3 h-2 w-24 rounded bg-slate-100" />
-          <div className="space-y-1.5">
-            {[16, 24, 20, 14, 22].map((w, i) => (
-              <div key={i} className={`h-1.5 rounded bg-slate-100`} style={{ width: `${w * 4}px` }} />
-            ))}
-          </div>
-          {/* Watermark */}
-          <div
-            className="pointer-events-none absolute inset-0 flex items-center justify-center"
-            aria-hidden="true"
-          >
-            <span
-              className="select-none text-[10px] font-bold text-red-400/30"
-              style={{ transform: 'rotate(-35deg)', whiteSpace: 'nowrap' }}
-            >
-              MEERA IYER · meera@example.com · 02/07/2026
-            </span>
-          </div>
-        </div>
-      </div>
-    ),
-  },
-  {
-    num: '05',
-    title: 'Track every action',
-    desc: 'A tamper-evident audit trail logs every view, download, upload, and permission change with who, what, and when. Exportable for regulatory or court submission.',
-    illustration: (
-      <div className="rounded-lg bg-mk-s1 p-5">
-        <p className="mb-3 text-xs font-semibold text-mk-t4">Audit Trail</p>
-        <div className="space-y-2">
-          {[
-            { action: 'Downloaded', file: 'FinancialReport.pdf', user: 'M. Iyer', time: '14:32' },
-            { action: 'Viewed', file: 'ClaimsRegister.xlsx', user: 'R. Sharma', time: '14:18' },
-            { action: 'Uploaded', file: 'LegalOpinion.docx', user: 'A. Bansal', time: '13:55' },
-          ].map((log) => (
-            <div
-              key={log.time}
-              className="flex items-center justify-between rounded-md bg-mk-bg px-3 py-2"
-            >
-              <div>
-                <span className="text-[10px] font-semibold text-blue-600">{log.action}</span>
-                <span className="ml-1.5 text-[10px] text-mk-t3">{log.file}</span>
-              </div>
-              <div className="text-right">
-                <div className="text-[10px] text-mk-t2">{log.user}</div>
-                <div className="text-[10px] text-mk-t3">{log.time}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    ),
-  },
-  {
-    num: '06',
-    title: 'Generate reports',
-    desc: 'Export deal analytics, document access reports, and compliance summaries — formatted for boards, regulators, and courts. One click, every time.',
-    illustration: (
-      <div className="rounded-lg bg-mk-s1 p-5">
-        <p className="mb-3 text-xs font-semibold text-mk-t4">Reports</p>
-        <div className="mb-4 grid grid-cols-2 gap-2">
-          {[
-            { label: 'Total Views', value: '1,247' },
-            { label: 'Downloads', value: '89' },
-            { label: 'Active Users', value: '24' },
-            { label: 'Documents', value: '847' },
-          ].map((s) => (
-            <div key={s.label} className="rounded-md bg-mk-bg px-3 py-2">
-              <div className="text-sm font-bold text-blue-600">{s.value}</div>
-              <div className="text-[10px] text-mk-t3">{s.label}</div>
-            </div>
-          ))}
-        </div>
-        <button className="w-full rounded-md bg-blue-600/20 py-1.5 text-[11px] font-semibold text-blue-600">
-          Export Report →
-        </button>
-      </div>
-    ),
-  },
-];
-
-function PlatformDemoSection() {
-  const [active, setActive] = useState(0);
-
-  useEffect(() => {
-    const id = setInterval(() => setActive((a) => (a + 1) % DEMO_STEPS.length), 4000);
-    return () => clearInterval(id);
-  }, []);
-
-  return (
-    <section className="bg-mk-bg py-24">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <Reveal className="text-center">
-          <SectionLabel>How it works</SectionLabel>
-          <h2 className="mt-4 text-3xl font-bold text-mk-text sm:text-4xl">
-            From setup to deal close in minutes.
-          </h2>
-          <p className="mx-auto mt-4 max-w-xl text-mk-t2">
-            Six steps. Every data room you run on Varied Reach follows this same secure, auditable process.
-          </p>
-        </Reveal>
-
-        <div className="mt-14 grid gap-10 lg:grid-cols-2 lg:items-start">
-          {/* Step list */}
-          <div className="space-y-1">
-            {DEMO_STEPS.map((step, i) => (
-              <button
-                key={step.num}
-                onClick={() => setActive(i)}
-                className={cn(
-                  'w-full rounded-xl px-5 py-4 text-left transition-all duration-200',
-                  active === i
-                    ? 'border border-blue-500/20 bg-blue-500/[0.08]'
-                    : 'hover:bg-slate-50',
-                )}
-              >
-                <div className="flex items-start gap-4">
-                  <span
-                    className={cn(
-                      'mt-0.5 text-xs font-bold tabular-nums',
-                      active === i ? 'text-blue-600' : 'text-mk-t4',
-                    )}
-                  >
-                    {step.num}
-                  </span>
-                  <div>
-                    <p
-                      className={cn(
-                        'text-sm font-semibold transition-colors',
-                        active === i ? 'text-mk-text' : 'text-mk-t2',
-                      )}
-                    >
-                      {step.title}
-                    </p>
-                    {active === i && (
-                      <motion.p
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        className="mt-1.5 text-sm leading-relaxed text-mk-t2"
-                      >
-                        {step.desc}
-                      </motion.p>
-                    )}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {/* Illustration */}
-          <div className="lg:sticky lg:top-24">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={active}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.3 }}
-                className="rounded-2xl border border-slate-200 bg-mk-s2 p-6"
-              >
-                {DEMO_STEPS[active].illustration}
-              </motion.div>
-            </AnimatePresence>
-            {/* Progress dots */}
-            <div className="mt-4 flex justify-center gap-1.5">
-              {DEMO_STEPS.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setActive(i)}
-                  aria-label={`Step ${i + 1}`}
-                  className={cn(
-                    'h-1.5 rounded-full transition-all duration-300',
-                    active === i ? 'w-6 bg-blue-500' : 'w-1.5 bg-slate-300',
-                  )}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── 5. Security ──────────────────────────────────────────────────────────────
-
-const SECURITY_PILLARS = [
-  {
-    icon: Stamp,
-    title: 'Dynamic watermarking',
-    desc: 'Every download carries the recipient\'s name, email, and timestamp. Leaks are always traceable back to source.',
-  },
-  {
-    icon: KeyRound,
-    title: 'Granular role-based access',
-    desc: 'Eight distinct access levels. External users can never see or download more than you explicitly allow.',
-  },
-  {
-    icon: History,
-    title: 'Tamper-evident audit trail',
-    desc: 'Every action — view, download, upload, permission change — is logged with who, what, and when.',
-  },
-  {
-    icon: Lock,
-    title: 'Configurable download policy',
-    desc: 'Per-room policy: preview only, original, watermarked, or all. Applied consistently for every stakeholder.',
-  },
-  {
-    icon: Eye,
-    title: 'External-role safeguards',
-    desc: 'External roles can never receive unwatermarked originals, even if the room policy would otherwise allow it.',
-  },
-  {
-    icon: Shield,
-    title: 'Encrypted at rest & in transit',
-    desc: 'AES-256 encryption for every file at rest. TLS 1.3 for every transfer. Zero plaintext exposure.',
-  },
-];
-
-function SecuritySection() {
-  return (
-    <section className="bg-mk-s1 py-24" aria-labelledby="security-heading">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <Reveal className="text-center">
-          <SectionLabel>Security</SectionLabel>
-          <h2
-            id="security-heading"
-            className="mt-4 text-3xl font-bold text-mk-text sm:text-4xl"
-          >
-            Bank-grade security for every document.
-          </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-mk-t2">
-            Built from the ground up for scenarios where a single untracked download can cost a deal, a
-            case, or a career.
-          </p>
-        </Reveal>
-
-        <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {SECURITY_PILLARS.map((pillar, i) => {
-            const Icon = pillar.icon;
-            return (
-              <Reveal key={pillar.title} delay={i * 0.07}>
-                <div className="h-full rounded-xl border border-slate-200 bg-mk-bg p-6 transition-colors hover:border-blue-500/20">
-                  <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
-                    <Icon className="h-5 w-5 text-blue-600" aria-hidden="true" />
-                  </div>
-                  <h3 className="mb-2 text-sm font-semibold text-mk-text">{pillar.title}</h3>
-                  <p className="text-sm leading-relaxed text-mk-t2">{pillar.desc}</p>
-                </div>
-              </Reveal>
-            );
-          })}
-        </div>
-
-        <Reveal delay={0.3}>
-          <div className="mt-10 text-center">
+            Every document. Every access.{' '}
+            <span className="text-blue-700">Accounted for.</span>
+          </m.h1>
+          <m.p {...anim(0.28)} className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-mk-t2">
+            The virtual data room for CIRP, liquidation, and M&amp;A due diligence — dynamic
+            watermarking, eight-role access control, and a court-ready audit trail.
+          </m.p>
+          <m.div {...anim(0.4)} className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link
-              href="/security"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"
+              href="/book-demo"
+              className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-700"
             >
-              Read our full security architecture
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </Link>
-          </div>
-        </Reveal>
-      </div>
-    </section>
-  );
-}
-
-// ─── 6. Industries ────────────────────────────────────────────────────────────
-
-const INDUSTRIES = [
-  { icon: '⚖️', title: 'IBC & CIRP', desc: 'End-to-end document management for CIRP proceedings under the Insolvency and Bankruptcy Code.' },
-  { icon: '🏛️', title: 'Liquidation', desc: 'Coordinate asset documentation, creditor communication, and compliance reporting.' },
-  { icon: '🤝', title: 'M&A Due Diligence', desc: 'Buy-side and sell-side diligence with watermarked previews and per-party access control.' },
-  { icon: '📈', title: 'Private Equity & VC', desc: 'Investment committee reviews, portfolio monitoring, and LP reporting — securely.' },
-  { icon: '🏦', title: 'Banking & NBFC', desc: 'Loan syndication, restructuring documentation, and regulatory filing workflows.' },
-  { icon: '⚖️', title: 'Law Firms', desc: 'Matter-specific rooms for client document exchange with full traceability.' },
-  { icon: '🏠', title: 'Homebuyer Committees', desc: 'IBC Section 7A homebuyer representation with structured document access and audit.' },
-  { icon: '🏗️', title: 'Real Estate & Infra', desc: 'Project data rooms for lenders, investors, and regulatory stakeholders.' },
-  { icon: '🏢', title: 'Stressed Assets', desc: 'ARC and IBA-led resolution processes with role-segregated document access.' },
-  { icon: '🔍', title: 'Forensic & Advisory', desc: 'Investigation and advisory engagements requiring complete and exportable audit evidence.' },
-];
-
-function IndustriesSection() {
-  return (
-    <section className="bg-mk-bg py-24" aria-labelledby="industries-heading">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <Reveal className="text-center">
-          <SectionLabel>Industries</SectionLabel>
-          <h2
-            id="industries-heading"
-            className="mt-4 text-3xl font-bold text-mk-text sm:text-4xl"
-          >
-            Built for every high-stakes transaction.
-          </h2>
-          <p className="mx-auto mt-4 max-w-xl text-mk-t2">
-            One platform, purpose-configured for ten industries where document security is not optional.
-          </p>
-        </Reveal>
-
-        <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          {INDUSTRIES.map((ind, i) => (
-            <motion.div
-              key={ind.title}
-              initial={{ opacity: 0, y: 16 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-60px' }}
-              transition={{ delay: i * 0.04, duration: 0.45 }}
-              className="group relative overflow-hidden rounded-xl border border-slate-200 bg-mk-s1 p-5 transition-all duration-200 hover:border-blue-500/20 hover:bg-mk-s2"
-            >
-              <div className="mb-3 text-xl">{ind.icon}</div>
-              <h3 className="mb-1.5 text-sm font-semibold text-mk-text">{ind.title}</h3>
-              <p className="text-xs leading-relaxed text-mk-t3">{ind.desc}</p>
-              <div className="absolute inset-y-0 left-0 w-0.5 bg-blue-500 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
-            </motion.div>
-          ))}
-        </div>
-
-        <Reveal delay={0.4}>
-          <div className="mt-8 text-center">
-            <Link
-              href="/industries"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"
-            >
-              Explore all industries
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </Link>
-          </div>
-        </Reveal>
-      </div>
-    </section>
-  );
-}
-
-// ─── 7. Features ──────────────────────────────────────────────────────────────
-
-const FEATURES = [
-  {
-    tag: 'Watermarking',
-    title: 'Every download carries the downloader\'s identity.',
-    desc: 'Dynamic watermarks are applied on the fly — name, email, and timestamp — to every PDF download and preview. If a document leaks, the source is immediately identifiable. There are no exceptions for external roles.',
-    benefits: ['Automatic, no manual steps', 'Applied to previews and downloads', 'External roles always watermarked', 'Court-admissible evidence of access'],
-    icon: Stamp,
-  },
-  {
-    tag: 'Access Control',
-    title: 'Eight access levels. Zero ambiguity.',
-    desc: 'Org Admin, RP, Liquidator, CoC Member, Auditor, Resolution Applicant, Guest, and External Read-Only. Each role is scoped to exactly what that stakeholder should see — and nothing more. Access can be revoked at any time.',
-    benefits: ['Role assigned per person, per room', 'No over-privileged access', 'Instant revocation', 'CIRP-aligned role structure'],
-    icon: KeyRound,
-  },
-  {
-    tag: 'Office Preview',
-    title: 'View Word, Excel, and PowerPoint without downloading.',
-    desc: 'Docx, xlsx, and pptx files are converted and served as secure, watermarked previews in the browser. Stakeholders get full readability without receiving the original file.',
-    benefits: ['Word, Excel, PowerPoint support', 'No plugin or app required', 'Watermarked even in preview', 'Lazy-cached for speed'],
-    icon: Eye,
-  },
-  {
-    tag: 'Audit Trail',
-    title: 'A complete, tamper-evident record of every action.',
-    desc: 'Every view, download, upload, permission change, and invitation is logged with actor, timestamp, and IP. The audit trail is immutable and exportable — formatted for regulators, courts, or board submission.',
-    benefits: ['Every action logged, no exceptions', 'Immutable and timestamped', 'Exportable for NCLT or IBC proceedings', 'Filterable by user, action, date'],
-    icon: History,
-  },
-  {
-    tag: 'Cloud Import',
-    title: 'Import directly from Google Drive or OneDrive.',
-    desc: 'Connect your cloud storage and select files to import directly into your data room — no manual download and re-upload. Imported files go through the full VDR pipeline: watermarking, access control, and audit trail.',
-    benefits: ['Google Drive and OneDrive support', 'Folder import with structure preserved', 'Full pipeline applied post-import', 'Token persisted for repeat imports'],
-    icon: CloudUpload,
-  },
-  {
-    tag: 'Download Policy',
-    title: 'You control what can be downloaded. For every room.',
-    desc: 'Set per-data-room download policy: preview only, original, watermarked, or both. The policy applies to every user in the room consistently — and can be changed at any time as the deal evolves.',
-    benefits: ['4 policy levels per room', 'Applied to all users uniformly', 'Changeable without re-inviting', 'External roles get additional protection'],
-    icon: Lock,
-  },
-  {
-    tag: 'Reports',
-    title: 'Deal intelligence, in one click.',
-    desc: 'Generate activity reports, document access summaries, user engagement analytics, and storage reports. Export as structured data for compliance review, board presentation, or regulatory submission.',
-    benefits: ['Access reports by user and file', 'Download and view analytics', 'Exportable CSV and structured data', 'Storage utilization breakdown'],
-    icon: BarChart3,
-  },
-];
-
-function FeaturesSection() {
-  return (
-    <section className="bg-mk-s1 py-24" aria-labelledby="features-heading">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <Reveal className="text-center">
-          <SectionLabel>Features</SectionLabel>
-          <h2
-            id="features-heading"
-            className="mt-4 text-3xl font-bold text-mk-text sm:text-4xl"
-          >
-            Every feature built for security, not convenience.
-          </h2>
-          <p className="mx-auto mt-4 max-w-xl text-mk-t2">
-            Each capability exists because the alternative — email, shared drives, generic cloud — creates
-            risk that high-stakes transactions cannot afford.
-          </p>
-        </Reveal>
-
-        <div className="mt-14 space-y-16">
-          {FEATURES.map((feat, i) => {
-            const Icon = feat.icon;
-            const isEven = i % 2 === 0;
-            return (
-              <Reveal key={feat.tag} delay={0.05}>
-                <div
-                  className={cn(
-                    'grid items-center gap-10 lg:grid-cols-2',
-                    !isEven && 'lg:[&>:first-child]:order-2',
-                  )}
-                >
-                  <div>
-                    <span className="text-xs font-semibold uppercase tracking-widest text-blue-600">
-                      {feat.tag}
-                    </span>
-                    <h3 className="mt-3 text-xl font-bold text-mk-text sm:text-2xl">{feat.title}</h3>
-                    <p className="mt-4 text-mk-t2 leading-relaxed">{feat.desc}</p>
-                    <ul className="mt-5 space-y-2">
-                      {feat.benefits.map((b) => (
-                        <li key={b} className="flex items-center gap-2.5 text-sm text-mk-t2">
-                          <Check className="h-4 w-4 flex-shrink-0 text-green-600" aria-hidden="true" />
-                          {b}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-mk-bg p-10">
-                    <Icon
-                      className="h-16 w-16 text-blue-600/40"
-                      aria-hidden="true"
-                      strokeWidth={1}
-                    />
-                  </div>
-                </div>
-              </Reveal>
-            );
-          })}
-        </div>
-
-        <Reveal delay={0.2}>
-          <div className="mt-14 text-center">
-            <Link
-              href="/features"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"
-            >
-              View full feature list
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </Link>
-          </div>
-        </Reveal>
-      </div>
-    </section>
-  );
-}
-
-// ─── 8. Integrations ─────────────────────────────────────────────────────────
-
-const INTEGRATIONS = [
-  {
-    name: 'Google Drive',
-    desc: 'Import files and folders directly from Drive into your VDR. Access token saved for repeat imports.',
-    icon: Globe,
-    color: 'text-blue-600',
-  },
-  {
-    name: 'Microsoft OneDrive',
-    desc: 'Connect OneDrive via OAuth and select files to import. Full VDR pipeline applied on import.',
-    icon: CloudUpload,
-    color: 'text-blue-500',
-  },
-  {
-    name: 'Email delivery',
-    desc: 'Invitations, notifications, and welcome messages delivered reliably via enterprise email infrastructure.',
-    icon: FileText,
-    color: 'text-purple-600',
-  },
-  {
-    name: 'REST API',
-    desc: 'Programmatic access to rooms, files, members, and audit events. Integrate into your own workflows.',
-    icon: Zap,
-    color: 'text-amber-600',
-  },
-];
-
-function IntegrationsSection() {
-  return (
-    <section className="bg-mk-bg py-24">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <Reveal className="text-center">
-          <SectionLabel>Integrations</SectionLabel>
-          <h2 className="mt-4 text-3xl font-bold text-mk-text sm:text-4xl">
-            Works with your existing tools.
-          </h2>
-          <p className="mx-auto mt-4 max-w-xl text-mk-t2">
-            Import from cloud storage you already use. Deliver notifications through your existing email
-            infrastructure. Connect to your workflows via API.
-          </p>
-        </Reveal>
-
-        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {INTEGRATIONS.map((intg, i) => {
-            const Icon = intg.icon;
-            return (
-              <Reveal key={intg.name} delay={i * 0.08}>
-                <div className="h-full rounded-xl border border-slate-200 bg-mk-s1 p-5 transition-colors hover:border-blue-500/20">
-                  <Icon className={cn('mb-4 h-7 w-7', intg.color)} aria-hidden="true" />
-                  <h3 className="mb-2 text-sm font-semibold text-mk-text">{intg.name}</h3>
-                  <p className="text-xs leading-relaxed text-mk-t3">{intg.desc}</p>
-                </div>
-              </Reveal>
-            );
-          })}
-        </div>
-        <Reveal delay={0.3}>
-          <p className="mt-6 text-center text-xs text-mk-t4">
-            More integrations coming soon &nbsp;·&nbsp; Contact us to request a specific integration
-          </p>
-        </Reveal>
-      </div>
-    </section>
-  );
-}
-
-// ─── 9. Journey ───────────────────────────────────────────────────────────────
-
-const JOURNEY_STEPS = [
-  { num: '01', title: 'Create account', desc: 'Sign up, verify email. Ready in 2 minutes.' },
-  { num: '02', title: 'Create data room', desc: 'Name, type, and download policy.' },
-  { num: '03', title: 'Upload documents', desc: 'Drag-drop, folder import, or cloud import.' },
-  { num: '04', title: 'Invite stakeholders', desc: 'Assign roles per person.' },
-  { num: '05', title: 'Stakeholders access', desc: 'Secure previews, watermarked downloads.' },
-  { num: '06', title: 'Monitor activity', desc: 'Real-time audit trail and alerts.' },
-  { num: '07', title: 'Export & close', desc: 'Compliance reports for courts and boards.' },
-];
-
-function JourneySection() {
-  return (
-    <section className="bg-mk-s1 py-24">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <Reveal className="text-center">
-          <SectionLabel>Journey</SectionLabel>
-          <h2 className="mt-4 text-3xl font-bold text-mk-text sm:text-4xl">
-            From account creation to deal close.
-          </h2>
-          <p className="mx-auto mt-4 max-w-xl text-mk-t2">Seven steps. Every CIRP, every M&A, every liquidation follows this same path.</p>
-        </Reveal>
-
-        <div className="relative mt-14">
-          {/* Connecting line (desktop) */}
-          <div
-            className="absolute left-6 top-6 hidden h-[calc(100%-48px)] w-px bg-slate-100 lg:block"
-            aria-hidden="true"
-          />
-
-          <div className="space-y-4 lg:ml-20">
-            {JOURNEY_STEPS.map((step, i) => (
-              <Reveal key={step.num} delay={i * 0.06}>
-                <div className="relative flex items-start gap-5">
-                  <div className="absolute -left-[72px] hidden h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-mk-s2 text-xs font-bold text-blue-600 lg:flex">
-                    {step.num}
-                  </div>
-                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-slate-200 bg-mk-s2 text-xs font-bold text-blue-600 lg:hidden">
-                    {step.num}
-                  </div>
-                  <div className="rounded-xl border border-slate-200 bg-mk-bg px-5 py-4 flex-1">
-                    <p className="text-sm font-semibold text-mk-text">{step.title}</p>
-                    <p className="mt-0.5 text-xs text-mk-t3">{step.desc}</p>
-                  </div>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── 10. Pricing ──────────────────────────────────────────────────────────────
-
-function PricingSection() {
-  return (
-    <section className="bg-mk-bg py-24" aria-labelledby="pricing-heading">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <Reveal className="text-center">
-          <SectionLabel>Pricing</SectionLabel>
-          <h2
-            id="pricing-heading"
-            className="mt-4 text-3xl font-bold text-mk-text sm:text-4xl"
-          >
-            Simple, transparent pricing.
-          </h2>
-          <p className="mx-auto mt-4 max-w-xl text-mk-t2">
-            No per-user seat fees. No surprise overages. One plan for everything you need.
-          </p>
-          <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-            <Link
-              href="/pricing"
-              className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
-            >
-              View all pricing plans
+              Book a live demo
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
             <Link
               href="/contact"
-              className="text-sm font-medium text-mk-t2 hover:text-slate-900 transition-colors"
+              className="inline-flex items-center rounded-md border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-mk-t2 transition-colors hover:border-slate-400 hover:text-slate-900"
             >
-              Talk to us about enterprise pricing →
+              Talk to an expert
             </Link>
-          </div>
-        </Reveal>
-
-        <div className="mt-12 grid gap-5 sm:grid-cols-3">
-          {[
-            {
-              name: 'Starter',
-              desc: 'For individual RPs and small liquidations.',
-              features: ['Up to 10 members', 'Up to 5 data rooms', '50 GB storage', 'All security features', 'Email support'],
-              cta: 'Start free trial',
-            },
-            {
-              name: 'Professional',
-              desc: 'For active deal teams and mid-size proceedings.',
-              features: ['Up to 50 members', 'Unlimited data rooms', '250 GB storage', 'Priority support', 'Advanced reports'],
-              cta: 'Start free trial',
-              highlight: true,
-            },
-            {
-              name: 'Business',
-              desc: 'For large firms, banks, and high-volume proceedings.',
-              features: ['Unlimited members', 'Unlimited data rooms', '1 TB storage', 'Dedicated support', 'Custom integrations'],
-              cta: 'Contact us',
-            },
-          ].map((plan, i) => (
-            <Reveal key={plan.name} delay={i * 0.1}>
-              <div
-                className={cn(
-                  'flex h-full flex-col rounded-xl border p-6',
-                  plan.highlight
-                    ? 'border-blue-500/40 bg-blue-500/[0.06]'
-                    : 'border-slate-200 bg-mk-s1',
-                )}
-              >
-                {plan.highlight && (
-                  <span className="mb-3 self-start rounded-full bg-blue-500/20 px-2.5 py-0.5 text-xs font-semibold text-blue-600">
-                    Most popular
-                  </span>
-                )}
-                <h3 className="text-base font-bold text-mk-text">{plan.name}</h3>
-                <p className="mt-1 text-xs text-mk-t3">{plan.desc}</p>
-                <ul className="mt-5 flex-1 space-y-2">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-center gap-2 text-xs text-mk-t2">
-                      <Check className="h-3.5 w-3.5 flex-shrink-0 text-green-600" aria-hidden="true" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href={plan.cta === 'Contact us' ? '/contact' : '/signup'}
-                  className={cn(
-                    'mt-6 block rounded-md py-2.5 text-center text-sm font-semibold transition-colors',
-                    plan.highlight
-                      ? 'bg-blue-600 text-white hover:bg-blue-500'
-                      : 'border border-slate-300 text-mk-t2 hover:border-slate-300 hover:text-slate-900',
-                  )}
-                >
-                  {plan.cta}
-                </Link>
-              </div>
-            </Reveal>
-          ))}
+          </m.div>
+          <m.p {...anim(0.5)} className="mt-6 text-xs text-mk-t4">
+            Guided onboarding &nbsp;·&nbsp; Data rooms live in a day &nbsp;·&nbsp; Built for IBC
+            workflows
+          </m.p>
         </div>
-        <Reveal delay={0.3}>
-          <p className="mt-6 text-center text-xs text-mk-t4">
-            All plans include: watermarking, RBAC, audit trail, office preview, and cloud import.
-          </p>
-        </Reveal>
+
+        <m.div {...anim(0.55)} className="mx-auto mt-12 max-w-5xl sm:mt-14">
+          <AppFrame />
+        </m.div>
       </div>
     </section>
   );
 }
 
-// ─── 11. FAQ ─────────────────────────────────────────────────────────────────
+// ─── 2. Credibility band ─────────────────────────────────────────────────────
 
-const FAQS = [
+const CRED_ITEMS = [
+  { icon: Gavel, label: 'Built for IBC workflows', sub: 'CIRP · Liquidation · M&A' },
+  { icon: Stamp, label: '100% of downloads watermarked', sub: 'Server-side, every page' },
+  { icon: Users, label: '8 access roles', sub: 'Modelled on real proceedings' },
+  { icon: FileUp, label: '2 GB file uploads', sub: 'Folder upload and versioning' },
+];
+
+function CredibilityBand() {
+  return (
+    <section className="border-y border-slate-200 bg-mk-s1">
+      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-5 px-4 py-8 sm:grid-cols-2 sm:px-6 lg:grid-cols-4">
+        {CRED_ITEMS.map((item) => (
+          <div key={item.label} className="flex items-start gap-3">
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white">
+              <item.icon className="h-4 w-4 text-slate-500" aria-hidden="true" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-mk-text">{item.label}</p>
+              <p className="mt-0.5 text-xs text-mk-t3">{item.sub}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ─── 3. Product showcase — shown, not described ──────────────────────────────
+
+function FilesMock() {
+  const reduceMotion = useReducedMotion();
+  return (
+    <div className="p-4 sm:p-5">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white">
+          <Upload className="h-3 w-3" aria-hidden="true" />
+          Upload
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs text-slate-500">
+          <FolderPlus className="h-3 w-3" aria-hidden="true" />
+          New folder
+        </span>
+        <span className="ml-auto hidden rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-500 sm:block">
+          CIRP folder set · 12 folders
+        </span>
+      </div>
+      <div className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-100">
+        <div className="flex items-center gap-2.5 px-3 py-2.5">
+          <Folder className="h-4 w-4 flex-shrink-0 text-slate-400" aria-hidden="true" />
+          <span className="truncate text-xs font-medium text-slate-700">01 · Financial Statements</span>
+          <span className="ml-auto text-[11px] text-slate-400">24 files</span>
+        </div>
+        <div className="flex items-center gap-2.5 bg-slate-50 px-3 py-2.5">
+          <FileText className="h-4 w-4 flex-shrink-0 text-slate-400" aria-hidden="true" />
+          <span className="truncate text-xs font-medium text-slate-900">Information Memorandum.pdf</span>
+          <span className="ml-auto flex items-center gap-1">
+            <span className="rounded-md bg-white p-1 text-slate-400 shadow-soft"><Download className="h-3 w-3" aria-hidden="true" /></span>
+            <span className="rounded-md bg-white p-1 text-slate-400 shadow-soft"><History className="h-3 w-3" aria-hidden="true" /></span>
+            <span className="rounded-md bg-white p-1 text-slate-400 shadow-soft"><PenLine className="h-3 w-3" aria-hidden="true" /></span>
+          </span>
+        </div>
+        <div className="flex items-center gap-2.5 px-3 py-2.5">
+          <FileSpreadsheet className="h-4 w-4 flex-shrink-0 text-slate-400" aria-hidden="true" />
+          <span className="truncate text-xs font-medium text-slate-700">Claims Register.xlsx</span>
+          <span className="ml-auto text-[11px] text-slate-400">12.8 MB</span>
+        </div>
+      </div>
+      <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
+        <div className="flex items-center justify-between text-[11px] font-medium text-slate-600">
+          <span className="flex items-center gap-1.5">
+            <FileUp className="h-3 w-3 text-blue-700" aria-hidden="true" />
+            Valuation Report — Final.pdf
+          </span>
+          <span className="text-slate-400">18.4 MB</span>
+        </div>
+        <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-200">
+          <m.div
+            className="h-full rounded-full bg-blue-600"
+            animate={reduceMotion ? { width: '100%' } : { width: ['8%', '100%'] }}
+            transition={{ duration: 3.5, repeat: Infinity, repeatDelay: 1.6, ease: 'easeInOut' }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WatermarkMock() {
+  const reduceMotion = useReducedMotion();
+  const lineWidths = ['82%', '94%', '76%', '88%', '68%', '90%', '80%', '58%'];
+  return (
+    <div className="p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="flex min-w-0 items-center gap-1.5 font-medium text-slate-600">
+          <FileText className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" aria-hidden="true" />
+          <span className="truncate">Information Memorandum.pdf — Preview</span>
+        </span>
+        <span className="flex-shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+          Watermarked
+        </span>
+      </div>
+      <div className="relative mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white p-6">
+        <div className="space-y-2.5">
+          <div className="h-2.5 w-2/5 rounded bg-slate-200" />
+          {lineWidths.map((width, i) => (
+            <div key={i} className="h-2 rounded bg-slate-100" style={{ width }} />
+          ))}
+        </div>
+        <m.div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-9"
+          animate={reduceMotion ? undefined : { opacity: [0.45, 0.85, 0.45] }}
+          transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+        >
+          {[0, 1, 2].map((i) => (
+            <span
+              key={i}
+              className="-rotate-[24deg] whitespace-nowrap text-[11px] font-semibold tracking-widest text-blue-600/50"
+            >
+              rahul.mehta@lenders.in · 02 JUL 2026 · 14:05 IST
+            </span>
+          ))}
+        </m.div>
+      </div>
+      <p className="mt-3 text-[11px] text-slate-400">
+        Applied server-side to previews and downloads — recipients can&apos;t remove it.
+      </p>
+    </div>
+  );
+}
+
+const PERM_ROLES = ['RP / Liquidator', 'PRA', 'CoC', 'Auditor'];
+const PERM_ROWS: { perm: string; values: (boolean | 'wm')[] }[] = [
+  { perm: 'View documents', values: [true, true, true, true] },
+  { perm: 'Download files', values: [true, 'wm', 'wm', 'wm'] },
+  { perm: 'Upload & organise', values: [true, false, false, false] },
+  { perm: 'Invite members', values: [true, false, false, false] },
+];
+
+function PermissionsMock() {
+  const reduceMotion = useReducedMotion();
+  return (
+    <div className="p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="font-medium text-slate-600">Role permissions — per data room</span>
+        <span className="flex-shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+          8 roles available
+        </span>
+      </div>
+      <div className="mt-3 overflow-hidden rounded-lg border border-slate-100">
+        <div className="grid grid-cols-[1.4fr,repeat(4,1fr)] border-b border-slate-100 bg-slate-50 px-3 py-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            Permission
+          </span>
+          {PERM_ROLES.map((role) => (
+            <span
+              key={role}
+              className="text-center text-[10px] font-semibold uppercase tracking-wider text-slate-400"
+            >
+              {role}
+            </span>
+          ))}
+        </div>
+        {PERM_ROWS.map((row, rowIdx) => (
+          <div
+            key={row.perm}
+            className={cn(
+              'grid grid-cols-[1.4fr,repeat(4,1fr)] items-center px-3 py-2.5',
+              rowIdx % 2 === 1 && 'bg-slate-50/50',
+            )}
+          >
+            <span className="text-xs font-medium text-slate-700">{row.perm}</span>
+            {row.values.map((value, i) => (
+              <span key={i} className="flex justify-center">
+                {value === true ? (
+                  <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
+                ) : value === 'wm' ? (
+                  <m.span
+                    className="rounded bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-blue-700"
+                    animate={reduceMotion ? undefined : { scale: [1, 1.12, 1] }}
+                    transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
+                  >
+                    WM
+                  </m.span>
+                ) : (
+                  <Minus className="h-3.5 w-3.5 text-slate-200" aria-hidden="true" />
+                )}
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-[11px] text-slate-400">
+        WM — downloads permitted with a personalised watermark only.
+      </p>
+    </div>
+  );
+}
+
+const AUDIT_ENTRIES = [
+  { time: '14:05:22', actor: 'Priya Sharma', action: 'Downloaded', target: 'Asset Schedule.xlsx', ip: '103.27.9.14' },
+  { time: '14:03:10', actor: 'Rahul Mehta', action: 'Viewed', target: 'Information Memorandum.pdf', ip: '49.36.12.88' },
+  { time: '13:58:41', actor: 'Admin (RP)', action: 'Updated role', target: 'PRA → view only', ip: '122.161.4.2' },
+  { time: '13:51:03', actor: 'Nikhil Rao', action: 'Logged in', target: '2FA verified', ip: '13.234.1.77' },
+];
+
+function AuditMock() {
+  const reduceMotion = useReducedMotion();
+  return (
+    <div className="p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="font-medium text-slate-600">Audit trail — every event, attributed</span>
+        <span className="flex flex-shrink-0 items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[11px] font-medium text-slate-500">
+          <Download className="h-3 w-3" aria-hidden="true" />
+          Export for NCLT
+        </span>
+      </div>
+      <div className="mt-3 overflow-hidden rounded-lg border border-slate-100">
+        <div className="grid grid-cols-[70px,1.1fr,1.5fr,90px] gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2 sm:grid-cols-[70px,1.1fr,1.6fr,100px]">
+          {['Time', 'User', 'Action', 'IP'].map((header) => (
+            <span key={header} className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              {header}
+            </span>
+          ))}
+        </div>
+        {AUDIT_ENTRIES.map((entry, i) => (
+          <m.div
+            key={entry.time}
+            className={cn(
+              'grid grid-cols-[70px,1.1fr,1.5fr,90px] items-center gap-2 px-3 py-2.5 sm:grid-cols-[70px,1.1fr,1.6fr,100px]',
+              i % 2 === 1 && 'bg-slate-50/50',
+            )}
+            animate={
+              i === 0 && !reduceMotion ? { opacity: [0, 1], x: [-10, 0] } : undefined
+            }
+            transition={{ duration: 0.45, repeat: Infinity, repeatDelay: 4.6, ease: 'easeOut' }}
+          >
+            <span className="font-mono text-[10px] text-slate-400">{entry.time}</span>
+            <span className="truncate text-xs font-medium text-slate-700">{entry.actor}</span>
+            <span className="truncate text-xs text-slate-500">
+              {entry.action} · {entry.target}
+            </span>
+            <span className="truncate font-mono text-[10px] text-slate-400">{entry.ip}</span>
+          </m.div>
+        ))}
+      </div>
+      <p className="mt-3 text-[11px] text-slate-400">
+        Actor, action, document, timestamp, and IP — exportable as structured data.
+      </p>
+    </div>
+  );
+}
+
+const REPORT_BARS = [42, 65, 50, 78, 58, 92, 70];
+
+function ReportsMock() {
+  const reduceMotion = useReducedMotion();
+  return (
+    <div className="p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="font-medium text-slate-600">Download &amp; view activity — last 7 days</span>
+        <span className="flex-shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+          CSV · Excel · PDF
+        </span>
+      </div>
+      <div className="mt-4 flex h-32 items-end gap-2 sm:h-36">
+        {REPORT_BARS.map((height, i) => (
+          <m.div
+            key={i}
+            className="flex-1 rounded-t-md bg-blue-600/80"
+            initial={reduceMotion ? false : { height: 0 }}
+            animate={{ height: `${height}%` }}
+            transition={{ duration: 0.6, delay: 0.1 + i * 0.06, ease: [0.22, 1, 0.36, 1] }}
+          />
+        ))}
+      </div>
+      <div className="mt-1 flex gap-2">
+        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
+          <span key={day} className="flex-1 text-center text-[10px] text-slate-300">
+            {day}
+          </span>
+        ))}
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        {[
+          { label: 'Downloads', value: '312' },
+          { label: 'Views', value: '1,204' },
+          { label: 'Active users', value: '24' },
+        ].map((stat) => (
+          <div key={stat.label} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+            <p className="text-sm font-bold text-slate-800">{stat.value}</p>
+            <p className="text-[10px] text-slate-400">{stat.label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ImportMock() {
+  const reduceMotion = useReducedMotion();
+  return (
+    <div className="p-4 sm:p-5">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50/60 px-3 py-2.5">
+          <Cloud className="h-4 w-4 text-blue-700" aria-hidden="true" />
+          <span className="text-xs font-semibold text-slate-800">Google Drive</span>
+          <Check className="ml-auto h-3.5 w-3.5 text-blue-700" aria-hidden="true" />
+        </div>
+        <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2.5">
+          <Cloud className="h-4 w-4 text-slate-400" aria-hidden="true" />
+          <span className="text-xs font-medium text-slate-600">Microsoft OneDrive</span>
+        </div>
+      </div>
+      <div className="mt-3 rounded-lg border border-slate-100 p-3">
+        <div className="flex items-center justify-between text-[11px] font-medium text-slate-600">
+          <span>Importing “Board &amp; Committee Papers”</span>
+          <span className="text-slate-400">34 files</span>
+        </div>
+        <div className="mt-3 space-y-3">
+          <div>
+            <div className="flex items-center justify-between text-[11px] text-slate-500">
+              <span className="flex items-center gap-1.5">
+                <FileText className="h-3 w-3 text-slate-400" aria-hidden="true" />
+                Minutes — 14th CoC Meeting.pdf
+              </span>
+              <Check className="h-3 w-3 text-emerald-600" aria-hidden="true" />
+            </div>
+            <div className="mt-1.5 h-1 rounded-full bg-emerald-500/80" />
+          </div>
+          <div>
+            <div className="flex items-center justify-between text-[11px] text-slate-500">
+              <span className="flex items-center gap-1.5">
+                <FileSpreadsheet className="h-3 w-3 text-slate-400" aria-hidden="true" />
+                Creditor Claims — Consolidated.xlsx
+              </span>
+              <span className="text-slate-400">…</span>
+            </div>
+            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-100">
+              <m.div
+                className="h-full rounded-full bg-blue-600"
+                animate={reduceMotion ? { width: '100%' } : { width: ['10%', '92%'] }}
+                transition={{ duration: 3, repeat: Infinity, repeatDelay: 1.4, ease: 'easeInOut' }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+      <p className="mt-3 text-[11px] text-slate-400">
+        Folder structure preserved — no re-organising after import.
+      </p>
+    </div>
+  );
+}
+
+interface ShowcaseTab {
+  id: string;
+  icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean | 'true' | 'false' }>;
+  label: string;
+  bullets: string[];
+  Mock: React.ComponentType;
+}
+
+const SHOWCASE_TABS: ShowcaseTab[] = [
   {
-    q: 'Is Varied Reach VDR compliant with IBC 2016 requirements for CIRP proceedings?',
-    a: 'Yes. The platform is designed specifically for IBC proceedings. The audit trail, role-based access (RP, CoC, Resolution Applicant), and watermarked document sharing align with IBBI regulations and NCLT submission requirements.',
+    id: 'data-rooms',
+    icon: FolderLock,
+    label: 'Data rooms & files',
+    bullets: [
+      'CIRP-ready folder taxonomy out of the box',
+      '2 GB per file, folder upload, versioning',
+      'PDF and Office preview without download',
+    ],
+    Mock: FilesMock,
   },
   {
-    q: 'How does dynamic watermarking work in practice?',
-    a: "When a user downloads or previews a document, the system applies a watermark in real-time containing their name, email address, and timestamp. This happens server-side — users cannot bypass or remove it. Every single download is traced.",
+    id: 'watermarking',
+    icon: Stamp,
+    label: 'Dynamic watermarking',
+    bullets: [
+      'Name, email, and timestamp on every page',
+      'Applied server-side — cannot be stripped',
+      'Covers previews and downloads alike',
+    ],
+    Mock: WatermarkMock,
   },
   {
-    q: 'Can external stakeholders (Resolution Applicants, Auditors, Guests) access documents without creating an Org account?',
-    a: 'External users are invited via email and can access their permitted documents through a secure link. They do not need to create an organisation account — they log in as invited members of a specific data room.',
+    id: 'permissions',
+    icon: KeyRound,
+    label: 'Permissions & RBAC',
+    bullets: [
+      'Eight roles modelled on real proceedings',
+      'Per-room overrides for external parties',
+      'Download policy control per data room',
+    ],
+    Mock: PermissionsMock,
   },
   {
-    q: 'What happens to data after a CIRP is closed or a deal is completed?',
-    a: 'You retain full access to your data room and all documents for the lifetime of your subscription. You can archive the room, export the audit trail, and download all documents before closure. Nothing is automatically deleted.',
+    id: 'audit-trail',
+    icon: History,
+    label: 'Audit trail',
+    bullets: [
+      'Every view and download recorded',
+      'Actor, document, timestamp, and IP',
+      'Exportable for NCLT / IBBI submission',
+    ],
+    Mock: AuditMock,
   },
   {
-    q: 'How is access differentiated between Committee of Creditors and Resolution Applicants?',
-    a: 'CoC Members and Resolution Applicants are separate roles with distinct permission levels. You can configure which folders and documents each group can view. Resolution Applicants typically receive watermarked view-only access to specific sections.',
+    id: 'reports',
+    icon: BarChart3,
+    label: 'Reports & analytics',
+    bullets: [
+      'Download and view trends per period',
+      'Per-user activity summaries',
+      'Export as CSV, Excel, or PDF',
+    ],
+    Mock: ReportsMock,
   },
   {
-    q: 'Where is data stored? Is it stored in India?',
-    a: 'All data is stored on servers within our infrastructure. If you have specific data residency requirements for regulatory compliance, please contact us — we can discuss options for your use case.',
-  },
-  {
-    q: 'Can I export the audit trail for submission to the NCLT or IBBI?',
-    a: 'Yes. The audit trail is exportable as structured data at any time. It includes actor, action, document, timestamp, and IP address — formatted for regulatory or court submission.',
-  },
-  {
-    q: 'How large can individual file uploads be?',
-    a: 'Individual files can be up to 2 GB each. For very large financial models, asset schedules, or engineering documents, this accommodates most enterprise file sizes.',
-  },
-  {
-    q: 'What file types can be previewed without downloading?',
-    a: 'PDF files are natively previewed in the browser. Word (docx), Excel (xlsx), and PowerPoint (pptx) files are converted and served as secure previews — no desktop application needed.',
-  },
-  {
-    q: 'Is there a limit on how many data rooms I can create?',
-    a: 'Starter plan: up to 5 data rooms. Professional and Business plans: unlimited data rooms. You can run multiple concurrent CIRP proceedings, M&A transactions, and client engagements simultaneously.',
+    id: 'cloud-import',
+    icon: Cloud,
+    label: 'Cloud import',
+    bullets: [
+      'Bring folders from Google Drive',
+      'Import from Microsoft OneDrive',
+      'Structure preserved, progress tracked',
+    ],
+    Mock: ImportMock,
   },
 ];
 
-function FAQSection() {
-  const [open, setOpen] = useState<number | null>(0);
+function ShowcaseSection() {
+  const [active, setActive] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const reduceMotion = useReducedMotion();
+
+  // Nav dropdown deep-links (/#watermarking etc.) select the matching tab.
+  useEffect(() => {
+    const applyHash = () => {
+      const hash = window.location.hash.replace('#', '');
+      const index = SHOWCASE_TABS.findIndex((tab) => tab.id === hash);
+      if (index >= 0) {
+        setActive(index);
+        setPaused(true);
+      }
+    };
+    applyHash();
+    window.addEventListener('hashchange', applyHash);
+    return () => window.removeEventListener('hashchange', applyHash);
+  }, []);
+
+  // Auto-advance until the visitor interacts with the tabs.
+  useEffect(() => {
+    if (paused || reduceMotion) return;
+    const timer = setInterval(() => {
+      setActive((current) => (current + 1) % SHOWCASE_TABS.length);
+    }, 5500);
+    return () => clearInterval(timer);
+  }, [paused, reduceMotion]);
+
+  const activeTab = SHOWCASE_TABS[active];
+  const ActiveMock = activeTab.Mock;
+
   return (
-    <section className="bg-mk-s1 py-24">
-      <div className="mx-auto max-w-3xl px-4 sm:px-6">
-        <Reveal className="text-center">
-          <SectionLabel>FAQ</SectionLabel>
-          <h2 className="mt-4 text-3xl font-bold text-mk-text sm:text-4xl">
-            Common questions.
+    <section id="platform" className="bg-mk-s1 py-20 sm:py-24" aria-labelledby="platform-heading">
+      <div aria-hidden="true">
+        {SHOWCASE_TABS.map((tab) => (
+          <span key={tab.id} id={tab.id} className="block scroll-mt-24" />
+        ))}
+      </div>
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <Reveal className="mx-auto max-w-2xl text-center">
+          <SectionLabel>Platform</SectionLabel>
+          <h2
+            id="platform-heading"
+            className="mt-4 text-3xl font-bold tracking-tight text-mk-text sm:text-4xl"
+          >
+            The platform, shown — not described.
           </h2>
           <p className="mt-4 text-mk-t2">
-            Specific to IBC, CIRP, and high-stakes document security.
+            Every screen below is the real product. Ask us to demonstrate any of them live.
           </p>
         </Reveal>
 
-        <div className="mt-12 space-y-1">
-          {FAQS.map((faq, i) => (
-            <Reveal key={i} delay={i * 0.03}>
-              <div className="rounded-xl border border-slate-200 bg-mk-bg">
-                <button
-                  onClick={() => setOpen(open === i ? null : i)}
-                  className="flex w-full items-start justify-between gap-4 px-5 py-4 text-left"
-                  aria-expanded={open === i}
-                >
-                  <span className="text-sm font-medium text-mk-text">{faq.q}</span>
-                  <ChevronDown
-                    className={cn(
-                      'mt-0.5 h-4 w-4 flex-shrink-0 text-mk-t3 transition-transform duration-200',
-                      open === i && 'rotate-180',
-                    )}
-                    aria-hidden="true"
-                  />
-                </button>
-                <AnimatePresence>
-                  {open === i && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="overflow-hidden"
-                    >
-                      <p className="border-t border-slate-100 px-5 pb-4 pt-3 text-sm leading-relaxed text-mk-t2">
-                        {faq.a}
-                      </p>
-                    </motion.div>
+        <div className="mt-12 grid gap-6 lg:grid-cols-[280px,minmax(0,1fr)] lg:gap-10">
+          {/* Tab rail — horizontal chips on mobile, vertical list on desktop */}
+          <div
+            className="flex gap-2 overflow-x-auto pb-2 lg:flex-col lg:gap-1.5 lg:overflow-visible lg:pb-0"
+            role="tablist"
+            aria-label="Platform capabilities"
+          >
+            {SHOWCASE_TABS.map((tab, index) => (
+              <button
+                key={tab.id}
+                role="tab"
+                aria-selected={index === active}
+                onClick={() => {
+                  setActive(index);
+                  setPaused(true);
+                }}
+                className={cn(
+                  'flex flex-shrink-0 items-center gap-2.5 rounded-lg border px-3.5 py-2.5 text-left text-sm transition-colors lg:w-full',
+                  index === active
+                    ? 'border-slate-200 bg-white font-semibold text-slate-900 shadow-soft'
+                    : 'border-transparent text-mk-t3 hover:bg-white/70 hover:text-slate-700',
+                )}
+              >
+                <tab.icon
+                  className={cn(
+                    'h-4 w-4 flex-shrink-0',
+                    index === active ? 'text-blue-700' : 'text-slate-400',
                   )}
-                </AnimatePresence>
-              </div>
-            </Reveal>
-          ))}
-        </div>
+                  aria-hidden="true"
+                />
+                <span className="whitespace-nowrap lg:whitespace-normal">{tab.label}</span>
+              </button>
+            ))}
+          </div>
 
-        <Reveal delay={0.3}>
-          <p className="mt-8 text-center text-sm text-mk-t3">
-            Have a question we haven&apos;t answered?{' '}
-            <Link href="/contact" className="text-blue-600 hover:text-blue-700">
-              Contact us →
-            </Link>
-          </p>
-        </Reveal>
+          {/* Active panel */}
+          <div className="min-w-0" onMouseEnter={() => setPaused(true)}>
+            <AnimatePresence mode="wait" initial={false}>
+              <m.div
+                key={activeTab.id}
+                initial={reduceMotion ? false : { opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={reduceMotion ? undefined : { opacity: 0, x: -10 }}
+                transition={{ duration: reduceMotion ? 0 : 0.22, ease: 'easeOut' }}
+              >
+                <div className="min-h-[300px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-card sm:min-h-[340px]">
+                  <ActiveMock />
+                </div>
+                <div className="mt-5 grid gap-2.5 sm:grid-cols-3">
+                  {activeTab.bullets.map((bullet) => (
+                    <div key={bullet} className="flex items-start gap-2 text-xs leading-relaxed text-mk-t2">
+                      <Check className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-blue-700" aria-hidden="true" />
+                      {bullet}
+                    </div>
+                  ))}
+                </div>
+              </m.div>
+            </AnimatePresence>
+          </div>
+        </div>
       </div>
     </section>
   );
 }
 
-// ─── 12. CTA Banner ──────────────────────────────────────────────────────────
+// ─── 4. Security & trust ─────────────────────────────────────────────────────
 
-function CTASection() {
+const TRUST_ROWS = [
+  {
+    icon: Stamp,
+    title: 'Dynamic watermarking',
+    body: 'Name, email, and timestamp applied server-side to every page of every preview and download.',
+  },
+  {
+    icon: History,
+    title: 'Complete audit trail',
+    body: 'Every view and download recorded with actor, document, timestamp, and IP — exportable for NCLT or IBBI submission.',
+  },
+  {
+    icon: KeyRound,
+    title: 'Granular access control',
+    body: 'Eight roles modelled on real proceedings — RP, PRA, CoC member, auditor, legal advisor — with per-room overrides.',
+  },
+  {
+    icon: Lock,
+    title: 'Encryption & isolation',
+    body: 'Encrypted in transit and at rest, IP allowlisting, and optional NDA gating per data room.',
+  },
+];
+
+const AUDIENCES = [
+  {
+    title: 'Resolution professionals',
+    body: 'Run CIRP and liquidation with CoC, PRAs, and auditors in one controlled room.',
+  },
+  {
+    title: 'Law firms',
+    body: 'Share privileged documents with external counsel on your terms.',
+  },
+  {
+    title: 'Banks & ARCs',
+    body: 'Evaluate stressed assets with watermarked, view-only access.',
+  },
+  {
+    title: 'Corporate deal teams',
+    body: 'Close M&A and fundraising diligence without email attachments.',
+  },
+];
+
+function TrustSection() {
   return (
-    <section className="bg-mk-bg py-24">
-      <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
-        <Reveal>
-          <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] px-8 py-14">
-            <h2 className="text-3xl font-bold text-mk-text sm:text-4xl">
-              Start your data room today.
+    <section className="bg-mk-bg py-20 sm:py-24" aria-labelledby="trust-heading">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="grid gap-12 lg:grid-cols-[1fr,1.2fr] lg:gap-16">
+          <Reveal>
+            <SectionLabel>Security</SectionLabel>
+            <h2
+              id="trust-heading"
+              className="mt-4 text-3xl font-bold tracking-tight text-mk-text sm:text-4xl"
+            >
+              Security that stands up to scrutiny.
             </h2>
-            <p className="mx-auto mt-4 max-w-lg text-mk-t2">
-              No credit card required. Room live in under 5 minutes. Cancel anytime.
+            <p className="mt-4 leading-relaxed text-mk-t2">
+              When the documents are a company&apos;s most sensitive, &ldquo;trust us&rdquo; is not
+              an answer. Every control here is verifiable in the product — ask us to show you any of
+              them live.
             </p>
-            <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
-              <Link
-                href="/signup"
-                className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-7 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
-              >
-                Start free trial
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-              <Link
-                href="/contact"
-                className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-slate-50 px-7 py-3.5 text-sm font-semibold text-mk-t2 transition-colors hover:text-slate-900"
-              >
-                Book a live demo
-              </Link>
+            <Link
+              href="/security"
+              className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-blue-700 transition-colors hover:text-blue-800"
+            >
+              Read the security overview
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          </Reveal>
+
+          <Reveal delay={0.1}>
+            <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white shadow-soft">
+              {TRUST_ROWS.map((row) => (
+                <div key={row.title} className="flex items-start gap-4 p-5">
+                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100">
+                    <row.icon className="h-4 w-4 text-slate-600" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-mk-text">{row.title}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-mk-t3">{row.body}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-mk-t4">
-              <span className="flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5 text-green-600" aria-hidden="true" />
-                Dynamic watermarking
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5 text-green-600" aria-hidden="true" />
-                Role-based access control
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5 text-green-600" aria-hidden="true" />
-                Complete audit trail
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5 text-green-600" aria-hidden="true" />
-                Cloud import
-              </span>
-            </div>
+          </Reveal>
+        </div>
+
+        <Reveal delay={0.15} className="mt-16">
+          <p className="text-xs font-semibold uppercase tracking-widest text-mk-t4">Who it serves</p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {AUDIENCES.map((audience) => (
+              <div key={audience.title} className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-sm font-semibold text-mk-text">{audience.title}</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-mk-t3">{audience.body}</p>
+              </div>
+            ))}
           </div>
         </Reveal>
       </div>
@@ -1316,23 +885,115 @@ function CTASection() {
   );
 }
 
-// ─── Export ───────────────────────────────────────────────────────────────────
+// ─── 5. Pricing — single source ──────────────────────────────────────────────
+
+function PricingTeaser() {
+  return (
+    <section className="border-t border-slate-200 bg-mk-s1 py-20 sm:py-24" aria-labelledby="pricing-heading">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <Reveal className="mx-auto max-w-2xl text-center">
+          <SectionLabel>Pricing</SectionLabel>
+          <h2
+            id="pricing-heading"
+            className="mt-4 text-3xl font-bold tracking-tight text-mk-text sm:text-4xl"
+          >
+            Pay for storage. Everything else is included.
+          </h2>
+          <p className="mt-4 text-mk-t2">
+            No per-user seat fees. No feature gating by tier. 18% GST applies.
+          </p>
+        </Reveal>
+
+        <div className="mt-12 grid gap-5 md:grid-cols-3">
+          {PLAN_IDS.map((id, index) => {
+            const highlighted = id === 'PROFESSIONAL';
+            return (
+              <Reveal key={id} delay={index * 0.08} className="h-full">
+                <PlanCard
+                  planId={id}
+                  compact
+                  highlighted={highlighted}
+                  cta={
+                    <Link
+                      href="/book-demo"
+                      className={cn(
+                        'block w-full rounded-md py-2.5 text-center text-sm font-semibold transition-colors',
+                        highlighted
+                          ? 'bg-slate-900 text-white hover:bg-slate-700'
+                          : 'border border-slate-300 text-mk-t2 hover:border-slate-400 hover:text-slate-900',
+                      )}
+                    >
+                      Book a demo
+                    </Link>
+                  }
+                />
+              </Reveal>
+            );
+          })}
+        </div>
+
+        <Reveal delay={0.2} className="mt-8 text-center">
+          <Link
+            href="/pricing"
+            className="text-sm font-semibold text-blue-700 transition-colors hover:text-blue-800"
+          >
+            See full pricing &amp; calculator →
+          </Link>
+          <p className="mt-2 text-xs text-mk-t4">
+            Every plan includes watermarking, RBAC, audit trail, office preview, and cloud import.
+          </p>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
+// ─── 6. Closing CTA ──────────────────────────────────────────────────────────
+
+function ClosingCta() {
+  return (
+    <section className="bg-slate-900 py-20" aria-labelledby="closing-heading">
+      <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
+        <Reveal>
+          <h2 id="closing-heading" className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            See your data room before you commit.
+          </h2>
+          <p className="mx-auto mt-4 max-w-xl leading-relaxed text-slate-400">
+            A 30-minute guided walkthrough with a specialist — your use case, your questions, the
+            real product. No trial accounts; every engagement starts with a working session.
+          </p>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <Link
+              href="/book-demo"
+              className="inline-flex items-center gap-2 rounded-md bg-white px-6 py-3 text-sm font-semibold text-slate-900 transition-colors hover:bg-slate-100"
+            >
+              Book a live demo
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+            <Link
+              href="/book-demo#callback"
+              className="inline-flex items-center rounded-md border border-slate-600 px-6 py-3 text-sm font-semibold text-slate-200 transition-colors hover:border-slate-400 hover:text-white"
+            >
+              Request a callback
+            </Link>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
+// ─── Page ────────────────────────────────────────────────────────────────────
 
 export function MarketingHomeContent() {
   return (
-    <>
+    <MotionProvider>
       <HeroSection />
-      <ProblemSection />
-      <StatsSection />
-      <PlatformDemoSection />
-      <SecuritySection />
-      <IndustriesSection />
-      <FeaturesSection />
-      <IntegrationsSection />
-      <JourneySection />
-      <PricingSection />
-      <FAQSection />
-      <CTASection />
-    </>
+      <CredibilityBand />
+      <ShowcaseSection />
+      <TrustSection />
+      <PricingTeaser />
+      <ClosingCta />
+    </MotionProvider>
   );
 }

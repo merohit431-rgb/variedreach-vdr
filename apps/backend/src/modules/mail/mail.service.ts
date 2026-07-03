@@ -12,6 +12,7 @@ import { accountCreatedTemplate } from './templates/account-created.template';
 import { storageWarningTemplate, StorageWarningLevel } from './templates/storage-warning.template';
 import { subscriptionActivatedTemplate } from './templates/subscription-activated.template';
 import { subscriptionRenewalReminderTemplate } from './templates/subscription-renewal-reminder.template';
+import { contactRequestTemplate, ContactRequestField } from './templates/contact-request.template';
 
 export interface SendResult {
   sent: boolean;
@@ -107,6 +108,18 @@ export class MailService {
   ): Promise<SendResult> {
     const rendered = welcomeEmailTemplate({ recipientName, loginUrl });
     return this.dispatch({ template: 'WELCOME_EMAIL', to, ...context }, rendered);
+  }
+
+  async sendDemoRequestEmail(requesterName: string, fields: ContactRequestField[]): Promise<SendResult> {
+    const to = this.configService.get<string>('mail.contactRecipient') || 'merohit431@gmail.com';
+    const rendered = contactRequestTemplate({ kind: 'DEMO', requesterName, fields });
+    return this.dispatch({ template: 'DEMO_REQUEST', to }, rendered);
+  }
+
+  async sendCallbackRequestEmail(requesterName: string, fields: ContactRequestField[]): Promise<SendResult> {
+    const to = this.configService.get<string>('mail.contactRecipient') || 'merohit431@gmail.com';
+    const rendered = contactRequestTemplate({ kind: 'CALLBACK', requesterName, fields });
+    return this.dispatch({ template: 'CALLBACK_REQUEST', to }, rendered);
   }
 
   // Dormant -- no caller invokes this today. See email-verification.template.ts.

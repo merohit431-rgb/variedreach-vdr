@@ -511,6 +511,8 @@ enum EmailTemplate {
   SUBSCRIPTION_UPGRADE_CONFIRMATION
   SUBSCRIPTION_CANCELLED
   DOCUMENT_UPLOADED
+  DEMO_REQUEST // internal notification: marketing-site demo form
+  CALLBACK_REQUEST // internal notification: marketing-site callback form
 }
 
 // userId/dataRoomId are both optional since not every email has either

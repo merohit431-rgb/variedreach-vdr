@@ -170,7 +170,7 @@ export default function IndustriesPage() {
               <div
                 key={ind.id}
                 id={ind.id}
-                className="rounded-xl border border-slate-200 bg-mk-bg p-7 transition-colors hover:border-blue-500/20"
+                className="scroll-mt-24 rounded-xl border border-slate-200 bg-mk-bg p-7 transition-colors hover:border-blue-500/20"
               >
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div>
@@ -206,16 +206,16 @@ export default function IndustriesPage() {
           </p>
           <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
             <Link
-              href="/contact"
-              className="inline-flex rounded-md bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
+              href="/book-demo"
+              className="inline-flex rounded-md bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-700"
             >
-              Talk to us
+              Book a live demo
             </Link>
             <Link
-              href="/signup"
+              href="/contact"
               className="inline-flex rounded-md border border-slate-300 px-6 py-3 text-sm font-semibold text-mk-t2 transition-colors hover:text-slate-900"
             >
-              Start free trial
+              Talk to us
             </Link>
           </div>
         </div>

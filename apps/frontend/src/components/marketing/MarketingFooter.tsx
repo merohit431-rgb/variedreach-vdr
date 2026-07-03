@@ -103,10 +103,10 @@ export function MarketingFooter() {
             </ul>
             <div className="mt-6">
               <Link
-                href="/signup"
-                className="inline-flex rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
+                href="/book-demo"
+                className="inline-flex rounded-md bg-white px-4 py-2 text-sm font-semibold text-slate-900 transition-colors hover:bg-slate-200"
               >
-                Get started
+                Book a demo
               </Link>
             </div>
           </div>

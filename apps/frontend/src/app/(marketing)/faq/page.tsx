@@ -61,11 +61,11 @@ const FAQS = [
       },
       {
         q: 'Is there a free trial?',
-        a: 'Yes. Create an account and run your first data room before committing to a paid plan. No credit card required to start.',
+        a: 'No — and that is deliberate. Instead of an empty trial account, we run a guided start: book a live demo, see the platform against your own use case, and be live with a working data room within a day of signing up.',
       },
       {
         q: 'Is there a limit on how many data rooms I can create?',
-        a: 'Starter plan: up to 5 data rooms. Professional and Business plans: unlimited data rooms. You can run multiple concurrent CIRP proceedings, M&A transactions, and client engagements simultaneously.',
+        a: 'No — every plan includes unlimited data rooms. You can run multiple concurrent CIRP proceedings, M&A transactions, and client engagements simultaneously.',
       },
       {
         q: 'What happens to my documents if a payment is missed?',
@@ -150,16 +150,16 @@ export default function FaqPage() {
           <p className="mt-3 text-mk-t2">We typically respond within one business day.</p>
           <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
             <Link
-              href="/contact"
-              className="inline-flex rounded-md bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
+              href="/book-demo"
+              className="inline-flex rounded-md bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-700"
             >
-              Contact us
+              Book a live demo
             </Link>
             <Link
-              href="/signup"
+              href="/contact"
               className="inline-flex rounded-md border border-slate-300 px-6 py-3 text-sm font-semibold text-mk-t2 transition-colors hover:text-slate-900"
             >
-              Start free trial
+              Contact us
             </Link>
           </div>
         </div>

@@ -122,10 +122,10 @@ export default function ContactPage() {
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </a>
             <Link
-              href="/signup"
+              href="/book-demo"
               className="inline-flex items-center gap-2 rounded-md border border-slate-300 px-6 py-3 text-sm font-semibold text-mk-t2 transition-colors hover:text-slate-900"
             >
-              Start free trial instead
+              Book a live demo instead
             </Link>
           </div>
         </div>
