@@ -19,14 +19,19 @@ const PRICING_PLANS: Record<string, { name: string; ratePerGbPerMonth: number; m
   PROFESSIONAL: { name: 'Professional', ratePerGbPerMonth: 4500, minimumStorageGb: 10 },
   BUSINESS:     { name: 'Business',     ratePerGbPerMonth: 4000, minimumStorageGb: 50 },
 };
+// GST not charged (business not GST-registered). Kept as a flag so the order
+// amount, provisioning, and the invoice all agree — the gateway must charge
+// exactly what the invoice shows. Re-enable centrally with the same flag in
+// pricing.constants.ts / provisioning.service.ts when GST registration lands.
 const GST_RATE = 0.18;
+const GST_ENABLED = false;
 
 function computeTotal(planId: string, storageGb: number, isYearly: boolean): number {
   const plan = PRICING_PLANS[planId];
   const billableGb = Math.max(storageGb, plan.minimumStorageGb);
   const monthlyBase = billableGb * plan.ratePerGbPerMonth;
   const base = isYearly ? Math.round(monthlyBase * 12 * 0.9) : monthlyBase;
-  return base + Math.round(base * GST_RATE);
+  return GST_ENABLED ? base + Math.round(base * GST_RATE) : base;
 }
 
 @Injectable()
