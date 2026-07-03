@@ -10,14 +10,19 @@ const PRICING_PLANS: Record<string, { name: string; ratePerGbPerMonth: number; m
   PROFESSIONAL: { name: 'Professional', ratePerGbPerMonth: 4500, minimumStorageGb: 10, minimumMonthlyBilling: 45000,  includedUsers: 25 },
   BUSINESS:     { name: 'Business',     ratePerGbPerMonth: 4000, minimumStorageGb: 50, minimumMonthlyBilling: 200000, includedUsers: 50 },
 };
+// GST is not charged — business is not registered under GST. Kept as a flag
+// (mirrors packages/shared pricing.constants.ts) so it can be re-enabled
+// centrally once registration is obtained. gst stays in the shape as 0 for
+// backwards compatibility with the Invoice.gstAmountPaisa column.
 const GST_RATE = 0.18;
+const GST_ENABLED = false;
 
 function computeAmounts(planId: string, storageGb: number, isYearly: boolean) {
   const plan = PRICING_PLANS[planId];
   const billableGb = Math.max(storageGb, plan.minimumStorageGb);
   const monthlyBase = billableGb * plan.ratePerGbPerMonth;
   const base = isYearly ? Math.round(monthlyBase * 12 * 0.9) : monthlyBase;
-  const gst = Math.round(base * GST_RATE);
+  const gst = GST_ENABLED ? Math.round(base * GST_RATE) : 0;
   return { billableGb, monthlyBase, base, gst, total: base + gst };
 }
 

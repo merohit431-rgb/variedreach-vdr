@@ -86,13 +86,13 @@ export default function AboutPage() {
           <h2 className="mb-8 text-xl font-bold text-mk-text">Get in touch</h2>
           <div className="grid gap-5 sm:grid-cols-3">
             <a
-              href="mailto:rohit@variedreach.com"
+              href="mailto:support@variedreach.com"
               className="flex items-start gap-3 rounded-xl border border-slate-200 bg-mk-s1 px-5 py-4 transition-colors hover:border-blue-500/20"
             >
               <Mail className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600" aria-hidden="true" />
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-mk-t4">Email</p>
-                <p className="mt-1 text-sm text-mk-t2">rohit@variedreach.com</p>
+                <p className="mt-1 text-sm text-mk-t2">support@variedreach.com</p>
               </div>
             </a>
             <a

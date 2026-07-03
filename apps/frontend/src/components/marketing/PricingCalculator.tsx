@@ -77,10 +77,6 @@ export function PricingCalculator({
             <span>Monthly charges</span>
             <span>{formatInr(breakdown.monthlyCharges)}</span>
           </div>
-          <div className="flex justify-between text-slate-600">
-            <span>GST (18%)</span>
-            <span>{formatInr(breakdown.gst)}</span>
-          </div>
           <div className="flex justify-between border-t border-slate-100 pt-1.5 text-base font-semibold text-slate-900">
             <span>Total payable</span>
             <span>{formatInr(breakdown.total)} / month</span>

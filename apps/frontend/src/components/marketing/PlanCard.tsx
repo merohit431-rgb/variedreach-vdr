@@ -52,7 +52,7 @@ export function PlanCard({
           <span className="text-sm text-mk-t3">/ GB / month</span>
         </div>
         <p className="mt-1 text-xs text-mk-t4">
-          Min. {formatInr(plan.minimumMonthlyBilling)} / month + 18% GST
+          Min. {formatInr(plan.minimumMonthlyBilling)} / month
         </p>
       </div>
 

@@ -112,7 +112,7 @@ export function SignupForm() {
           </Link>
         </div>
         <p className="mt-1 text-slate-600">
-          {formatInr(pricing.total)} / month <span className="text-slate-400">(incl. 18% GST)</span>
+          {formatInr(pricing.total)} / month
         </p>
       </div>
 

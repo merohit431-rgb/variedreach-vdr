@@ -73,6 +73,13 @@ export function useSuperAdmin() {
   const getRevenue = useCallback(() => get('/super-admin/revenue'), []);
   const getHealth = useCallback(() => get('/super-admin/health'), []);
 
+  // Business profile (seller identity) — full record incl. PAN/GST.
+  const getBusinessProfile = useCallback(() => get('/business-profile/admin'), []);
+  const updateBusinessProfile = useCallback(
+    (body: Record<string, string>) => patch('/business-profile', body),
+    [],
+  );
+
   const getActivity = useCallback(
     (page = 1, limit = 50) => get(`/super-admin/activity?page=${page}&limit=${limit}`),
     [],
@@ -90,5 +97,7 @@ export function useSuperAdmin() {
     getRevenue,
     getHealth,
     getActivity,
+    getBusinessProfile,
+    updateBusinessProfile,
   };
 }

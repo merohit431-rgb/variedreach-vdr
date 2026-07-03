@@ -6,6 +6,26 @@ const prisma = new PrismaClient();
 const BCRYPT_ROUNDS = 12;
 
 async function main() {
+  // Business profile — single row (id "default"), seed only if absent so a
+  // Super-Admin edit is never overwritten by re-seeding.
+  await prisma.businessProfile.upsert({
+    where: { id: 'default' },
+    update: {},
+    create: {
+      id: 'default',
+      businessName: 'Varied Reach',
+      tagline: 'Secure Virtual Data Room',
+      legalName: 'Rohit Dubey',
+      pan: 'CDJPR3842R',
+      gstNumber: null,
+      address: 'S Block 376, Panchsheel Park, New Delhi 110017',
+      supportEmail: 'support@variedreach.com',
+      supportPhone: '+91 88510 96461',
+      website: 'vdr.variedreach.com',
+    },
+  });
+  console.log('Business profile ready (id: default)');
+
   const orgName = process.env.SEED_ORG_NAME || 'Demo Resolution Professionals LLP';
   const orgSlug = process.env.SEED_ORG_SLUG || 'demo-rp';
   const adminEmail = process.env.SEED_ADMIN_EMAIL || 'admin@insolvencyvdr.local';

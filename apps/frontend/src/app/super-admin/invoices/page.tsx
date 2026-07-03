@@ -51,25 +51,21 @@ export default function InvoicesPage() {
             <tr>
               <Th>Invoice #</Th>
               <Th>Organisation</Th>
-              <Th>Base Amount</Th>
-              <Th>GST (18%)</Th>
-              <Th>Total</Th>
+              <Th>Amount</Th>
               <Th>Status</Th>
               <Th>Issued</Th>
               <Th>Paid</Th>
             </tr>
           </Thead>
           <Tbody>
-            {loading && <Tr><Td colSpan={8} className="text-center py-8 text-slate-400">Loading…</Td></Tr>}
+            {loading && <Tr><Td colSpan={6} className="text-center py-8 text-slate-400">Loading…</Td></Tr>}
             {!loading && data?.items?.length === 0 && (
-              <Tr><Td colSpan={8} className="text-center py-8 text-slate-400">No invoices yet.</Td></Tr>
+              <Tr><Td colSpan={6} className="text-center py-8 text-slate-400">No invoices yet.</Td></Tr>
             )}
             {!loading && data?.items?.map((inv: any) => (
               <Tr key={inv.id}>
                 <Td className="font-mono text-xs font-medium text-slate-700">{inv.invoiceNumber}</Td>
                 <Td className="text-slate-800">{inv.organisation?.name ?? '—'}</Td>
-                <Td className="text-slate-600">{formatInr(inv.amountPaisa)}</Td>
-                <Td className="text-slate-500">{formatInr(inv.gstAmountPaisa)}</Td>
                 <Td className="font-semibold text-slate-900">{formatInr(inv.totalAmountPaisa)}</Td>
                 <Td>
                   <Badge tone={STATUS_TONE[inv.status] ?? 'neutral'}>{inv.status}</Badge>

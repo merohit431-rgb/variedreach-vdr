@@ -87,7 +87,7 @@ export default function PricingPage() {
               <h2 className="text-2xl font-bold text-mk-text">Calculate your monthly cost.</h2>
               <p className="mt-3 text-mk-t2">
                 Choose a plan, enter your storage requirement, and see the exact monthly billing — including
-                18% GST — before you sign up.
+                the exact monthly total — before you sign up.
               </p>
               <p className="mt-4 text-sm text-mk-t3">
                 Need more than 50 GB or custom terms?{' '}
@@ -120,7 +120,7 @@ export default function PricingPage() {
               },
               {
                 q: 'How does storage billing work?',
-                a: 'You pay per GB per month at your plan\'s rate, subject to a minimum monthly commitment. GST (18%) is added on top. Storage across all your data rooms is counted together.',
+                a: 'You pay per GB per month at your plan\'s rate, subject to a minimum monthly commitment. The amount shown is the total payable, with no additional taxes or hidden charges. Storage across all your data rooms is counted together.',
               },
               {
                 q: 'Can I change my plan or storage later?',

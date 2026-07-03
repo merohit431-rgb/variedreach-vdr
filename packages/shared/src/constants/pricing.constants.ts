@@ -66,7 +66,12 @@ export const PRICING_PLANS: Record<PlanId, PricingPlan> = {
   },
 };
 
+// GST is NOT charged: the business is not registered under GST. The rate is
+// kept here (not deleted) so GST can be re-enabled centrally the day
+// registration is obtained. `gst` stays on PricingBreakdown as 0 for
+// backwards compatibility with existing callers/records.
 export const GST_RATE = 0.18;
+export const GST_ENABLED = false;
 
 export interface PricingBreakdown {
   billableStorageGb: number;
@@ -83,7 +88,7 @@ export function calculatePricing(planId: PlanId, selectedStorageGb: number): Pri
   const plan = PRICING_PLANS[planId];
   const billableStorageGb = Math.max(selectedStorageGb, plan.minimumStorageGb);
   const monthlyCharges = billableStorageGb * plan.ratePerGbPerMonth;
-  const gst = Math.round(monthlyCharges * GST_RATE);
+  const gst = GST_ENABLED ? Math.round(monthlyCharges * GST_RATE) : 0;
   const total = monthlyCharges + gst;
 
   return { billableStorageGb, monthlyCharges, gst, total };

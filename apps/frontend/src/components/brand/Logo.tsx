@@ -76,7 +76,7 @@ export function Logo({
               SUBTITLE_SIZE[size],
             )}
           >
-            Virtual Data Room
+            Secure Virtual Data Room
           </p>
         )}
       </div>

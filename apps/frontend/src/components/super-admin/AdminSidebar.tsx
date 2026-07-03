@@ -13,6 +13,7 @@ import {
   Activity,
   ScrollText,
   ShieldAlert,
+  Store,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { href: '/super-admin/revenue',        label: 'Revenue',         icon: TrendingUp },
   { href: '/super-admin/health',         label: 'Platform Health', icon: Activity },
   { href: '/super-admin/activity',       label: 'Activity Log',    icon: ScrollText },
+  { href: '/super-admin/business-profile', label: 'Business Profile', icon: Store },
 ];
 
 interface AdminSidebarProps {

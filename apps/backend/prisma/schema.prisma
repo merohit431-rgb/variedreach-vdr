@@ -743,3 +743,27 @@ model Notification {
   @@index([userId, createdAt])
   @@map("notifications")
 }
+
+// ═══════════════════════════════════════════════════════════
+// BUSINESS PROFILE (seller identity — single row, Super Admin editable)
+// ═══════════════════════════════════════════════════════════
+
+// One row (id = "default"). Source of truth for seller identity shown across
+// the app, emails, and invoices. Seeded from packages/shared BUSINESS_PROFILE;
+// when GST registration is obtained, set gstNumber here once and it flows
+// everywhere. Kept as a table (not env) so Super Admin can edit at runtime.
+model BusinessProfile {
+  id           String   @id @default("default")
+  businessName String
+  tagline      String
+  legalName    String
+  pan          String
+  gstNumber    String?
+  address      String
+  supportEmail String
+  supportPhone String
+  website      String
+  updatedAt    DateTime @updatedAt
+
+  @@map("business_profile")
+}

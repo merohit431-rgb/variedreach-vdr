@@ -429,7 +429,7 @@ export function Sidebar({ isCollapsed, onToggleCollapse, isMobileOpen, onCloseMo
           isCollapsed ? 'justify-center px-2' : 'justify-between px-4',
         )}
       >
-        <Logo size="sm" variant="light" showSubtitle={false} iconOnly={isCollapsed} />
+        <Logo size="sm" variant="light" showSubtitle={!isCollapsed} iconOnly={isCollapsed} />
         <button
           onClick={onCloseMobile}
           aria-label="Close menu"

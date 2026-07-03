@@ -25,7 +25,7 @@ export default function ContactPage() {
         <div className="mx-auto max-w-4xl px-4 sm:px-6">
           <div className="grid gap-6 sm:grid-cols-3">
             <a
-              href="mailto:rohit@variedreach.com"
+              href="mailto:support@variedreach.com"
               className="group flex flex-col gap-4 rounded-xl border border-slate-200 bg-mk-bg p-6 transition-colors hover:border-blue-500/20"
             >
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/10">
@@ -34,7 +34,7 @@ export default function ContactPage() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-mk-t4">Email</p>
                 <p className="mt-1 text-sm font-medium text-mk-text group-hover:text-blue-600 transition-colors">
-                  rohit@variedreach.com
+                  support@variedreach.com
                 </p>
                 <p className="mt-1 text-xs text-mk-t3">For all enquiries</p>
               </div>
@@ -115,7 +115,7 @@ export default function ContactPage() {
 
           <div className="mt-10 flex flex-col gap-3 sm:flex-row">
             <a
-              href="mailto:rohit@variedreach.com"
+              href="mailto:support@variedreach.com"
               className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
             >
               Send an email

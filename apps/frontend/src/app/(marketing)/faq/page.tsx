@@ -57,7 +57,7 @@ const FAQS = [
     items: [
       {
         q: 'How is pricing calculated?',
-        a: "Pricing is based on the storage you need, billed monthly per GB at your plan's rate, subject to the plan's minimum commitment. GST (18%) is added on top of the calculated charge.",
+        a: "Pricing is based on the storage you need, billed monthly per GB at your plan's rate, subject to the plan's minimum commitment. The amount shown is the total payable — there are no additional taxes or hidden charges.",
       },
       {
         q: 'Is there a free trial?',

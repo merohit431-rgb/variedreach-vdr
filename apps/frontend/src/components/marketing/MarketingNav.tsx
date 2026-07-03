@@ -133,7 +133,7 @@ export function MarketingNav() {
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
         <Link href="/" aria-label="Varied Reach home" className="flex-shrink-0">
-          <Logo size="sm" />
+          <Logo size="sm" showSubtitle />
         </Link>
 
         <nav className="hidden items-center gap-7 lg:flex" aria-label="Main navigation">

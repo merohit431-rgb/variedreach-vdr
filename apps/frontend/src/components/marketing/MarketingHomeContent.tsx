@@ -900,7 +900,7 @@ function PricingTeaser() {
             Pay for storage. Everything else is included.
           </h2>
           <p className="mt-4 text-mk-t2">
-            No per-user seat fees. No feature gating by tier. 18% GST applies.
+            No per-user seat fees. No feature gating by tier. No hidden charges.
           </p>
         </Reveal>
 

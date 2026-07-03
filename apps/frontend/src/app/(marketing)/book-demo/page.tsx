@@ -86,7 +86,7 @@ function DemoForm() {
         <p className="mt-2 max-w-sm text-sm leading-relaxed text-mk-t3">
           {done.received
             ? `We'll confirm your slot at ${workEmail} within one business day.`
-            : 'Your details were recorded, but our notification system had a hiccup. To be safe, email rohit@variedreach.com and we will confirm your slot directly.'}
+            : 'Your details were recorded, but our notification system had a hiccup. To be safe, email support@variedreach.com and we will confirm your slot directly.'}
         </p>
       </div>
     );
@@ -419,8 +419,8 @@ export default function BookDemoPage() {
               </p>
               <p className="mt-2 text-sm leading-relaxed text-mk-t3">
                 Write to{' '}
-                <a href="mailto:rohit@variedreach.com" className="font-medium text-blue-700 hover:text-blue-800">
-                  rohit@variedreach.com
+                <a href="mailto:support@variedreach.com" className="font-medium text-blue-700 hover:text-blue-800">
+                  support@variedreach.com
                 </a>{' '}
                 or call{' '}
                 <a href="tel:+918851096461" className="font-medium text-blue-700 hover:text-blue-800">

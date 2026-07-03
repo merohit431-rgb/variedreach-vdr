@@ -44,12 +44,10 @@ export function CheckoutForm() {
   const plan = PRICING_PLANS[planId];
   const breakdown = calculatePricing(planId, storageGb);
   const isYearly = cycle === 'YEARLY';
+  // No GST — not registered. Total = base (yearly gets the 10% discount).
   const yearlyBase = Math.round(breakdown.monthlyCharges * 12 * 0.9);
-  const yearlyGst = Math.round(yearlyBase * 0.18);
-  const yearlyTotal = yearlyBase + yearlyGst;
   const displayBase = isYearly ? yearlyBase : breakdown.monthlyCharges;
-  const displayGst = isYearly ? yearlyGst : breakdown.gst;
-  const displayTotal = isYearly ? yearlyTotal : breakdown.total;
+  const displayTotal = displayBase;
 
   async function handlePay() {
     setIsSubmitting(true);
@@ -113,10 +111,6 @@ export function CheckoutForm() {
           <div className="flex justify-between">
             <span>{isYearly ? '12 months × monthly rate × 0.9' : 'Monthly charges'}</span>
             <span>{formatInr(displayBase)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>GST (18%)</span>
-            <span>{formatInr(displayGst)}</span>
           </div>
         </div>
         <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-semibold text-slate-900">

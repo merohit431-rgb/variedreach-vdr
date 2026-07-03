@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { Mail, Phone, MapPin } from 'lucide-react';
 import { Logo } from '@/components/brand/Logo';
+import { FooterContact } from './FooterContact';
 
 const PRODUCT_LINKS = [
   { href: '/features', label: 'Features' },
@@ -28,31 +28,12 @@ export function MarketingFooter() {
       <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-5">
           <div className="lg:col-span-2">
-            <Logo size="sm" variant="light" />
+            <Logo size="sm" variant="light" showSubtitle />
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-slate-400">
               Secure virtual data rooms built for CIRP, liquidation, M&amp;A due diligence, and every
               high-stakes Indian enterprise transaction.
             </p>
-            <div className="mt-6 flex flex-col gap-2.5 text-sm text-slate-400">
-              <a
-                href="mailto:rohit@variedreach.com"
-                className="flex items-center gap-2 transition-colors hover:text-slate-200"
-              >
-                <Mail className="h-4 w-4 flex-shrink-0 text-slate-500" aria-hidden="true" />
-                rohit@variedreach.com
-              </a>
-              <a
-                href="tel:+918851096461"
-                className="flex items-center gap-2 transition-colors hover:text-slate-200"
-              >
-                <Phone className="h-4 w-4 flex-shrink-0 text-slate-500" aria-hidden="true" />
-                +91 88510 96461
-              </a>
-              <span className="flex items-start gap-2">
-                <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-500" aria-hidden="true" />
-                S Block 376, Panchsheel Park, New Delhi 110017
-              </span>
-            </div>
+            <FooterContact />
           </div>
 
           <div>
