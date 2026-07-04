@@ -37,6 +37,7 @@ import { CloudImportModule } from './modules/cloud-import/cloud-import.module';
 import { ContactModule } from './modules/contact/contact.module';
 import { BusinessProfileModule } from './modules/business-profile/business-profile.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { CouponModule } from './modules/coupon/coupon.module';
 
 @Module({
   imports: [
@@ -84,6 +85,7 @@ import { BillingModule } from './modules/billing/billing.module';
     ContactModule,
     BusinessProfileModule,
     BillingModule,
+    CouponModule,
   ],
   controllers: [AppController],
   providers: [

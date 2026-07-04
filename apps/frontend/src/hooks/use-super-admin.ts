@@ -22,6 +22,24 @@ async function patch<T>(path: string, body: unknown): Promise<Result<T>> {
   }
 }
 
+async function post<T>(path: string, body?: unknown): Promise<Result<T>> {
+  try {
+    const res = await apiClient.post<{ data: T }>(path, body ?? {});
+    return { success: true, data: res.data.data };
+  } catch (err) {
+    return { success: false, message: extractErrorMessage(err) };
+  }
+}
+
+async function del(path: string): Promise<Result<null>> {
+  try {
+    await apiClient.delete(path);
+    return { success: true, data: null };
+  } catch (err) {
+    return { success: false, message: extractErrorMessage(err) };
+  }
+}
+
 export function useSuperAdmin() {
   const getDashboard = useCallback(() => get('/super-admin/dashboard'), []);
 
@@ -80,6 +98,18 @@ export function useSuperAdmin() {
     [],
   );
 
+  // Coupons
+  const getCoupons = useCallback(
+    (search?: string) => get(`/coupons${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+    [],
+  );
+  const getCoupon = useCallback((id: string) => get(`/coupons/${id}`), []);
+  const createCoupon = useCallback((body: unknown) => post('/coupons', body), []);
+  const updateCoupon = useCallback((id: string, body: unknown) => patch(`/coupons/${id}`, body), []);
+  const deleteCoupon = useCallback((id: string) => del(`/coupons/${id}`), []);
+  const duplicateCoupon = useCallback((id: string) => post(`/coupons/${id}/duplicate`), []);
+  const getCouponRedemptions = useCallback((id: string) => get(`/coupons/${id}/redemptions`), []);
+
   const getActivity = useCallback(
     (page = 1, limit = 50) => get(`/super-admin/activity?page=${page}&limit=${limit}`),
     [],
@@ -99,5 +129,12 @@ export function useSuperAdmin() {
     getActivity,
     getBusinessProfile,
     updateBusinessProfile,
+    getCoupons,
+    getCoupon,
+    createCoupon,
+    updateCoupon,
+    deleteCoupon,
+    duplicateCoupon,
+    getCouponRedemptions,
   };
 }

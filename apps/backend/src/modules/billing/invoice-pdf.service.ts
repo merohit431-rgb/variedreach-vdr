@@ -171,9 +171,11 @@ export class InvoicePdfService {
     // ── Totals box ──
     y += 24;
     const boxX = right - 220;
+    const discountPaisa = invoice.amountPaisa + invoice.gstAmountPaisa - invoice.totalAmountPaisa;
     const rowsT: [string, string, boolean][] = [
       ['Subtotal', inr(invoice.amountPaisa), false],
     ];
+    if (discountPaisa > 0) rowsT.push(['Discount', `- ${inr(discountPaisa)}`, false]);
     if (invoice.gstAmountPaisa > 0) rowsT.push(['GST', inr(invoice.gstAmountPaisa), false]);
     rowsT.push(['Total paid', inr(invoice.totalAmountPaisa), true]);
     for (const [label, value, strong] of rowsT) {

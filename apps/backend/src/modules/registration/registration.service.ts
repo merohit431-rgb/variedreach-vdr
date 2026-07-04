@@ -6,6 +6,7 @@ import { MailService } from '../mail/mail.service';
 import { AuthService } from '../auth/auth.service';
 import { IPaymentProvider, PAYMENT_PROVIDER } from '../payment/payment-provider.interface';
 import { ProvisioningService } from './provisioning.service';
+import { CouponService } from '../coupon/coupon.service';
 import { generateOpaqueToken, sha256Hex } from '../../common/utils/crypto.util';
 import { CreateRegistrationDto } from './dto/create-registration.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -47,6 +48,7 @@ export class RegistrationService {
     private readonly authService: AuthService,
     @Inject(PAYMENT_PROVIDER) private readonly paymentProvider: IPaymentProvider,
     private readonly provisioningService: ProvisioningService,
+    private readonly couponService: CouponService,
   ) {}
 
   async register(dto: CreateRegistrationDto): Promise<void> {
@@ -109,25 +111,46 @@ export class RegistrationService {
     await this.issueVerificationToken(registration.id, registration.fullName, registration.email);
   }
 
-  async createOrder(dto: CreateOrderDto): Promise<{ orderId: string; amountPaisa: number; currency: string; keyId: string; planName: string; billingCycle: string }> {
+  async createOrder(dto: CreateOrderDto): Promise<{ orderId: string; amountPaisa: number; discountPaisa: number; couponCode: string | null; currency: string; keyId: string; planName: string; billingCycle: string }> {
     const reg = await this.prisma.registration.findUnique({ where: { email: dto.email.toLowerCase().trim() } });
     if (!reg || !reg.verifiedAt) throw new BadRequestException('Email not verified or registration not found');
     if (reg.provisionedAt) throw new BadRequestException('Account already provisioned');
 
     const billingCycle = dto.billingCycle ?? reg.billingCycle ?? 'MONTHLY';
     const isYearly = billingCycle === 'YEARLY';
-    const amountPaisa = computeTotal(reg.selectedPlan, reg.selectedStorageGb, isYearly);
+    const grossPaisa = computeTotal(reg.selectedPlan, reg.selectedStorageGb, isYearly);
+
+    // Coupon (optional) — resolved server-side; the gateway is charged the
+    // discounted amount and the discount is stored for the invoice.
+    let discountPaisa = 0;
+    let couponCode: string | null = null;
+    if (dto.couponCode) {
+      const v = await this.couponService.resolve(dto.couponCode, reg.selectedPlan, grossPaisa, reg.email);
+      if (!v.valid) throw new BadRequestException(v.reason ?? 'This coupon cannot be applied');
+      discountPaisa = v.discountPaisa;
+      couponCode = v.code ?? null;
+    }
+    const amountPaisa = Math.max(0, grossPaisa - discountPaisa);
 
     const receipt = `reg_${reg.id.replace(/-/g, '').slice(0, 20)}`;
     const order = await this.paymentProvider.createOrder({ amountPaisa, receipt });
 
     await this.prisma.registration.update({
       where: { id: reg.id },
-      data: { gatewayOrderId: order.orderId, billingCycle },
+      data: { gatewayOrderId: order.orderId, billingCycle, couponCode, discountPaisa },
     });
 
     const plan = PRICING_PLANS[reg.selectedPlan];
-    return { orderId: order.orderId, amountPaisa: order.amountPaisa, currency: 'INR', keyId: order.keyId, planName: plan.name, billingCycle };
+    return {
+      orderId: order.orderId,
+      amountPaisa: order.amountPaisa,
+      discountPaisa,
+      couponCode,
+      currency: 'INR',
+      keyId: order.keyId,
+      planName: plan.name,
+      billingCycle,
+    };
   }
 
   async getDetails(email: string): Promise<{ selectedPlan: string; selectedStorageGb: number; billingCycle: string } | null> {

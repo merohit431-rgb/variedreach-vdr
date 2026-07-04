@@ -54,11 +54,11 @@ export function useRegistration() {
     }
   }, []);
 
-  const createOrder = useCallback(async (email: string, billingCycle: string) => {
+  const createOrder = useCallback(async (email: string, billingCycle: string, couponCode?: string) => {
     try {
-      const res = await apiClient.post<{ orderId: string; amountPaisa: number; currency: string; keyId: string; planName: string; billingCycle: string }>(
+      const res = await apiClient.post<{ orderId: string; amountPaisa: number; discountPaisa: number; couponCode: string | null; currency: string; keyId: string; planName: string; billingCycle: string }>(
         '/registrations/create-order',
-        { email, billingCycle },
+        { email, billingCycle, ...(couponCode ? { couponCode } : {}) },
       );
       return { success: true as const, data: res.data };
     } catch (error) {

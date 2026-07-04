@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
+import { CouponService } from '../coupon/coupon.service';
 
 // Mirror of packages/shared/src/constants/pricing.constants.ts
 // (cannot be imported directly — shared package ships raw TS with no build step)
@@ -35,6 +36,7 @@ export class ProvisioningService {
     private readonly prisma: PrismaService,
     private readonly mailService: MailService,
     private readonly configService: ConfigService,
+    private readonly couponService: CouponService,
   ) {}
 
   async provision(registrationId: string): Promise<{ organisationId: string; userId: string; email: string; firstName: string; lastName: string; role: string }> {
@@ -48,6 +50,9 @@ export class ProvisioningService {
 
     const isYearly = reg.billingCycle === 'YEARLY';
     const amounts = computeAmounts(reg.selectedPlan, reg.selectedStorageGb, isYearly);
+    // Coupon discount was resolved + stored at create-order; clamp defensively.
+    const discountPaisa = Math.min(Math.max(0, reg.discountPaisa ?? 0), amounts.total);
+    const netTotal = amounts.total - discountPaisa;
     const now = new Date();
     const periodEnd = new Date(now);
     isYearly ? periodEnd.setFullYear(periodEnd.getFullYear() + 1) : periodEnd.setMonth(periodEnd.getMonth() + 1);
@@ -105,7 +110,7 @@ export class ProvisioningService {
         data: {
           subscriptionId: subscription.id,
           organisationId: org.id,
-          amountPaisa: amounts.total,
+          amountPaisa: netTotal, // what was actually charged (after discount)
           status: 'SUCCESSFUL',
           ...(reg.gatewayOrderId && { gatewayOrderId: reg.gatewayOrderId }),
           paidAt: now,
@@ -122,6 +127,23 @@ export class ProvisioningService {
       const seq = lastInv ? parseInt(lastInv.invoiceNumber.split('-')[2], 10) + 1 : 1;
       const invoiceNumber = `INV-${year}-${String(seq).padStart(6, '0')}`;
 
+      const lineItems: Array<{ description: string; quantity: number; unitPricePaisa: number; amountPaisa: number }> = [
+        {
+          description: `${plan.name} Plan – ${isYearly ? 'Annual' : 'Monthly'} (${amounts.billableGb} GB storage)`,
+          quantity: isYearly ? 12 : 1,
+          unitPricePaisa: amounts.monthlyBase,
+          amountPaisa: amounts.base,
+        },
+      ];
+      if (discountPaisa > 0) {
+        lineItems.push({
+          description: `Discount${reg.couponCode ? ` (coupon ${reg.couponCode})` : ''}`,
+          quantity: 1,
+          unitPricePaisa: -discountPaisa,
+          amountPaisa: -discountPaisa,
+        });
+      }
+
       await tx.invoice.create({
         data: {
           subscriptionId: subscription.id,
@@ -130,21 +152,19 @@ export class ProvisioningService {
           invoiceNumber,
           amountPaisa: amounts.base,
           gstAmountPaisa: amounts.gst,
-          totalAmountPaisa: amounts.total,
+          totalAmountPaisa: netTotal,
           status: 'PAID',
           issuedAt: now,
           paidAt: now,
-          lineItems: [
-            {
-              description: `${plan.name} Plan – ${isYearly ? 'Annual' : 'Monthly'} (${amounts.billableGb} GB storage)`,
-              quantity: isYearly ? 12 : 1,
-              unitPricePaisa: amounts.monthlyBase,
-              amountPaisa: amounts.base,
-            },
-          ],
+          lineItems,
           ...(reg.gstNumber && { customerGstNumber: reg.gstNumber }),
         },
       });
+
+      // Record the coupon redemption in the same transaction as the invoice.
+      if (reg.couponCode && discountPaisa > 0) {
+        await this.couponService.redeem(tx, reg.couponCode, discountPaisa, reg.email, org.id);
+      }
 
       await tx.registration.update({
         where: { id: reg.id },
@@ -156,7 +176,7 @@ export class ProvisioningService {
 
     // Fire-and-forget payment-success + welcome email with the receipt summary.
     const frontendUrl = this.configService.get<string>('app.frontendUrl');
-    const amountLabel = `INR ${(amounts.total / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+    const amountLabel = `INR ${(netTotal / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
     void this.mailService.sendSubscriptionActivatedEmail(reg.email, reg.fullName, plan.name, {
       userId: user.id,
       invoiceNumber,

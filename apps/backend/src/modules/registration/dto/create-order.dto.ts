@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEmail, IsIn, IsOptional } from 'class-validator';
+import { IsEmail, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreateOrderDto {
   @ApiProperty()
@@ -12,4 +12,10 @@ export class CreateOrderDto {
   @IsOptional()
   @IsIn(['MONTHLY', 'YEARLY'])
   billingCycle?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  couponCode?: string;
 }

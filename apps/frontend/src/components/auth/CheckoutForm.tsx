@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { CreditCard, CheckCircle2 } from 'lucide-react';
+import { CreditCard, CheckCircle2, Tag, X } from 'lucide-react';
 import { useRegistration } from '@/hooks/use-registration';
+import { useCoupon, type CouponResult } from '@/hooks/use-coupon';
 import { useAuthStore } from '@/store/auth-store';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
@@ -20,6 +21,7 @@ export function CheckoutForm() {
   const email = searchParams.get('email') ?? '';
   const router = useRouter();
   const { getDetails, createOrder, completeRegistration } = useRegistration();
+  const { validate } = useCoupon();
   const setAuth = useAuthStore((s) => s.setAuth);
 
   const [loading, setLoading] = useState(true);
@@ -28,6 +30,10 @@ export function CheckoutForm() {
   const [storageGb, setStorageGb] = useState(5);
   const [cycle, setCycle] = useState<BillingCycle>('MONTHLY');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [couponInput, setCouponInput] = useState('');
+  const [applied, setApplied] = useState<CouponResult | null>(null);
+  const [couponError, setCouponError] = useState('');
+  const [applying, setApplying] = useState(false);
 
   useEffect(() => {
     if (!email) { setError('No email provided.'); setLoading(false); return; }
@@ -47,13 +53,31 @@ export function CheckoutForm() {
   // No GST — not registered. Total = base (yearly gets the 10% discount).
   const yearlyBase = Math.round(breakdown.monthlyCharges * 12 * 0.9);
   const displayBase = isYearly ? yearlyBase : breakdown.monthlyCharges;
-  const displayTotal = displayBase;
+  // Coupon amounts come from the server in paise; checkout works in rupees.
+  const discountRupees = applied ? Math.round(applied.discountPaisa / 100) : 0;
+  const finalTotal = applied ? Math.round(applied.finalPaisa / 100) : displayBase;
+
+  function resetCoupon() {
+    setApplied(null);
+    setCouponError('');
+  }
+
+  async function handleApplyCoupon() {
+    if (!couponInput.trim()) return;
+    setApplying(true);
+    setCouponError('');
+    const res = await validate({ code: couponInput.trim(), planId, storageGb, billingCycle: cycle, email });
+    setApplying(false);
+    if (!res.success) { setCouponError(res.message ?? 'Could not check that coupon.'); return; }
+    if (!res.data.valid) { setApplied(null); setCouponError(res.data.reason ?? 'This coupon is not valid.'); return; }
+    setApplied(res.data);
+  }
 
   async function handlePay() {
     setIsSubmitting(true);
     setError('');
 
-    const orderRes = await createOrder(email, cycle);
+    const orderRes = await createOrder(email, cycle, applied?.code);
     if (!orderRes.success) { setError(orderRes.message ?? 'Failed to create order.'); setIsSubmitting(false); return; }
 
     const { orderId } = orderRes.data;
@@ -90,7 +114,7 @@ export function CheckoutForm() {
         {(['MONTHLY', 'YEARLY'] as BillingCycle[]).map((c) => (
           <button
             key={c}
-            onClick={() => setCycle(c)}
+            onClick={() => { setCycle(c); resetCoupon(); }}
             className={`flex-1 rounded-md py-1.5 text-sm font-medium transition-colors ${
               cycle === c ? 'bg-brand-700 text-white' : 'text-slate-600 hover:bg-slate-50'
             }`}
@@ -112,11 +136,52 @@ export function CheckoutForm() {
             <span>{isYearly ? '12 months × monthly rate × 0.9' : 'Monthly charges'}</span>
             <span>{formatInr(displayBase)}</span>
           </div>
+          {applied && (
+            <div className="flex justify-between text-emerald-700">
+              <span>Coupon {applied.code}</span>
+              <span>− {formatInr(discountRupees)}</span>
+            </div>
+          )}
         </div>
         <div className="flex justify-between border-t border-slate-200 pt-2 text-base font-semibold text-slate-900">
           <span>Total due now</span>
-          <span>{formatInr(displayTotal)}{isYearly ? ' / year' : ' / month'}</span>
+          <span>{formatInr(finalTotal)}{isYearly ? ' / year' : ' / month'}</span>
         </div>
+      </div>
+
+      {/* Coupon */}
+      <div>
+        {applied ? (
+          <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+            <span className="flex items-center gap-2 text-sm font-medium text-emerald-800">
+              <Tag className="h-4 w-4" aria-hidden="true" />
+              {applied.code} applied
+            </span>
+            <button
+              onClick={() => { resetCoupon(); setCouponInput(''); }}
+              className="flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-900"
+            >
+              <X className="h-3.5 w-3.5" aria-hidden="true" /> Remove
+            </button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Tag className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+              <input
+                value={couponInput}
+                onChange={(e) => { setCouponInput(e.target.value.toUpperCase()); setCouponError(''); }}
+                onKeyDown={(e) => e.key === 'Enter' && handleApplyCoupon()}
+                placeholder="Coupon code"
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm uppercase text-slate-900 placeholder:normal-case placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              />
+            </div>
+            <Button variant="secondary" onClick={handleApplyCoupon} isLoading={applying} disabled={!couponInput.trim()}>
+              Apply
+            </Button>
+          </div>
+        )}
+        {couponError && <p className="mt-1.5 text-xs text-rose-600">{couponError}</p>}
       </div>
 
       {error && <Alert tone="danger">{error}</Alert>}
@@ -126,7 +191,7 @@ export function CheckoutForm() {
           {isSubmitting ? 'Processing…' : (
             <span className="flex items-center justify-center gap-2">
               <CreditCard className="h-4 w-4" />
-              {`Pay ${formatInr(displayTotal)} and Activate`}
+              {`Pay ${formatInr(finalTotal)} and Activate`}
             </span>
           )}
         </Button>

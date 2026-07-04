@@ -14,6 +14,7 @@ import {
   ScrollText,
   ShieldAlert,
   Store,
+  Ticket,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { href: '/super-admin/payments',       label: 'Payments',        icon: CreditCard },
   { href: '/super-admin/subscriptions',  label: 'Subscriptions',   icon: RefreshCcw },
   { href: '/super-admin/invoices',       label: 'Invoices',        icon: FileText },
+  { href: '/super-admin/coupons',        label: 'Coupons',         icon: Ticket },
   { href: '/super-admin/revenue',        label: 'Revenue',         icon: TrendingUp },
   { href: '/super-admin/health',         label: 'Platform Health', icon: Activity },
   { href: '/super-admin/activity',       label: 'Activity Log',    icon: ScrollText },
