@@ -7,6 +7,7 @@ import { useSidebarCollapsed } from '@/hooks/use-sidebar-collapsed';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopNav } from '@/components/layout/TopNav';
 import { EnvironmentBanner } from '@/components/layout/EnvironmentBanner';
+import { StickyUploadManager } from '@/components/files/StickyUploadManager';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -43,6 +44,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <main className="flex-1 animate-fade-in p-4 lg:p-6">{children}</main>
         </div>
       </div>
+      <StickyUploadManager />
     </div>
   );
 }

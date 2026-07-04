@@ -18,7 +18,9 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
-import { memoryStorage } from 'multer';
+import { diskStorage } from 'multer';
+import { mkdir } from 'fs/promises';
+import { join } from 'path';
 import type { Request, Response } from 'express';
 import { FilesService } from './files.service';
 import { UpdateFileDto } from './dto/update-file.dto';
@@ -30,6 +32,23 @@ import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { sendFileResponse } from '../../common/utils/http-file-response.util';
 
 const MAX_FILES_PER_UPLOAD = 50;
+
+// Same volume as STORAGE_LOCAL_PATH's permanent storage (not the OS's /tmp)
+// so LocalStorageProvider's rename() is an atomic move on one filesystem,
+// not a slow cross-device copy of a multi-GB file.
+const UPLOAD_TEMP_DIR = join(process.env.STORAGE_LOCAL_PATH || './uploads', 'tmp');
+const MAX_UPLOAD_SIZE_BYTES = parseInt(process.env.STORAGE_MAX_FILE_SIZE_BYTES || `${2 * 1024 * 1024 * 1024}`, 10);
+
+// Uploads stream straight to disk instead of buffering in memory -- a 2GB
+// file fully buffered would blow well past the backend container's memory
+// limit. multer doesn't create its destination directory on its own.
+const uploadDiskStorage = diskStorage({
+  destination: (_req, _file, callback) => {
+    mkdir(UPLOAD_TEMP_DIR, { recursive: true })
+      .then(() => callback(null, UPLOAD_TEMP_DIR))
+      .catch((error) => callback(error, UPLOAD_TEMP_DIR));
+  },
+});
 
 @ApiTags('Files')
 @Controller({ path: 'data-rooms/:dataRoomId/files', version: '1' })
@@ -46,7 +65,12 @@ export class FilesController {
   }
 
   @Post()
-  @UseInterceptors(FilesInterceptor('files', MAX_FILES_PER_UPLOAD, { storage: memoryStorage() }))
+  @UseInterceptors(
+    FilesInterceptor('files', MAX_FILES_PER_UPLOAD, {
+      storage: uploadDiskStorage,
+      limits: { fileSize: MAX_UPLOAD_SIZE_BYTES },
+    }),
+  )
   upload(
     @Param('dataRoomId') dataRoomId: string,
     @UploadedFiles() files: Express.Multer.File[],
@@ -78,7 +102,9 @@ export class FilesController {
   }
 
   @Post(':fileId/versions')
-  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  @UseInterceptors(
+    FileInterceptor('file', { storage: uploadDiskStorage, limits: { fileSize: MAX_UPLOAD_SIZE_BYTES } }),
+  )
   addVersion(
     @Param('dataRoomId') dataRoomId: string,
     @Param('fileId') fileId: string,

@@ -72,3 +72,20 @@ export function useDeleteFolder(dataRoomId: string) {
     },
   });
 }
+
+export function useCopyFolder(dataRoomId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ folderId, targetParentId }: { folderId: string; targetParentId?: string | null }) => {
+      const response = await apiClient.post<{ data: FolderNode }>(
+        `/data-rooms/${dataRoomId}/folders/${folderId}/copy`,
+        { targetParentId: targetParentId ?? undefined },
+      );
+      return response.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['data-rooms', dataRoomId, 'folders'] });
+      queryClient.invalidateQueries({ queryKey: ['data-rooms', dataRoomId, 'files'] });
+    },
+  });
+}
