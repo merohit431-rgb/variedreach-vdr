@@ -10,6 +10,7 @@ import { useWorkspaceStore } from '@/store/workspace-store';
 import { Avatar } from '@/components/ui/Avatar';
 import { EnvironmentBadge } from '@/components/layout/EnvironmentBanner';
 import { NotificationBell } from '@/components/layout/NotificationBell';
+import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { ROLE_LABELS } from '@variedreach-vdr/shared';
 import { cn } from '@/lib/cn';
 
@@ -198,6 +199,8 @@ export function TopNav({ onOpenMobileMenu }: { onOpenMobileMenu: () => void }) {
       {/* Right: env badge + bell + avatar */}
       <div className="ml-auto flex flex-shrink-0 items-center gap-2">
         <EnvironmentBadge />
+
+        <ThemeToggle />
 
         {user && <NotificationBell />}
 

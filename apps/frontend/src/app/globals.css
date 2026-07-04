@@ -5,6 +5,26 @@
 :root {
   --background: #f8fafc;
   --foreground: #0f172a;
+
+  /* Dashboard (VDR) theme tokens. The app.* Tailwind colors resolve to these
+     CSS variables (RGB channels, so Tailwind's /<alpha> opacity modifiers keep
+     working). They DEFAULT to the dark palette here on :root so every existing
+     app-* utility renders byte-identically to the previous hardcoded values —
+     everywhere, in or out of the dashboard — i.e. zero regression. The
+     dashboard layout root carries .app-dark or .app-light; only .app-light
+     overrides these to the light palette, flipping the whole dashboard with no
+     component changes. Marketing and auth never carry these classes. */
+  --app-bg: 11 16 32;
+  --app-s1: 15 22 41;
+  --app-s2: 20 29 51;
+  --app-s3: 26 36 64;
+  --app-border: 31 41 55;
+  --app-border2: 43 58 85;
+  --app-text: 241 245 249;
+  --app-t2: 203 213 225;
+  --app-t3: 148 163 184;
+  --app-t4: 100 116 139;
+  --app-primary: 59 130 246;
 }
 
 body {
@@ -12,7 +32,7 @@ body {
   background: var(--background);
 }
 
-/* Shimmer loading skeletons (Skeleton primitive) */
+/* Shimmer loading skeletons (Skeleton primitive) — light default */
 .skeleton {
   background-image: linear-gradient(
     90deg,
@@ -29,24 +49,53 @@ body {
   outline-offset: 2px;
 }
 
-/* Dashboard dark theme — scoped by .app-dark on the dashboard layout root so
-   marketing and auth surfaces stay light. color-scheme makes native controls
-   (date inputs, selects, checkboxes) render dark. */
 .app-dark {
   color-scheme: dark;
 }
+/* Light theme override — swaps the dashboard palette to enterprise light. */
+.app-light {
+  color-scheme: light;
+  --app-bg: 255 255 255;
+  --app-s1: 248 250 252;
+  --app-s2: 241 245 249;
+  --app-s3: 226 232 240;
+  --app-border: 226 232 240;
+  --app-border2: 203 213 225;
+  --app-text: 15 23 42;
+  --app-t2: 51 65 85;
+  --app-t3: 100 116 139;
+  --app-t4: 148 163 184;
+  --app-primary: 37 99 235;
+}
+
+/* Smooth theme switch — transition only cheap surface properties. Fires on a
+   toggle (property change), not on first paint. */
+.app-dark *,
+.app-light * {
+  transition: background-color 0.2s ease, border-color 0.2s ease,
+    color 0.15s ease, fill 0.15s ease;
+}
+
 .app-dark :focus-visible {
   outline-color: #3b82f6;
 }
+.app-light :focus-visible {
+  outline-color: #0a4da3;
+}
+
 .app-dark .skeleton {
   background-image: linear-gradient(90deg, #141d33 0px, #1a2440 40px, #141d33 80px);
   background-size: 800px 100%;
 }
-.app-dark ::-webkit-scrollbar {
+
+/* Custom scrollbars — dark keeps navy, light uses slate */
+.app-dark ::-webkit-scrollbar,
+.app-light ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
-.app-dark ::-webkit-scrollbar-track {
+.app-dark ::-webkit-scrollbar-track,
+.app-light ::-webkit-scrollbar-track {
   background: transparent;
 }
 .app-dark ::-webkit-scrollbar-thumb {
@@ -55,4 +104,11 @@ body {
 }
 .app-dark ::-webkit-scrollbar-thumb:hover {
   background: #2b3a55;
+}
+.app-light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 8px;
+}
+.app-light ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }

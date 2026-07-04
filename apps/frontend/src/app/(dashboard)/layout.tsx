@@ -8,12 +8,22 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { TopNav } from '@/components/layout/TopNav';
 import { EnvironmentBanner } from '@/components/layout/EnvironmentBanner';
 import { StickyUploadManager } from '@/components/files/StickyUploadManager';
+import { ThemeProvider, useTheme } from '@/components/theme/theme-provider';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <ThemeProvider>
+      <DashboardShell>{children}</DashboardShell>
+    </ThemeProvider>
+  );
+}
+
+function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, isInitializing } = useAuth();
   const { isCollapsed, toggle } = useSidebarCollapsed();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const { theme } = useTheme();
 
   useEffect(() => {
     if (!isInitializing) {
@@ -27,14 +37,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (isInitializing || !user || user.role === 'SUPER_ADMIN') {
     return (
-      <div className="app-dark flex min-h-screen items-center justify-center bg-app-bg text-sm text-app-t3">
+      <div
+        className={`app-${theme} flex min-h-screen items-center justify-center bg-app-bg text-sm text-app-t3`}
+      >
         Loading…
       </div>
     );
   }
 
   return (
-    <div className="app-dark flex min-h-screen flex-col bg-app-bg text-app-text">
+    <div className={`app-${theme} flex min-h-screen flex-col bg-app-bg text-app-text`}>
       <EnvironmentBanner />
       <div className="flex flex-1">
         <Sidebar

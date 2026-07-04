@@ -47,20 +47,23 @@ const config: Config = {
           gold: '#d97706',
           green: '#10b981',
         },
-        // Dashboard dark-theme tokens (deep navy reference palette) — app
-        // surfaces only, never in marketing
+        // Dashboard theme tokens — app surfaces only, never in marketing.
+        // These resolve to CSS variables (RGB channels) defined per-theme in
+        // globals.css under .app-dark / .app-light, so the whole dashboard
+        // flips light/dark by swapping that root class. The `/ <alpha-value>`
+        // keeps Tailwind opacity modifiers (e.g. bg-app-s2/60) working.
         app: {
-          bg: '#0b1020',
-          s1: '#0f1629',
-          s2: '#141d33',
-          s3: '#1a2440',
-          border: '#1f2937',
-          border2: '#2b3a55',
-          text: '#f1f5f9',
-          t2: '#cbd5e1',
-          t3: '#94a3b8',
-          t4: '#64748b',
-          primary: '#3b82f6',
+          bg: 'rgb(var(--app-bg) / <alpha-value>)',
+          s1: 'rgb(var(--app-s1) / <alpha-value>)',
+          s2: 'rgb(var(--app-s2) / <alpha-value>)',
+          s3: 'rgb(var(--app-s3) / <alpha-value>)',
+          border: 'rgb(var(--app-border) / <alpha-value>)',
+          border2: 'rgb(var(--app-border2) / <alpha-value>)',
+          text: 'rgb(var(--app-text) / <alpha-value>)',
+          t2: 'rgb(var(--app-t2) / <alpha-value>)',
+          t3: 'rgb(var(--app-t3) / <alpha-value>)',
+          t4: 'rgb(var(--app-t4) / <alpha-value>)',
+          primary: 'rgb(var(--app-primary) / <alpha-value>)',
         },
       },
       fontFamily: {
