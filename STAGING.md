@@ -38,7 +38,7 @@ application-level resource is fully separate.
 | Git checkout | `/opt/variedreach-vdr` (branch `main`) | `/opt/variedreach-vdr-staging` (branch `development`) |
 | Compose project | `variedreach-vdr` | `variedreach-vdr-staging` |
 | Compose files | `docker-compose.yml` + `docker-compose.prod.yml` | `docker-compose.yml` + `docker-compose.staging.yml` |
-| Containers | `vdr_postgres`, `vdr_redis`, `vdr_backend`, `vdr_frontend`, `vdr_nginx` | `vdr_staging_postgres`, `vdr_staging_redis`, `vdr_staging_backend`, `vdr_staging_frontend` (no separate Nginx — see below) |
+| Containers | `vdr_postgres`, `vdr_redis`, `vdr_backend`, `vdr_frontend`, `vdr_nginx`, `vdr_gotenberg` | `vdr_staging_postgres`, `vdr_staging_redis`, `vdr_staging_backend`, `vdr_staging_frontend`, `vdr_staging_gotenberg` (no separate Nginx — see below) |
 | Database | `insolvency_vdr` (user `vdr_user`) | `insolvency_vdr_staging` (user `vdr_staging_user`) — separate Postgres container, separate volume, separate credentials |
 | Redis | separate container, separate volume | separate container, separate volume |
 | Uploads | volume `variedreach-vdr_backend_uploads` | volume `variedreach-vdr-staging_backend_uploads` |
