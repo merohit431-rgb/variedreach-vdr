@@ -194,7 +194,21 @@ export class DataRoomsService {
 
     return this.prisma.dataRoomMember.findMany({
       where: { dataRoomId, removedAt: null },
-      include: { user: { select: { id: true, email: true, firstName: true, lastName: true, role: true, status: true } } },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+            status: true,
+            company: true,
+            designation: true,
+            mobile: true,
+          },
+        },
+      },
       orderBy: { invitedAt: 'asc' },
     });
   }
@@ -213,14 +227,23 @@ export class DataRoomsService {
     const frontendUrl = this.configService.get<string>('app.frontendUrl');
     let emailSent: boolean;
 
+    // "Full Name" -> firstName/lastName the same way registration provisioning
+    // splits it: everything but the last word is the first name.
+    const nameParts = dto.fullName.trim().split(/\s+/);
+    const firstName = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : nameParts[0];
+    const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+
     if (!user) {
       user = await this.prisma.user.create({
         data: {
           organisationId: actor.organisationId,
           email,
           password: generateOpaqueToken().hash, // unusable placeholder until invite is accepted
-          firstName: dto.email.split('@')[0],
-          lastName: '',
+          firstName,
+          lastName,
+          company: dto.company,
+          designation: dto.designation,
+          mobile: dto.mobile,
           role: dto.role,
           status: 'PENDING_INVITE',
         },
@@ -248,6 +271,20 @@ export class DataRoomsService {
       );
       emailSent = result.sent;
     } else {
+      // Existing, already-active user added to a different room -- their
+      // established identity wins, so we only fill in profile gaps (never
+      // overwrite something they, or an earlier invite, already set).
+      if (dto.company || dto.designation || dto.mobile) {
+        await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            ...(user.company == null && dto.company ? { company: dto.company } : {}),
+            ...(user.designation == null && dto.designation ? { designation: dto.designation } : {}),
+            ...(user.mobile == null && dto.mobile ? { mobile: dto.mobile } : {}),
+          },
+        });
+      }
+
       // Existing, already-active user added to a different room -- no
       // password setup needed, just let them know it's there.
       const result = await this.mailService.sendDataRoomInvitationEmail(
@@ -263,12 +300,14 @@ export class DataRoomsService {
 
     const member = await this.prisma.dataRoomMember.upsert({
       where: { dataRoomId_userId: { dataRoomId, userId: user.id } },
-      update: { removedAt: null, roleOverride: dto.role },
+      update: { removedAt: null, roleOverride: dto.role, clientOrganisation: dto.clientOrganisation, notes: dto.notes },
       create: {
         dataRoomId,
         userId: user.id,
         invitedBy: actor.id,
         roleOverride: dto.role,
+        clientOrganisation: dto.clientOrganisation,
+        notes: dto.notes,
       },
     });
 
@@ -278,7 +317,13 @@ export class DataRoomsService {
       userId: actor.id,
       resourceType: 'User',
       resourceId: user.id,
-      metadata: { invitedEmail: user.email, role: dto.role },
+      metadata: {
+        invitedEmail: user.email,
+        role: dto.role,
+        ...(dto.company ? { company: dto.company } : {}),
+        ...(dto.designation ? { designation: dto.designation } : {}),
+        ...(dto.clientOrganisation ? { clientOrganisation: dto.clientOrganisation } : {}),
+      },
     });
 
     return { ...member, emailSent };

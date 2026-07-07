@@ -141,6 +141,11 @@ model User {
   password            String
   firstName           String
   lastName            String
+  // Enterprise profile fields, captured at invite time (see InviteMemberDto)
+  // and shown on the member profile view. Person-level, not per-data-room.
+  company             String?
+  designation         String?
+  mobile              String?
   role                UserRole
   status              UserStatus @default(PENDING_INVITE)
   failedLoginAttempts Int        @default(0)
@@ -374,6 +379,11 @@ model DataRoomMember {
   dataRoomId   String
   userId       String
   roleOverride UserRole?
+  // Which client legal entity this member represents in THIS room -- a
+  // single room can span a corporate group with several related entities,
+  // and the same person may represent a different one in a different room.
+  clientOrganisation String?
+  notes              String?
   invitedBy    String?
   invitedAt    DateTime  @default(now())
   joinedAt     DateTime?

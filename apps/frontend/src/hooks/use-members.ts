@@ -6,6 +6,8 @@ export interface Member {
   userId: string;
   dataRoomId: string;
   roleOverride: UserRole | null;
+  clientOrganisation: string | null;
+  notes: string | null;
   invitedAt: string;
   joinedAt: string | null;
   user: {
@@ -15,7 +17,21 @@ export interface Member {
     lastName: string;
     role: UserRole;
     status: string;
+    company: string | null;
+    designation: string | null;
+    mobile: string | null;
   };
+}
+
+export interface InviteMemberInput {
+  fullName: string;
+  email: string;
+  role: UserRole;
+  clientOrganisation?: string;
+  company?: string;
+  designation?: string;
+  mobile?: string;
+  notes?: string;
 }
 
 export function useMembers(dataRoomId: string) {
@@ -32,7 +48,7 @@ export function useMembers(dataRoomId: string) {
 export function useInviteMember(dataRoomId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { email: string; role: UserRole }) => {
+    mutationFn: async (input: InviteMemberInput) => {
       const response = await apiClient.post<{ data: { emailSent: boolean } }>(
         `/data-rooms/${dataRoomId}/members/invite`,
         input,

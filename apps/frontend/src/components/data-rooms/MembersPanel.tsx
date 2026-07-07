@@ -1,18 +1,21 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
-import { UserPlus, RotateCcw, Mail, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { UserPlus, RotateCcw, Mail, Trash2, IdCard } from 'lucide-react';
 import {
   useMembers,
-  useInviteMember,
   useUpdateMemberRole,
   useRemoveMember,
   useResetMemberPassword,
   useResendInvite,
+  type Member,
 } from '@/hooks/use-members';
 import { USER_ROLES, ROLE_LABELS, type UserRole } from '@variedreach-vdr/shared';
 import { Avatar } from '@/components/ui/Avatar';
+import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { InviteMemberModal } from './InviteMemberModal';
+import { MemberProfileModal } from './MemberProfileModal';
 import { extractErrorMessage } from '@/lib/error-message';
 import { cn } from '@/lib/cn';
 
@@ -43,33 +46,15 @@ function MemberRowSkeleton() {
 
 export function MembersPanel({ dataRoomId, canManage }: { dataRoomId: string; canManage: boolean }) {
   const { data: members, isLoading } = useMembers(dataRoomId);
-  const inviteMember = useInviteMember(dataRoomId);
   const updateRole = useUpdateMemberRole(dataRoomId);
   const removeMember = useRemoveMember(dataRoomId);
   const resetPassword = useResetMemberPassword(dataRoomId);
   const resendInvite = useResendInvite(dataRoomId);
 
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState<UserRole>('PRA');
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [profileMember, setProfileMember] = useState<Member | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-
-  async function handleInvite(event: FormEvent) {
-    event.preventDefault();
-    setError(null);
-    setNotice(null);
-    try {
-      const result = await inviteMember.mutateAsync({ email, role });
-      setEmail('');
-      setNotice(
-        result.emailSent
-          ? `Invitation sent to ${email}`
-          : `Member added, but the invitation email failed to send to ${email}. Use "Resend invite" to try again.`,
-      );
-    } catch (err) {
-      setError(extractErrorMessage(err));
-    }
-  }
 
   async function handleResetPassword(userId: string, userEmail: string) {
     setError(null);
@@ -99,55 +84,32 @@ export function MembersPanel({ dataRoomId, canManage }: { dataRoomId: string; ca
 
   return (
     <div className="space-y-4">
-      {/* Invite form */}
+      {/* Invite trigger */}
       {canManage && (
-        <div className="rounded-xl border border-app-border bg-app-s1 p-5 shadow-dark-soft">
-          <p className="text-xs font-semibold uppercase tracking-wide text-app-t3">
+        <div className="flex items-center justify-between rounded-xl border border-app-border bg-app-s1 p-5 shadow-dark-soft">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-app-t3">Members</p>
+            <p className="mt-0.5 text-sm text-app-t3">
+              Invite internal team members or external professionals to this data room.
+            </p>
+          </div>
+          <Button onClick={() => setIsInviteOpen(true)}>
+            <UserPlus className="h-4 w-4" aria-hidden="true" />
             Invite Member
-          </p>
-          <form onSubmit={handleInvite} className="mt-4 flex flex-wrap items-end gap-3">
-            <div className="min-w-48 flex-1">
-              <label htmlFor="invite-email" className="block text-xs font-medium text-app-t2">
-                Email address
-              </label>
-              <input
-                id="invite-email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@company.com"
-                className="mt-1.5 w-full rounded-lg border border-app-border px-3 py-2 text-sm text-app-text placeholder:text-app-t4 focus:border-app-primary focus:outline-none focus:ring-2 focus:ring-app-primary/20"
-              />
-            </div>
-            <div>
-              <label htmlFor="invite-role" className="block text-xs font-medium text-app-t2">
-                Role
-              </label>
-              <select
-                id="invite-role"
-                value={role}
-                onChange={(e) => setRole(e.target.value as UserRole)}
-                className="mt-1.5 rounded-lg border border-app-border px-3 py-2 text-sm text-app-text focus:border-app-primary focus:outline-none focus:ring-2 focus:ring-app-primary/20"
-              >
-                {USER_ROLES.filter((r) => r !== 'SUPER_ADMIN').map((r) => (
-                  <option key={r} value={r}>
-                    {ROLE_LABELS[r]}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button
-              type="submit"
-              disabled={inviteMember.isPending}
-              className="flex items-center gap-1.5 rounded-lg bg-app-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500/100 disabled:opacity-50"
-            >
-              <UserPlus className="h-4 w-4" aria-hidden="true" />
-              {inviteMember.isPending ? 'Inviting…' : 'Invite'}
-            </button>
-          </form>
+          </Button>
         </div>
       )}
+
+      <InviteMemberModal
+        dataRoomId={dataRoomId}
+        open={isInviteOpen}
+        onClose={() => setIsInviteOpen(false)}
+        onInvited={(message) => {
+          setError(null);
+          setNotice(message);
+        }}
+      />
+      <MemberProfileModal member={profileMember} onClose={() => setProfileMember(null)} />
 
       {/* Feedback messages */}
       {error && (
@@ -210,18 +172,24 @@ export function MembersPanel({ dataRoomId, canManage }: { dataRoomId: string; ca
                     >
                       {/* Member info */}
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setProfileMember(member)}
+                          className="group flex items-center gap-3 text-left"
+                          title="View member profile"
+                        >
                           <Avatar
                             name={`${member.user.firstName} ${member.user.lastName}`}
                             size="sm"
                           />
                           <div>
-                            <p className="text-sm font-medium text-app-text">
+                            <p className="flex items-center gap-1.5 text-sm font-medium text-app-text group-hover:text-app-primary">
                               {member.user.firstName} {member.user.lastName}
+                              <IdCard className="h-3 w-3 text-app-t4 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />
                             </p>
                             <p className="text-xs text-app-t3">{member.user.email}</p>
                           </div>
-                        </div>
+                        </button>
                       </td>
 
                       {/* Role */}
@@ -303,7 +271,7 @@ export function MembersPanel({ dataRoomId, canManage }: { dataRoomId: string; ca
                     <p className="text-sm text-app-t3">No members yet.</p>
                     {canManage && (
                       <p className="mt-1 text-xs text-app-t3">
-                        Use the form above to invite the first member.
+                        Use &quot;Invite Member&quot; above to invite the first member.
                       </p>
                     )}
                   </td>

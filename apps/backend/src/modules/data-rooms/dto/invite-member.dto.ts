@@ -1,10 +1,15 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { UserRole } from '@prisma/client';
-import { IsEmail, IsIn } from 'class-validator';
+import { IsEmail, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { ASSIGNABLE_MEMBER_ROLES } from '../../../common/constants/content-roles';
 
 export class InviteMemberDto {
+  @ApiProperty()
+  @IsString()
+  @MaxLength(150)
+  fullName!: string;
+
   @ApiProperty()
   @Transform(({ value }) => (typeof value === 'string' ? value.toLowerCase().trim() : value))
   @IsEmail()
@@ -13,4 +18,37 @@ export class InviteMemberDto {
   @ApiProperty({ enum: ASSIGNABLE_MEMBER_ROLES })
   @IsIn(ASSIGNABLE_MEMBER_ROLES)
   role!: UserRole;
+
+  // Which client legal entity this person represents in this data room
+  // (e.g. a specific subsidiary within a corporate-group case).
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  clientOrganisation?: string;
+
+  // The invitee's own employer/firm (e.g. "Deloitte", "ABC Law Associates").
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  company?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  designation?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  mobile?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  notes?: string;
 }
