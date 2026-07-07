@@ -29,10 +29,15 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useAuthStore } from '@/store/auth-store';
 import { useWorkspaceStore } from '@/store/workspace-store';
-import { useDataRoomAccess, useDataRoomStats } from '@/hooks/use-data-rooms';
+import { useDataRoomAccess, useDataRoomStats, type DataRoomAccess } from '@/hooks/use-data-rooms';
 import { useFolders, useCreateFolder, type FolderNode } from '@/hooks/use-folders';
 import { ROLE_LABELS, EXTERNAL_ROLES, type UserRole } from '@variedreach-vdr/shared';
 import { cn } from '@/lib/cn';
+
+// Roles that participate in the Q&A workflow. Managers always can; among
+// external roles only the professional participants do -- an Auditor is
+// read/verify-only and a Viewer (GUEST) has no collaboration surface.
+const QNA_ROLES: UserRole[] = ['PRA', 'COC_MEMBER', 'LEGAL_ADVISOR'];
 
 const TOP_LEVEL_FOLDER_LIMIT = 8;
 const ROOM_PATH_PATTERN = /^\/data-rooms\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/;
@@ -76,19 +81,46 @@ function getAppNavSections(role: UserRole): NavSection[] {
   return sections;
 }
 
-function getRoomNavSections(base: string, canManage: boolean): NavSection[] {
-  return [
-    {
-      items: [
-        { href: base, label: 'Files', icon: FolderOpen, exact: true },
-        { href: `${base}/activity`, label: 'Activity', icon: History },
-        ...(canManage ? [{ href: `${base}/members`, label: 'Members', icon: Users }] : []),
-        ...(canManage ? [{ href: `${base}/reports`, label: 'Reports', icon: BarChart3 }] : []),
-        { href: `${base}/qna`, label: 'Q&A', icon: MessagesSquare },
-        ...(canManage ? [{ href: `${base}/settings`, label: 'Settings', icon: Settings }] : []),
-      ],
-    },
-  ];
+// Room navigation is built per effective role, not just manager/non-manager,
+// so each role sees only what it can actually use (menu items are hidden
+// outright, never shown-then-403'd):
+//   Manager (RP / Org Admin):  Files · Members · Reports · Activity · Q&A · Settings
+//   PRA / CoC / Legal Advisor: Files · Activity (own) · Q&A · Settings
+//   Auditor:                   Files · Activity (own) · Settings
+//   Viewer (GUEST):            Files · Settings
+// "Settings" points at the room's admin settings for managers, and at the
+// user's personal account settings for everyone else (they have no room-level
+// settings to manage) so the entry always resolves to something usable.
+function getRoomNavSections(base: string, access: DataRoomAccess | undefined): NavSection[] {
+  const role = access?.effectiveRole;
+  const canManage = Boolean(access?.canManageRoom);
+  const isViewer = role === 'GUEST';
+  const canUseQna = canManage || (role != null && QNA_ROLES.includes(role));
+
+  const items: NavItem[] = [{ href: base, label: 'Files', icon: FolderOpen, exact: true }];
+
+  if (canManage) {
+    items.push({ href: `${base}/members`, label: 'Members', icon: Users });
+    items.push({ href: `${base}/reports`, label: 'Reports', icon: BarChart3 });
+  }
+
+  // Viewers get no activity feed at all; everyone else does (managers see the
+  // whole room, others are scoped to their own actions by the backend).
+  if (!isViewer) {
+    items.push({ href: `${base}/activity`, label: 'Activity', icon: History });
+  }
+
+  if (canUseQna) {
+    items.push({ href: `${base}/qna`, label: 'Q&A', icon: MessagesSquare });
+  }
+
+  items.push(
+    canManage
+      ? { href: `${base}/settings`, label: 'Settings', icon: Settings }
+      : { href: '/settings', label: 'Settings', icon: Settings, exact: true },
+  );
+
+  return [{ items }];
 }
 
 function NavLinks({
@@ -419,7 +451,7 @@ export function Sidebar({ isCollapsed, onToggleCollapse, isMobileOpen, onCloseMo
   const { data: roomAccess } = useDataRoomAccess(roomId ?? '');
 
   const sections = roomId
-    ? getRoomNavSections(`/data-rooms/${roomId}`, Boolean(roomAccess?.canManageRoom))
+    ? getRoomNavSections(`/data-rooms/${roomId}`, roomAccess)
     : getAppNavSections(user?.role ?? 'RP_LIQUIDATOR');
 
   const canCreateRoom = user && !EXTERNAL_ROLES.includes(user.role);

@@ -53,9 +53,11 @@ export function useDataRoom(id: string) {
 
 export interface DataRoomStats {
   documents: number;
-  members: number;
-  storageUsedBytes: string;
-  storageLimitGb: number;
+  // Management-only figures: the backend returns null for non-managers, and
+  // the room header hides the corresponding cards for them.
+  members: number | null;
+  storageUsedBytes: string | null;
+  storageLimitGb: number | null;
   lastActivityAt: string | null;
   lastActivityAction: string | null;
   folderCounts: Record<string, number>;

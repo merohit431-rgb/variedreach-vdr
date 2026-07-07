@@ -398,10 +398,26 @@ export class DataRoomsService {
       throw new NotFoundException('Member not found in this data room');
     }
 
-    const updated = await this.prisma.dataRoomMember.update({
-      where: { dataRoomId_userId: { dataRoomId, userId } },
-      data: { roleOverride: role },
-    });
+    if (userId === actor.id && !ADMIN_ROLES.includes(role)) {
+      throw new BadRequestException('You cannot demote yourself out of a manager role');
+    }
+
+    // Every @Roles() guard and the sidebar/dashboard/page-level UI gates all
+    // read the user's GLOBAL User.role (JwtStrategy re-fetches it fresh on
+    // every request). Writing only roleOverride here left that global role
+    // stale forever, so "change role" only ever relabeled this one room's
+    // member row -- the account kept behaving as its old role everywhere
+    // else. Update both, in lockstep, so they can never diverge again.
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.dataRoomMember.update({
+        where: { dataRoomId_userId: { dataRoomId, userId } },
+        data: { roleOverride: role },
+      }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { role },
+      }),
+    ]);
 
     await this.auditLogService.record({
       action: 'USER_ROLE_CHANGED',
@@ -460,10 +476,13 @@ export class DataRoomsService {
   }
 
   // Member-visible workspace stats for the room header cards and sidebar
-  // folder counts. Counts only -- no document contents -- so plain membership
-  // (any role) is the right gate, unlike listMembers which stays manager-only.
+  // folder counts. Document count + folder counts are fine for any member,
+  // but member count and organisation storage are management figures -- they
+  // are nulled for non-managers here so a direct API call can't read them
+  // (the UI hides the corresponding cards, but the backend is the real gate).
   async getStats(dataRoomId: string, actor: AuthenticatedUser) {
-    await this.assertMember(dataRoomId, actor);
+    const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor);
+    const isManager = ADMIN_ROLES.includes(effectiveRole);
 
     const [room, documents, members, lastActivity, folderGroups] = await Promise.all([
       this.prisma.dataRoom.findUniqueOrThrow({
@@ -491,9 +510,9 @@ export class DataRoomsService {
 
     return {
       documents,
-      members,
-      storageUsedBytes: room.storageUsedBytes.toString(),
-      storageLimitGb: room.storageLimitGb,
+      members: isManager ? members : null,
+      storageUsedBytes: isManager ? room.storageUsedBytes.toString() : null,
+      storageLimitGb: isManager ? room.storageLimitGb : null,
       lastActivityAt: lastActivity?.createdAt ?? null,
       lastActivityAction: lastActivity?.action ?? null,
       folderCounts,

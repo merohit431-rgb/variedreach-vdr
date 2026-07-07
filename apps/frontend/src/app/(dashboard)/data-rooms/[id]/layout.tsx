@@ -333,24 +333,35 @@ export default function DataRoomLayout({ children }: { children: React.ReactNode
             label="Documents"
             value={stats ? stats.documents.toLocaleString() : '—'}
           />
-          <StatCard
-            icon={Users}
-            iconClasses="bg-violet-500/15 text-violet-300"
-            label="Members"
-            value={stats ? String(stats.members) : '—'}
-          />
-          <StatCard
-            icon={Database}
-            iconClasses="bg-app-primary/15 text-app-primary"
-            label="Storage"
-            value={stats ? `${bytesToGb(stats.storageUsedBytes).toFixed(1)} GB` : '—'}
-            sub={stats ? `of ${stats.storageLimitGb} GB used` : undefined}
-            bar={
-              stats && stats.storageLimitGb > 0
-                ? (bytesToGb(stats.storageUsedBytes) / stats.storageLimitGb) * 100
-                : undefined
-            }
-          />
+          {/* Member count and organisation storage are management information
+              -- only room managers see them. Non-managers get Documents +
+              Last activity only. */}
+          {canManage && (
+            <StatCard
+              icon={Users}
+              iconClasses="bg-violet-500/15 text-violet-300"
+              label="Members"
+              value={stats && stats.members != null ? String(stats.members) : '—'}
+            />
+          )}
+          {canManage && (
+            <StatCard
+              icon={Database}
+              iconClasses="bg-app-primary/15 text-app-primary"
+              label="Storage"
+              value={
+                stats && stats.storageUsedBytes != null
+                  ? `${bytesToGb(stats.storageUsedBytes).toFixed(1)} GB`
+                  : '—'
+              }
+              sub={stats && stats.storageLimitGb != null ? `of ${stats.storageLimitGb} GB used` : undefined}
+              bar={
+                stats && stats.storageUsedBytes != null && stats.storageLimitGb
+                  ? (bytesToGb(stats.storageUsedBytes) / stats.storageLimitGb) * 100
+                  : undefined
+              }
+            />
+          )}
           <StatCard
             icon={ActivityIcon}
             iconClasses="bg-amber-500/15 text-amber-400"
@@ -372,7 +383,9 @@ export default function DataRoomLayout({ children }: { children: React.ReactNode
       {/* Right rail */}
       <aside className="hidden w-72 flex-shrink-0 space-y-4 xl:block">
         <ActivityFeedPanel dataRoomId={id} />
-        {stats && <StoragePanel usedBytes={stats.storageUsedBytes} limitGb={stats.storageLimitGb} />}
+        {canManage && stats && stats.storageUsedBytes != null && stats.storageLimitGb != null && (
+          <StoragePanel usedBytes={stats.storageUsedBytes} limitGb={stats.storageLimitGb} />
+        )}
       </aside>
 
       <ConfirmDialog
