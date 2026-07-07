@@ -32,6 +32,7 @@ import {
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { cn } from '@/lib/cn';
+import { getStorageLevel, STORAGE_LEVEL_STYLES, type StorageLevel } from '@/lib/storage-status';
 
 const STATUS_CONFIG: Record<string, { dot: string; text: string; label: string }> = {
   ACTIVE: { dot: 'bg-emerald-500', text: 'text-emerald-400', label: 'ACTIVE' },
@@ -92,7 +93,7 @@ function StatCard({
       {bar !== undefined && (
         <div className="mt-3 h-1 overflow-hidden rounded-full bg-app-s3">
           <div
-            className={cn('h-full rounded-full', bar >= 95 ? 'bg-red-500' : bar >= 80 ? 'bg-amber-500' : 'bg-app-primary')}
+            className={cn('h-full rounded-full', STORAGE_LEVEL_STYLES[getStorageLevel(bar)].bar)}
             style={{ width: `${Math.min(100, bar)}%` }}
           />
         </div>
@@ -163,9 +164,17 @@ function ActivityFeedPanel({ dataRoomId }: { dataRoomId: string }) {
   );
 }
 
+const STORAGE_LEVEL_HEX: Record<StorageLevel, string> = {
+  ok: '#10b981',
+  warning: '#f59e0b',
+  critical: '#ef4444',
+  full: '#ef4444',
+};
+
 function StoragePanel({ usedBytes, limitGb }: { usedBytes: string; limitGb: number }) {
   const usedGb = bytesToGb(usedBytes);
   const percent = limitGb > 0 ? Math.min(100, Math.round((usedGb / limitGb) * 100)) : 0;
+  const level = getStorageLevel(percent);
   const radius = 30;
   const circumference = 2 * Math.PI * radius;
 
@@ -180,7 +189,7 @@ function StoragePanel({ usedBytes, limitGb }: { usedBytes: string; limitGb: numb
             cy="36"
             r={radius}
             fill="none"
-            stroke={percent >= 95 ? '#ef4444' : percent >= 80 ? '#f59e0b' : '#3b82f6'}
+            stroke={STORAGE_LEVEL_HEX[level]}
             strokeWidth="7"
             strokeLinecap="round"
             strokeDasharray={`${(circumference * percent) / 100} ${circumference}`}
@@ -197,10 +206,7 @@ function StoragePanel({ usedBytes, limitGb }: { usedBytes: string; limitGb: numb
           </p>
           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-app-s3">
             <div
-              className={cn(
-                'h-full rounded-full',
-                percent >= 95 ? 'bg-red-500' : percent >= 80 ? 'bg-amber-500' : 'bg-app-primary',
-              )}
+              className={cn('h-full rounded-full', STORAGE_LEVEL_STYLES[level].bar)}
               style={{ width: `${percent}%` }}
             />
           </div>

@@ -138,6 +138,16 @@ export class MailService {
     return this.dispatch({ template: 'CALLBACK_REQUEST', to, replyTo }, rendered);
   }
 
+  async sendStorageUpgradeRequestEmail(
+    requesterName: string,
+    fields: ContactRequestField[],
+    replyTo?: string,
+  ): Promise<SendResult> {
+    const to = this.configService.get<string>('mail.contactRecipient') || 'rohit@variedreach.com';
+    const rendered = contactRequestTemplate({ kind: 'STORAGE_UPGRADE', requesterName, fields });
+    return this.dispatch({ template: 'STORAGE_UPGRADE_REQUESTED', to, replyTo }, rendered);
+  }
+
   // Dormant -- no caller invokes this today. See email-verification.template.ts.
   async sendEmailVerificationEmail(
     to: string,

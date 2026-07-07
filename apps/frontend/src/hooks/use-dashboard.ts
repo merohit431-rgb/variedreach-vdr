@@ -1,5 +1,7 @@
+import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { extractErrorMessage } from '@/lib/error-message';
 
 export interface DashboardStorage {
   usedBytes: number;
@@ -37,6 +39,17 @@ export function useDashboardStats() {
       return response.data.data;
     },
   });
+}
+
+export function useRequestStorageUpgrade() {
+  return useCallback(async (requestedGb: number, note?: string) => {
+    try {
+      await apiClient.post('/dashboard/storage/upgrade-request', { requestedGb, note });
+      return { success: true as const };
+    } catch (error) {
+      return { success: false as const, message: extractErrorMessage(error) };
+    }
+  }, []);
 }
 
 export function useRecentActivity(limit = 10) {

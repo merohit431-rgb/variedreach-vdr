@@ -22,6 +22,8 @@ import { Tooltip } from '@/components/ui/Tooltip';
 import { useUploadStore } from '@/store/upload-store';
 import { useImportStore, ImportProvider } from '@/store/import-store';
 import { getFileIcon } from '@/lib/file-icon';
+import { useDashboardStats } from '@/hooks/use-dashboard';
+import { StorageUpgradeDialog } from '@/components/dashboard/StorageUpgradeDialog';
 import { UploadProgressPanel } from './UploadProgressPanel';
 import { ImportProgressPanel } from './ImportProgressPanel';
 import { CloudImportModal } from './CloudImportModal';
@@ -156,11 +158,14 @@ export function FileBrowser({
   const nameMaxLength = isMobile ? MOBILE_NAME_MAX_LENGTH : DESKTOP_NAME_MAX_LENGTH;
   const queryClient = useQueryClient();
   const { items: uploadItems, enqueue } = useUploadStore();
+  const { data: dashboardStats } = useDashboardStats();
+  const orgStorage = dashboardStats && 'storage' in dashboardStats ? dashboardStats.storage : null;
 
   const multiInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   const [error, setError] = useState<string | null>(null);
+  const [showStorageFull, setShowStorageFull] = useState(false);
   const [previewFile, setPreviewFile] = useState<FileRecord | null>(null);
   const [versionsFile, setVersionsFile] = useState<FileRecord | null>(null);
   const [detailsFile, setDetailsFile] = useState<FileRecord | null>(null);
@@ -239,6 +244,13 @@ export function FileBrowser({
   function uploadFileList(fileList: FileList | File[]) {
     const list = Array.from(fileList) as BrowserFileWithPath[];
     if (list.length === 0) return;
+    // Proactive UX guard — the backend enforces the real quota regardless
+    // (see FilesService.assertOrgStorageAvailable), this just avoids sending
+    // uploads that are already known to fail.
+    if (orgStorage && orgStorage.percentUsed >= 100) {
+      setShowStorageFull(true);
+      return;
+    }
     for (const file of list) {
       enqueue({ dataRoomId, folderId, file, relativePath: file.webkitRelativePath || file.name, queryClient });
     }
@@ -886,6 +898,13 @@ export function FileBrowser({
           folderId={folderId}
           initialProvider={showCloudImport}
           onClose={() => setShowCloudImport(null)}
+        />
+      )}
+      {orgStorage && (
+        <StorageUpgradeDialog
+          open={showStorageFull}
+          onClose={() => setShowStorageFull(false)}
+          currentGb={orgStorage.limitGb}
         />
       )}
     </div>

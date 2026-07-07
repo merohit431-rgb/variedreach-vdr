@@ -1,6 +1,6 @@
 import { renderEmailHtml, renderEmailText } from './layout';
 
-export type ContactRequestKind = 'DEMO' | 'CALLBACK';
+export type ContactRequestKind = 'DEMO' | 'CALLBACK' | 'STORAGE_UPGRADE';
 
 export interface ContactRequestField {
   label: string;
@@ -16,6 +16,7 @@ export interface ContactRequestParams {
 const COPY: Record<ContactRequestKind, { subjectLead: string; headline: string }> = {
   DEMO: { subjectLead: 'New demo request', headline: 'requested a live demo from the marketing site' },
   CALLBACK: { subjectLead: 'New callback request', headline: 'requested a callback from the marketing site' },
+  STORAGE_UPGRADE: { subjectLead: 'Storage upgrade request', headline: 'requested additional storage' },
 };
 
 // Field values are visitor-supplied free text going into an HTML email --

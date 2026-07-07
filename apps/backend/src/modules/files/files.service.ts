@@ -22,6 +22,7 @@ import { UpdateFileDto } from './dto/update-file.dto';
 import { ListFilesQueryDto } from './dto/list-files-query.dto';
 import { StorageWarningLevel } from '../mail/templates/storage-warning.template';
 import { NotificationService } from '../notifications/notification.service';
+import { getOrgStorageUsage } from '../../common/org-storage.util';
 
 const STORAGE_ALERT_ORG_WIDE_ROLES: UserRole[] = [UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN];
 
@@ -86,16 +87,19 @@ export class FilesService {
     // before writing a single byte to disk.
     const dataRoom = await this.prisma.dataRoom.findUnique({
       where: { id: dataRoomId },
-      select: { storageUsedBytes: true, storageLimitGb: true },
+      select: { organisationId: true, storageUsedBytes: true, storageLimitGb: true },
     });
+    const batchBytes = multerFiles.reduce((sum, f) => sum + BigInt(f.size), 0n);
     if (dataRoom) {
       const quotaBytes = BigInt(dataRoom.storageLimitGb) * 1024n * 1024n * 1024n;
-      const batchBytes = multerFiles.reduce((sum, f) => sum + BigInt(f.size), 0n);
       if (dataRoom.storageUsedBytes + batchBytes > quotaBytes) {
         throw new BadRequestException(
           `Upload would exceed the data room's ${dataRoom.storageLimitGb} GB storage quota`,
         );
       }
+      // Organisation-wide cap sits above the per-room quota — a room can have
+      // headroom while the org as a whole is full, so both must pass.
+      await this.assertOrgStorageAvailable(dataRoom.organisationId, batchBytes);
     }
 
     const created: File[] = [];
@@ -286,7 +290,7 @@ export class FilesService {
     // Quota pre-check: the net size delta (new - old) must not push usage over limit.
     const dataRoomForVersion = await this.prisma.dataRoom.findUnique({
       where: { id: dataRoomId },
-      select: { storageUsedBytes: true, storageLimitGb: true },
+      select: { organisationId: true, storageUsedBytes: true, storageLimitGb: true },
     });
     if (dataRoomForVersion) {
       const quotaBytes = BigInt(dataRoomForVersion.storageLimitGb) * 1024n * 1024n * 1024n;
@@ -295,6 +299,9 @@ export class FilesService {
         throw new BadRequestException(
           `New version would exceed the data room's ${dataRoomForVersion.storageLimitGb} GB storage quota`,
         );
+      }
+      if (netDelta > 0n) {
+        await this.assertOrgStorageAvailable(dataRoomForVersion.organisationId, netDelta);
       }
     }
 
@@ -658,6 +665,18 @@ export class FilesService {
   private extractExtension(fileName: string): string {
     const parts = fileName.split('.');
     return parts.length > 1 ? parts.pop()!.toLowerCase() : '';
+  }
+
+  // Organisation-wide storage cap (Organisation.storageLimitGb) — separate
+  // from and on top of each data room's own quota. A tenant can be well
+  // under its per-room limits yet still be at its overall plan cap.
+  private async assertOrgStorageAvailable(organisationId: string, additionalBytes: bigint): Promise<void> {
+    const { usedBytes, limitBytes, limitGb } = await getOrgStorageUsage(this.prisma, organisationId);
+    if (usedBytes + additionalBytes > limitBytes) {
+      throw new BadRequestException(
+        `This would exceed your organisation's ${limitGb} GB storage plan. Upgrade your plan or free up space to continue.`,
+      );
+    }
   }
 
   // Event-driven off upload/delete/version changes -- no cron involved.

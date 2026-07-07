@@ -85,6 +85,7 @@ enum AuditAction {
   BULK_DOWNLOADED
   MFA_ENABLED
   MFA_DISABLED
+  STORAGE_UPGRADE_REQUESTED
 }
 
 enum PermissionScope {
@@ -517,6 +518,7 @@ enum EmailTemplate {
   DOCUMENT_UPLOADED
   DEMO_REQUEST // internal notification: marketing-site demo form
   CALLBACK_REQUEST // internal notification: marketing-site callback form
+  STORAGE_UPGRADE_REQUESTED // internal notification: org admin requests more storage
 }
 
 // userId/dataRoomId are both optional since not every email has either
@@ -727,6 +729,7 @@ enum NotificationType {
   QUESTION_ANSWERED
   DATA_ROOM_UPDATED
   PERMISSION_CHANGED
+  STORAGE_UPGRADE_REQUESTED
 }
 
 model Notification {

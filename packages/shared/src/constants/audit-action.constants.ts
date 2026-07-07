@@ -28,6 +28,7 @@ export const AUDIT_ACTIONS = [
   'FILE_MOVED',
   'FILE_DELETED',
   'REPORT_EXPORTED',
+  'STORAGE_UPGRADE_REQUESTED',
 ] as const;
 
 export type AuditActionType = (typeof AUDIT_ACTIONS)[number];
@@ -61,4 +62,5 @@ export const AUDIT_ACTION_LABELS: Record<AuditActionType, string> = {
   FILE_MOVED: 'File moved',
   FILE_DELETED: 'File deleted',
   REPORT_EXPORTED: 'Report exported',
+  STORAGE_UPGRADE_REQUESTED: 'Storage upgrade requested',
 };
