@@ -19,6 +19,22 @@ interface DialogProps {
 export function Dialog({ open, onClose, title, description, children, className }: DialogProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // Hold the latest onClose in a ref so the focus-management effect below can
+  // depend on `open` ALONE. Callers almost always pass onClose as a fresh
+  // closure each render (e.g. `onClose={() => setOpen(false)}` or a handler
+  // recreated inside a form component). If the effect depended on onClose, then
+  // every keystroke in an input rendered inside the dialog would re-run the
+  // effect -- and its cleanup calls `previouslyFocused.focus()`, ripping focus
+  // out of the field mid-typing and back onto the trigger behind the modal.
+  // That was the "Invite Member modal loses focus / tries to close on every
+  // character" bug: the 7-field form re-renders on each keystroke, minting a
+  // new onClose reference every time. Keeping onClose in a ref decouples the
+  // effect's identity from the caller's render cycle.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     if (!open) return;
 
@@ -36,7 +52,7 @@ export function Dialog({ open, onClose, title, description, children, className 
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -62,7 +78,9 @@ export function Dialog({ open, onClose, title, description, children, className 
       document.body.style.overflow = '';
       previouslyFocused?.focus();
     };
-  }, [open, onClose]);
+    // Depends on `open` only -- see onCloseRef note above. This effect must run
+    // exactly once per open/close, never on content re-renders.
+  }, [open]);
 
   if (!open) return null;
 
