@@ -1,10 +1,9 @@
 'use client';
 
-import { KeyRound, UserCircle } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
+import { KeyRound, UserCircle, Monitor } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
-import { useMfaStatus } from '@/hooks/use-mfa';
-import { MfaSettingsPanel } from '@/components/auth/MfaSettingsPanel';
+import { EmailOtpSettingsPanel } from '@/components/auth/EmailOtpSettingsPanel';
+import { SessionsPanel } from '@/components/auth/SessionsPanel';
 import { Avatar } from '@/components/ui/Avatar';
 import { ROLE_LABELS } from '@variedreach-vdr/shared';
 
@@ -39,13 +38,6 @@ function SettingsSection({
 
 export default function AccountSettingsPage() {
   const { user } = useAuthStore();
-  const { data: mfaStatus, refetch: refetchMfa } = useMfaStatus();
-  const queryClient = useQueryClient();
-
-  function handleMfaStatusChange() {
-    queryClient.invalidateQueries({ queryKey: ['auth', 'mfa-status'] });
-    refetchMfa();
-  }
 
   return (
     <div className="max-w-2xl space-y-5">
@@ -82,12 +74,17 @@ export default function AccountSettingsPage() {
       <SettingsSection
         icon={KeyRound}
         title="Two-Factor Authentication"
-        description="Protect your account with a time-based one-time password (TOTP)."
+        description="Add a verification step to protect your account."
       >
-        <MfaSettingsPanel
-          isMfaEnabled={mfaStatus?.totpEnabled ?? false}
-          onStatusChange={handleMfaStatusChange}
-        />
+        <EmailOtpSettingsPanel />
+      </SettingsSection>
+
+      <SettingsSection
+        icon={Monitor}
+        title="Active Sessions"
+        description="Devices currently signed in to your account."
+      >
+        <SessionsPanel />
       </SettingsSection>
     </div>
   );

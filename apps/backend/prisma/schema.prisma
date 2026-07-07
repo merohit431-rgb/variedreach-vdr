@@ -86,6 +86,9 @@ enum AuditAction {
   MFA_ENABLED
   MFA_DISABLED
   STORAGE_UPGRADE_REQUESTED
+  SESSION_REVOKED
+  TRUSTED_DEVICE_ADDED
+  TRUSTED_DEVICE_REVOKED
 }
 
 enum PermissionScope {
@@ -143,9 +146,13 @@ model User {
   lastLoginIp         String?
   // bcrypt hashes of the last 5 passwords, oldest first — enforces no-reuse policy
   previousPasswords   Json       @default("[]")
-  // TOTP-based MFA — secret stored as base32 string
+  // TOTP-based MFA — secret stored as base32 string. Scaffolded but not
+  // exposed in any UI; superseded by email OTP below (see MANDATORY_MFA_ROLES).
   totpSecret          String?
   totpEnabled         Boolean    @default(false)
+  // Email-OTP 2FA — self-service opt-in for roles where it isn't mandatory
+  // (see MANDATORY_MFA_ROLES in auth/constants/mfa.constants.ts).
+  emailOtpEnabled     Boolean    @default(false)
   createdAt           DateTime   @default(now())
   updatedAt           DateTime   @updatedAt
   deletedAt           DateTime?
@@ -153,6 +160,8 @@ model User {
   organisation        Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   dataRoomMemberships DataRoomMember[]
   sessions            Session[]
+  emailOtpChallenges  EmailOtpChallenge[]
+  trustedDevices      TrustedDevice[]
   inviteToken         InviteToken?
   passwordResetTokens PasswordResetToken[]
   auditLogs           AuditLog[]
@@ -254,6 +263,47 @@ model Session {
 
   @@index([userId, revokedAt])
   @@map("sessions")
+}
+
+// One row per login OTP sent — codeHash only, like every other token in this
+// schema (PasswordResetToken, InviteToken). A fresh challenge supersedes any
+// prior unconsumed one for the same user (created on login and on resend).
+model EmailOtpChallenge {
+  id         String    @id @default(uuid())
+  userId     String
+  codeHash   String
+  attempts   Int       @default(0)
+  rememberMe Boolean   @default(false)
+  ipAddress  String?
+  userAgent  String?
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, consumedAt])
+  @@map("email_otp_challenges")
+}
+
+// "Remember this device for 30 days" — an opaque token in an httpOnly cookie
+// (tokenHash persisted, same pattern as Session's refresh token) presented on
+// a future login to skip the OTP challenge for that browser only.
+model TrustedDevice {
+  id         String    @id @default(uuid())
+  userId     String
+  tokenHash  String    @unique
+  label      String? // e.g. "Chrome on macOS" — best-effort, for the user's own recognition
+  ipAddress  String?
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@map("trusted_devices")
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -519,6 +569,8 @@ enum EmailTemplate {
   DEMO_REQUEST // internal notification: marketing-site demo form
   CALLBACK_REQUEST // internal notification: marketing-site callback form
   STORAGE_UPGRADE_REQUESTED // internal notification: org admin requests more storage
+  MFA_OTP_CODE
+  LOGIN_ALERT
 }
 
 // userId/dataRoomId are both optional since not every email has either

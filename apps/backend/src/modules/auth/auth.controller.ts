@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Param,
   Post,
   Req,
   Res,
@@ -21,11 +22,16 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { AcceptInviteDto } from './dto/accept-invite.dto';
 import { VerifyMfaSetupDto } from './dto/verify-mfa-setup.dto';
 import { VerifyMfaLoginDto } from './dto/verify-mfa-login.dto';
+import { VerifyEmailOtpDto } from './dto/verify-email-otp.dto';
+import { ResendEmailOtpDto } from './dto/resend-email-otp.dto';
+import { DisableEmailOtpDto } from './dto/disable-email-otp.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { AuthenticatedUser } from './types/jwt-payload.interface';
+import { sha256Hex } from '../../common/utils/crypto.util';
 
 const REFRESH_COOKIE_NAME = 'refresh_token';
+const TRUSTED_DEVICE_COOKIE_NAME = 'trusted_device';
 
 @ApiTags('Auth')
 @Controller({ path: 'auth', version: '1' })
@@ -46,10 +52,11 @@ export class AuthController {
     const result = await this.authService.login(dto, {
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
+      trustedDeviceToken: req.cookies?.[TRUSTED_DEVICE_COOKIE_NAME],
     });
 
     if (result.requiresMfa) {
-      return { requiresMfa: true, mfaChallengeToken: result.mfaChallengeToken };
+      return { requiresMfa: true, mfaChallengeToken: result.mfaChallengeToken, mfaMethod: result.mfaMethod };
     }
 
     this.setRefreshCookie(res, result.refreshToken, result.refreshExpiresAt);
@@ -119,6 +126,8 @@ export class AuthController {
     await this.authService.acceptInvite(dto.token, dto.password);
   }
 
+  // ── TOTP (authenticator app) MFA — dormant, not exposed in any UI. Kept
+  // functional but superseded by the email-OTP endpoints below. ──
   @SkipThrottle()
   @Get('mfa/status')
   async mfaStatus(@CurrentUser() user: AuthenticatedUser) {
@@ -166,8 +175,93 @@ export class AuthController {
     return { accessToken: result.accessToken, user: result.user };
   }
 
+  // ── Email OTP — the 2FA mechanism the product actually exposes ──
+  @Public()
+  @Throttle({ global: { ttl: 900, limit: 10 } })
+  @Post('mfa/verify-email-otp')
+  async verifyEmailOtp(
+    @Body() dto: VerifyEmailOtpDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.verifyEmailOtpLogin(
+      dto.mfaChallengeToken,
+      dto.code,
+      Boolean(dto.rememberMe),
+      Boolean(dto.trustDevice),
+      { ipAddress: req.ip, userAgent: req.headers['user-agent'] },
+    );
+    this.setRefreshCookie(res, result.refreshToken, result.refreshExpiresAt);
+    if (result.trustedDeviceToken && result.trustedDeviceExpiresAt) {
+      this.setTrustedDeviceCookie(res, result.trustedDeviceToken, result.trustedDeviceExpiresAt);
+    }
+    return { accessToken: result.accessToken, user: result.user };
+  }
+
+  @Public()
+  @Throttle({ global: { ttl: 60, limit: 3 } })
+  @Post('mfa/resend-email-otp')
+  async resendEmailOtp(@Body() dto: ResendEmailOtpDto, @Req() req: Request) {
+    return this.authService.resendEmailOtp(dto.mfaChallengeToken, {
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+  }
+
+  @SkipThrottle()
+  @Get('mfa/email-otp/status')
+  async emailOtpStatus(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.getEmailOtpStatus(user);
+  }
+
+  @Post('mfa/email-otp/enable')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async enableEmailOtp(@CurrentUser() user: AuthenticatedUser) {
+    await this.authService.enableEmailOtp(user);
+  }
+
+  @Post('mfa/email-otp/disable')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async disableEmailOtp(@CurrentUser() user: AuthenticatedUser, @Body() dto: DisableEmailOtpDto) {
+    await this.authService.disableEmailOtp(user, dto.currentPassword);
+  }
+
+  // ── Session / device management ──
+  @SkipThrottle()
+  @Get('sessions')
+  async listSessions(@CurrentUser() user: AuthenticatedUser, @Req() req: Request) {
+    const currentTokenHash = this.hashRefreshCookie(req);
+    return this.authService.listSessions(user, currentTokenHash);
+  }
+
+  @Delete('sessions/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async revokeSession(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    await this.authService.revokeSession(user, id);
+  }
+
+  @Post('sessions/revoke-others')
+  async revokeOtherSessions(@CurrentUser() user: AuthenticatedUser, @Req() req: Request) {
+    return this.authService.revokeOtherSessions(user, this.hashRefreshCookie(req));
+  }
+
+  private hashRefreshCookie(req: Request): string | undefined {
+    const raw = req.cookies?.[REFRESH_COOKIE_NAME];
+    return raw ? sha256Hex(raw) : undefined;
+  }
+
   private setRefreshCookie(res: Response, token: string, expiresAt: Date) {
     res.cookie(REFRESH_COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: this.configService.get<string>('app.nodeEnv') === 'production',
+      sameSite: 'lax',
+      path: '/api/v1/auth',
+      expires: expiresAt,
+    });
+  }
+
+  private setTrustedDeviceCookie(res: Response, token: string, expiresAt: Date) {
+    res.cookie(TRUSTED_DEVICE_COOKIE_NAME, token, {
       httpOnly: true,
       secure: this.configService.get<string>('app.nodeEnv') === 'production',
       sameSite: 'lax',

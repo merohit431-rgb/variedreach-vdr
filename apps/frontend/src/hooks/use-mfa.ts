@@ -65,3 +65,82 @@ export function useVerifyMfaLogin() {
     },
   });
 }
+
+// ── Email OTP — the 2FA mechanism actually exposed in Settings + the login flow ──
+
+export interface EmailOtpStatus {
+  enabled: boolean;
+  required: boolean;
+}
+
+export function useEmailOtpStatus() {
+  return useQuery({
+    queryKey: ['auth', 'email-otp-status'],
+    queryFn: async () => {
+      const response = await apiClient.get<{ data: EmailOtpStatus }>('/auth/mfa/email-otp/status');
+      return response.data.data;
+    },
+  });
+}
+
+export function useEnableEmailOtp() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      await apiClient.post('/auth/mfa/email-otp/enable');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['auth', 'email-otp-status'] });
+    },
+  });
+}
+
+export function useDisableEmailOtp() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (currentPassword: string) => {
+      await apiClient.post('/auth/mfa/email-otp/disable', { currentPassword });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['auth', 'email-otp-status'] });
+    },
+  });
+}
+
+export interface AuthenticatedUserResult {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  organisationId: string;
+}
+
+export function useVerifyEmailOtpLogin() {
+  return useMutation({
+    mutationFn: async (input: {
+      mfaChallengeToken: string;
+      code: string;
+      rememberMe?: boolean;
+      trustDevice?: boolean;
+    }) => {
+      const response = await apiClient.post<{ data: { accessToken: string; user: AuthenticatedUserResult } }>(
+        '/auth/mfa/verify-email-otp',
+        input,
+      );
+      return response.data.data;
+    },
+  });
+}
+
+export function useResendEmailOtp() {
+  return useMutation({
+    mutationFn: async (mfaChallengeToken: string) => {
+      const response = await apiClient.post<{ data: { sent: true; mfaChallengeToken: string } }>(
+        '/auth/mfa/resend-email-otp',
+        { mfaChallengeToken },
+      );
+      return response.data.data;
+    },
+  });
+}

@@ -14,6 +14,8 @@ import { subscriptionActivatedTemplate } from './templates/subscription-activate
 import { subscriptionRenewalReminderTemplate } from './templates/subscription-renewal-reminder.template';
 import { contactRequestTemplate, ContactRequestField } from './templates/contact-request.template';
 import { documentUploadedTemplate } from './templates/document-uploaded.template';
+import { mfaOtpCodeTemplate } from './templates/mfa-otp-code.template';
+import { loginAlertTemplate } from './templates/login-alert.template';
 
 export interface SendResult {
   sent: boolean;
@@ -106,6 +108,29 @@ export class MailService {
   ): Promise<SendResult> {
     const rendered = passwordResetTemplate({ resetUrl, expiresInMinutes });
     return this.dispatch({ template: 'PASSWORD_RESET', to, ...context }, rendered);
+  }
+
+  async sendMfaOtpEmail(
+    to: string,
+    code: string,
+    expiresInMinutes: number,
+    context: { userId?: string } = {},
+  ): Promise<SendResult> {
+    const rendered = mfaOtpCodeTemplate({ code, expiresInMinutes });
+    return this.dispatch({ template: 'MFA_OTP_CODE', to, ...context }, rendered);
+  }
+
+  async sendLoginAlertEmail(
+    to: string,
+    firstName: string,
+    device: string,
+    ipAddress: string,
+    whenLabel: string,
+    securityUrl: string,
+    context: { userId?: string } = {},
+  ): Promise<SendResult> {
+    const rendered = loginAlertTemplate({ firstName, device, ipAddress, whenLabel, securityUrl });
+    return this.dispatch({ template: 'LOGIN_ALERT', to, ...context }, rendered);
   }
 
   async sendWelcomeEmail(

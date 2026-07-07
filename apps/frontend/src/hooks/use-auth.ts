@@ -24,6 +24,7 @@ export function useAuth() {
             success: true as const,
             requiresMfa: true as const,
             mfaChallengeToken: data.mfaChallengeToken as string,
+            mfaMethod: data.mfaMethod as 'EMAIL_OTP' | 'TOTP',
           };
         }
         setAuth(data.user, data.accessToken);

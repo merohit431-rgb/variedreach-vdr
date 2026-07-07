@@ -17,4 +17,8 @@ export default registerAs('jwt', () => ({
     process.env.REGISTRATION_VERIFICATION_EXPIRES_HOURS || '24',
     10,
   ),
+  emailOtpExpiryMinutes: parseInt(process.env.EMAIL_OTP_EXPIRY_MINUTES || '10', 10),
+  emailOtpMaxAttempts: parseInt(process.env.EMAIL_OTP_MAX_ATTEMPTS || '5', 10),
+  emailOtpResendCooldownSeconds: parseInt(process.env.EMAIL_OTP_RESEND_COOLDOWN_SECONDS || '30', 10),
+  trustedDeviceDays: parseInt(process.env.TRUSTED_DEVICE_DAYS || '30', 10),
 }));
