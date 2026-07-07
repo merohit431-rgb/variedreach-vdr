@@ -236,7 +236,7 @@ export class AuthService {
     await this.prisma.user.update({ where: { id: actor.id }, data: { emailOtpEnabled: true } });
     await this.auditLogService.record({ action: 'MFA_ENABLED', userId: actor.id });
     if (user) {
-      this.sendMfaStatusChangedAlert(user.email, user.firstName, true).catch(() => undefined);
+      this.sendMfaStatusChangedAlert(actor.id, user.email, user.firstName, true).catch(() => undefined);
     }
   }
 
@@ -257,7 +257,7 @@ export class AuthService {
 
     await this.prisma.user.update({ where: { id: actor.id }, data: { emailOtpEnabled: false } });
     await this.auditLogService.record({ action: 'MFA_DISABLED', userId: actor.id });
-    this.sendMfaStatusChangedAlert(user.email, user.firstName, false).catch(() => undefined);
+    this.sendMfaStatusChangedAlert(actor.id, user.email, user.firstName, false).catch(() => undefined);
   }
 
   async listSessions(actor: AuthenticatedUser, currentTokenHash: string | undefined): Promise<SessionSummary[]> {
@@ -916,7 +916,7 @@ export class AuthService {
     );
   }
 
-  private async sendMfaStatusChangedAlert(email: string, firstName: string, enabled: boolean): Promise<void> {
+  private async sendMfaStatusChangedAlert(userId: string, email: string, firstName: string, enabled: boolean): Promise<void> {
     const frontendUrl = this.configService.get<string>('app.frontendUrl');
     await this.mailService.sendMfaStatusChangedEmail(
       email,
@@ -924,6 +924,7 @@ export class AuthService {
       enabled,
       new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
       `${frontendUrl}/settings`,
+      { userId },
     );
   }
 
