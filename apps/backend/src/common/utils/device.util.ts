@@ -1,8 +1,13 @@
-// Best-effort "Chrome on macOS" style summary from a User-Agent header — good
-// enough for a human recognizing their own sessions, not meant to be a fully
-// accurate UA parser (no dependency pulled in for that).
-export function describeUserAgent(userAgent?: string | null): string {
-  if (!userAgent) return 'Unknown device';
+// Best-effort UA parsing -- good enough for a human recognizing their own
+// sessions, not meant to be a fully accurate UA parser (no dependency pulled
+// in for that).
+export interface ParsedUserAgent {
+  browser: string;
+  os: string;
+}
+
+export function parseUserAgent(userAgent?: string | null): ParsedUserAgent {
+  if (!userAgent) return { browser: 'Unknown browser', os: 'Unknown OS' };
 
   const ua = userAgent;
   let browser = 'Unknown browser';
@@ -21,5 +26,10 @@ export function describeUserAgent(userAgent?: string | null): string {
   else if (/android/i.test(ua)) os = 'Android';
   else if (/linux/i.test(ua)) os = 'Linux';
 
+  return { browser, os };
+}
+
+export function describeUserAgent(userAgent?: string | null): string {
+  const { browser, os } = parseUserAgent(userAgent);
   return `${browser} on ${os}`;
 }

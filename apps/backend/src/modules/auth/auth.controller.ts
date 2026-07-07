@@ -245,6 +245,27 @@ export class AuthController {
     return this.authService.revokeOtherSessions(user, this.hashRefreshCookie(req));
   }
 
+  // Unlike revoke-others, this also ends the caller's own session, so the
+  // now-dead refresh cookie must be cleared on this response too.
+  @Post('sessions/revoke-all')
+  async revokeAllSessions(@CurrentUser() user: AuthenticatedUser, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.revokeAllSessions(user);
+    res.clearCookie(REFRESH_COOKIE_NAME, { path: '/api/v1/auth' });
+    return result;
+  }
+
+  @SkipThrottle()
+  @Get('trusted-devices')
+  async listTrustedDevices(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.listTrustedDevices(user);
+  }
+
+  @Delete('trusted-devices/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async revokeTrustedDevice(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string) {
+    await this.authService.revokeTrustedDevice(user, id);
+  }
+
   private hashRefreshCookie(req: Request): string | undefined {
     const raw = req.cookies?.[REFRESH_COOKIE_NAME];
     return raw ? sha256Hex(raw) : undefined;

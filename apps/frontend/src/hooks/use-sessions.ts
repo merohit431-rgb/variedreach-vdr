@@ -6,9 +6,13 @@ import { apiClient } from '@/lib/api-client';
 export interface SessionSummary {
   id: string;
   device: string;
+  browser: string;
+  os: string;
   ipAddress: string | null;
+  location: string | null;
   rememberMe: boolean;
   createdAt: string;
+  lastActiveAt: string;
   isCurrent: boolean;
 }
 

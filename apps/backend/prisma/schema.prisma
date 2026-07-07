@@ -89,6 +89,9 @@ enum AuditAction {
   SESSION_REVOKED
   TRUSTED_DEVICE_ADDED
   TRUSTED_DEVICE_REVOKED
+  MFA_OTP_GENERATED
+  MFA_OTP_FAILED
+  LOGIN_BLOCKED
 }
 
 enum PermissionScope {
@@ -249,15 +252,22 @@ model Registration {
 // Refresh-token session record. Enables concurrent-session limiting (PRD:
 // max 3 by default) and remote revocation. tokenHash, never the raw token.
 model Session {
-  id         String    @id @default(uuid())
-  userId     String
-  tokenHash  String    @unique
-  userAgent  String?
-  ipAddress  String?
-  rememberMe Boolean   @default(false)
-  expiresAt  DateTime
-  revokedAt  DateTime?
-  createdAt  DateTime  @default(now())
+  id           String    @id @default(uuid())
+  userId       String
+  tokenHash    String    @unique
+  userAgent    String?
+  ipAddress    String?
+  // Best-effort "City, Country" from a one-time IP geolocation lookup at
+  // login (see common/utils/geo-ip.util.ts) -- null if the lookup timed out
+  // or the service was unreachable; never blocks or slows down login itself.
+  location     String?
+  rememberMe   Boolean   @default(false)
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  // Bumped on refresh() (~ every access-token lifetime of continued use) as
+  // a low-overhead "still active" signal -- not touched on every request.
+  lastActiveAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -269,16 +279,20 @@ model Session {
 // schema (PasswordResetToken, InviteToken). A fresh challenge supersedes any
 // prior unconsumed one for the same user (created on login and on resend).
 model EmailOtpChallenge {
-  id         String    @id @default(uuid())
-  userId     String
-  codeHash   String
-  attempts   Int       @default(0)
-  rememberMe Boolean   @default(false)
-  ipAddress  String?
-  userAgent  String?
-  expiresAt  DateTime
-  consumedAt DateTime?
-  createdAt  DateTime  @default(now())
+  id             String    @id @default(uuid())
+  userId         String
+  codeHash       String
+  attempts       Int       @default(0)
+  rememberMe     Boolean   @default(false)
+  ipAddress      String?
+  userAgent      String?
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  // Set when the mail provider itself reported failure to send this code --
+  // lets resend skip the cooldown for a delivery that never went out, so a
+  // provider hiccup can't strand a user outside their own account.
+  deliveryFailed Boolean   @default(false)
+  createdAt      DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -571,6 +585,8 @@ enum EmailTemplate {
   STORAGE_UPGRADE_REQUESTED // internal notification: org admin requests more storage
   MFA_OTP_CODE
   LOGIN_ALERT
+  PASSWORD_CHANGED
+  MFA_STATUS_CHANGED
 }
 
 // userId/dataRoomId are both optional since not every email has either

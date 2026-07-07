@@ -1,9 +1,10 @@
 'use client';
 
-import { KeyRound, UserCircle, Monitor } from 'lucide-react';
+import { KeyRound, UserCircle, Monitor, ShieldCheck } from 'lucide-react';
 import { useAuthStore } from '@/store/auth-store';
 import { EmailOtpSettingsPanel } from '@/components/auth/EmailOtpSettingsPanel';
 import { SessionsPanel } from '@/components/auth/SessionsPanel';
+import { TrustedDevicesPanel } from '@/components/auth/TrustedDevicesPanel';
 import { Avatar } from '@/components/ui/Avatar';
 import { ROLE_LABELS } from '@variedreach-vdr/shared';
 
@@ -85,6 +86,14 @@ export default function AccountSettingsPage() {
         description="Devices currently signed in to your account."
       >
         <SessionsPanel />
+      </SettingsSection>
+
+      <SettingsSection
+        icon={ShieldCheck}
+        title="Trusted Devices"
+        description="Devices remembered so they skip the verification code."
+      >
+        <TrustedDevicesPanel />
       </SettingsSection>
     </div>
   );

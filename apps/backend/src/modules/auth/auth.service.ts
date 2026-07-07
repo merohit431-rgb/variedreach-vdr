@@ -14,7 +14,8 @@ import { AuditLogService } from '../audit/audit-log.service';
 import { MailService } from '../mail/mail.service';
 import { generateOpaqueToken, sha256Hex } from '../../common/utils/crypto.util';
 import { generateNumericOtp } from '../../common/utils/otp.util';
-import { describeUserAgent } from '../../common/utils/device.util';
+import { describeUserAgent, parseUserAgent } from '../../common/utils/device.util';
+import { resolveApproximateLocation } from '../../common/utils/geo-ip.util';
 import { isMfaRequiredForUser, MANDATORY_MFA_ROLES } from '../../common/constants/mfa.constants';
 import { LoginDto } from './dto/login.dto';
 import { JwtPayload, AuthenticatedUser } from './types/jwt-payload.interface';
@@ -59,10 +60,23 @@ export interface EmailOtpVerifyResult {
 export interface SessionSummary {
   id: string;
   device: string;
+  browser: string;
+  os: string;
   ipAddress: string | null;
+  location: string | null;
   rememberMe: boolean;
   createdAt: Date;
+  lastActiveAt: Date;
   isCurrent: boolean;
+}
+
+export interface TrustedDeviceSummary {
+  id: string;
+  label: string;
+  ipAddress: string | null;
+  createdAt: Date;
+  lastUsedAt: Date | null;
+  expiresAt: Date;
 }
 
 interface RequestMeta {
@@ -90,6 +104,12 @@ export class AuthService {
     }
 
     if (user.lockedUntil && user.lockedUntil > new Date()) {
+      await this.auditLogService.record({
+        action: 'LOGIN_BLOCKED',
+        userId: user.id,
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
+      });
       throw new UnauthorizedException(
         `Account is temporarily locked. Try again after ${user.lockedUntil.toISOString()}`,
       );
@@ -112,7 +132,7 @@ export class AuthService {
     const trustedDevice = await this.matchTrustedDevice(user.id, meta.trustedDeviceToken);
     if (trustedDevice) {
       await this.prisma.trustedDevice.update({ where: { id: trustedDevice.id }, data: { lastUsedAt: new Date() } });
-      return this.completeLogin(user, Boolean(dto.rememberMe), meta);
+      return this.completeLogin(user, Boolean(dto.rememberMe), meta, { deviceTrusted: true });
     }
 
     if (isMfaRequiredForUser(user)) {
@@ -144,6 +164,7 @@ export class AuthService {
     user: { id: string; email: string; firstName: string; lastName: string; role: string; organisationId: string },
     rememberMe: boolean,
     meta: RequestMeta,
+    options: { deviceTrusted?: boolean } = {},
   ): Promise<LoginResult> {
     const isNewDevice = await this.isUnrecognizedDevice(user.id, meta);
 
@@ -159,7 +180,7 @@ export class AuthService {
 
     await this.enforceConcurrentSessionLimit(user.id);
 
-    const { accessToken, refreshToken, refreshExpiresAt } = await this.issueTokens(
+    const { accessToken, refreshToken, refreshExpiresAt, location } = await this.issueTokens(
       user.id,
       user.email,
       user.role,
@@ -176,7 +197,7 @@ export class AuthService {
     });
 
     if (isNewDevice) {
-      this.sendLoginAlert(user.id, user.email, user.firstName, meta).catch(() => undefined);
+      this.sendLoginAlert(user.id, user.email, user.firstName, meta, location, options.deviceTrusted).catch(() => undefined);
     }
 
     return {
@@ -208,12 +229,15 @@ export class AuthService {
   }
 
   async enableEmailOtp(actor: AuthenticatedUser): Promise<void> {
-    const user = await this.prisma.user.findUnique({ where: { id: actor.id }, select: { emailOtpEnabled: true } });
+    const user = await this.prisma.user.findUnique({ where: { id: actor.id } });
     if (user?.emailOtpEnabled) {
       throw new BadRequestException('Two-factor authentication is already enabled');
     }
     await this.prisma.user.update({ where: { id: actor.id }, data: { emailOtpEnabled: true } });
     await this.auditLogService.record({ action: 'MFA_ENABLED', userId: actor.id });
+    if (user) {
+      this.sendMfaStatusChangedAlert(user.email, user.firstName, true).catch(() => undefined);
+    }
   }
 
   async disableEmailOtp(actor: AuthenticatedUser, currentPassword: string): Promise<void> {
@@ -233,6 +257,7 @@ export class AuthService {
 
     await this.prisma.user.update({ where: { id: actor.id }, data: { emailOtpEnabled: false } });
     await this.auditLogService.record({ action: 'MFA_DISABLED', userId: actor.id });
+    this.sendMfaStatusChangedAlert(user.email, user.firstName, false).catch(() => undefined);
   }
 
   async listSessions(actor: AuthenticatedUser, currentTokenHash: string | undefined): Promise<SessionSummary[]> {
@@ -241,14 +266,21 @@ export class AuthService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return sessions.map((session) => ({
-      id: session.id,
-      device: describeUserAgent(session.userAgent),
-      ipAddress: session.ipAddress,
-      rememberMe: session.rememberMe,
-      createdAt: session.createdAt,
-      isCurrent: Boolean(currentTokenHash) && session.tokenHash === currentTokenHash,
-    }));
+    return sessions.map((session) => {
+      const { browser, os } = parseUserAgent(session.userAgent);
+      return {
+        id: session.id,
+        device: describeUserAgent(session.userAgent),
+        browser,
+        os,
+        ipAddress: session.ipAddress,
+        location: session.location,
+        rememberMe: session.rememberMe,
+        createdAt: session.createdAt,
+        lastActiveAt: session.lastActiveAt,
+        isCurrent: Boolean(currentTokenHash) && session.tokenHash === currentTokenHash,
+      };
+    });
   }
 
   async revokeSession(actor: AuthenticatedUser, sessionId: string): Promise<void> {
@@ -277,6 +309,54 @@ export class AuthService {
       });
     }
     return { revoked: result.count };
+  }
+
+  // "Logout everywhere" -- unlike revokeOtherSessions, this also revokes the
+  // caller's own current session. The controller is responsible for clearing
+  // the now-dead refresh cookie on the response.
+  async revokeAllSessions(actor: AuthenticatedUser): Promise<{ revoked: number }> {
+    const result = await this.prisma.session.updateMany({
+      where: { userId: actor.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    if (result.count > 0) {
+      await this.auditLogService.record({
+        action: 'SESSION_REVOKED',
+        userId: actor.id,
+        metadata: { count: result.count, scope: 'all_devices' },
+      });
+    }
+    return { revoked: result.count };
+  }
+
+  async listTrustedDevices(actor: AuthenticatedUser): Promise<TrustedDeviceSummary[]> {
+    const devices = await this.prisma.trustedDevice.findMany({
+      where: { userId: actor.id, revokedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return devices.map((device) => ({
+      id: device.id,
+      label: device.label ?? 'Unknown device',
+      ipAddress: device.ipAddress,
+      createdAt: device.createdAt,
+      lastUsedAt: device.lastUsedAt,
+      expiresAt: device.expiresAt,
+    }));
+  }
+
+  async revokeTrustedDevice(actor: AuthenticatedUser, deviceId: string): Promise<void> {
+    const device = await this.prisma.trustedDevice.findUnique({ where: { id: deviceId } });
+    if (!device || device.userId !== actor.id) {
+      throw new NotFoundException('Trusted device not found');
+    }
+    await this.prisma.trustedDevice.update({ where: { id: deviceId }, data: { revokedAt: new Date() } });
+    await this.auditLogService.record({
+      action: 'TRUSTED_DEVICE_REVOKED',
+      userId: actor.id,
+      resourceType: 'TrustedDevice',
+      resourceId: deviceId,
+    });
   }
 
   async setupMfa(actor: AuthenticatedUser): Promise<{ qrCodeDataUrl: string; secret: string }> {
@@ -449,7 +529,7 @@ export class AuthService {
       const attempts = challenge.attempts + 1;
       await this.prisma.emailOtpChallenge.update({ where: { id: challenge.id }, data: { attempts } });
       await this.auditLogService.record({
-        action: 'USER_LOGIN_FAILED',
+        action: 'MFA_OTP_FAILED',
         userId,
         ipAddress: meta.ipAddress,
         userAgent: meta.userAgent,
@@ -462,7 +542,37 @@ export class AuthService {
 
     await this.prisma.emailOtpChallenge.update({ where: { id: challenge.id }, data: { consumedAt: new Date() } });
 
-    const loginResult = await this.completeLogin(user, rememberMe, meta);
+    // Trust must be established BEFORE completeLogin so its (fire-and-forget)
+    // login-alert email can truthfully say "this device has also been
+    // remembered" -- doing it after would race the email against a fact that
+    // didn't exist yet when the alert was composed.
+    let trustedDeviceToken: string | undefined;
+    let trustedDeviceExpiresAt: Date | undefined;
+
+    if (trustDevice) {
+      const trustedDeviceDays = this.configService.get<number>('jwt.trustedDeviceDays')!;
+      const { raw, hash } = generateOpaqueToken();
+      trustedDeviceExpiresAt = new Date(Date.now() + trustedDeviceDays * 24 * 60 * 60_000);
+      trustedDeviceToken = raw;
+
+      await this.prisma.trustedDevice.create({
+        data: {
+          userId,
+          tokenHash: hash,
+          label: describeUserAgent(meta.userAgent),
+          ipAddress: meta.ipAddress,
+          expiresAt: trustedDeviceExpiresAt,
+        },
+      });
+      await this.auditLogService.record({
+        action: 'TRUSTED_DEVICE_ADDED',
+        userId,
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
+      });
+    }
+
+    const loginResult = await this.completeLogin(user, rememberMe, meta, { deviceTrusted: trustDevice });
     if (loginResult.requiresMfa) {
       // Unreachable in practice (completeLogin never returns the MFA branch)
       // but keeps the type system honest without an unsafe cast.
@@ -473,27 +583,7 @@ export class AuthService {
       return loginResult;
     }
 
-    const trustedDeviceDays = this.configService.get<number>('jwt.trustedDeviceDays')!;
-    const { raw, hash } = generateOpaqueToken();
-    const trustedDeviceExpiresAt = new Date(Date.now() + trustedDeviceDays * 24 * 60 * 60_000);
-
-    await this.prisma.trustedDevice.create({
-      data: {
-        userId,
-        tokenHash: hash,
-        label: describeUserAgent(meta.userAgent),
-        ipAddress: meta.ipAddress,
-        expiresAt: trustedDeviceExpiresAt,
-      },
-    });
-    await this.auditLogService.record({
-      action: 'TRUSTED_DEVICE_ADDED',
-      userId,
-      ipAddress: meta.ipAddress,
-      userAgent: meta.userAgent,
-    });
-
-    return { ...loginResult, trustedDeviceToken: raw, trustedDeviceExpiresAt };
+    return { ...loginResult, trustedDeviceToken, trustedDeviceExpiresAt };
   }
 
   async resendEmailOtp(mfaChallengeToken: string, meta: RequestMeta): Promise<{ sent: true; mfaChallengeToken: string }> {
@@ -509,8 +599,11 @@ export class AuthService {
       orderBy: { createdAt: 'desc' },
     });
 
+    // A code whose delivery the mail provider itself reported as failed
+    // skips the cooldown -- otherwise a provider hiccup would strand the
+    // user behind a wait for a code that never arrived.
     const cooldownSeconds = this.configService.get<number>('jwt.emailOtpResendCooldownSeconds')!;
-    if (latest) {
+    if (latest && !latest.deliveryFailed) {
       const elapsedSeconds = (Date.now() - latest.createdAt.getTime()) / 1000;
       if (elapsedSeconds < cooldownSeconds) {
         throw new BadRequestException(`Please wait ${Math.ceil(cooldownSeconds - elapsedSeconds)}s before requesting another code`);
@@ -641,6 +734,17 @@ export class AuthService {
     ]);
 
     await this.auditLogService.record({ action: 'USER_PASSWORD_RESET_COMPLETED', userId: user.id });
+
+    const frontendUrl = this.configService.get<string>('app.frontendUrl');
+    this.mailService
+      .sendPasswordChangedEmail(
+        user.email,
+        user.firstName,
+        new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+        `${frontendUrl}/settings`,
+        { userId: user.id },
+      )
+      .catch(() => undefined);
   }
 
   async acceptInvite(token: string, password: string): Promise<void> {
@@ -741,7 +845,7 @@ export class AuthService {
       where: { userId, consumedAt: null },
       data: { consumedAt: new Date() },
     });
-    await this.prisma.emailOtpChallenge.create({
+    const challenge = await this.prisma.emailOtpChallenge.create({
       data: {
         userId,
         codeHash: sha256Hex(code),
@@ -752,7 +856,18 @@ export class AuthService {
       },
     });
 
-    await this.mailService.sendMfaOtpEmail(email, code, expiryMinutes, { userId });
+    const { sent } = await this.mailService.sendMfaOtpEmail(email, code, expiryMinutes, { userId });
+    if (!sent) {
+      await this.prisma.emailOtpChallenge.update({ where: { id: challenge.id }, data: { deliveryFailed: true } });
+    }
+
+    await this.auditLogService.record({
+      action: 'MFA_OTP_GENERATED',
+      userId,
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+      metadata: sent ? undefined : { deliveryFailed: true },
+    });
 
     return this.jwtService.sign(
       { sub: userId, mfaChallenge: true, method: 'EMAIL_OTP' },
@@ -779,7 +894,14 @@ export class AuthService {
     return !existing;
   }
 
-  private async sendLoginAlert(userId: string, email: string, firstName: string, meta: RequestMeta): Promise<void> {
+  private async sendLoginAlert(
+    userId: string,
+    email: string,
+    firstName: string,
+    meta: RequestMeta,
+    location?: string | null,
+    deviceTrusted?: boolean,
+  ): Promise<void> {
     const frontendUrl = this.configService.get<string>('app.frontendUrl');
     await this.mailService.sendLoginAlertEmail(
       email,
@@ -789,6 +911,19 @@ export class AuthService {
       new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
       `${frontendUrl}/settings`,
       { userId },
+      location,
+      deviceTrusted,
+    );
+  }
+
+  private async sendMfaStatusChangedAlert(email: string, firstName: string, enabled: boolean): Promise<void> {
+    const frontendUrl = this.configService.get<string>('app.frontendUrl');
+    await this.mailService.sendMfaStatusChangedEmail(
+      email,
+      firstName,
+      enabled,
+      new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
+      `${frontendUrl}/settings`,
     );
   }
 
@@ -815,6 +950,7 @@ export class AuthService {
       ? this.configService.get<number>('jwt.refreshRememberMeExpiresDays')!
       : this.configService.get<number>('jwt.refreshExpiresDays')!;
     const refreshExpiresAt = new Date(Date.now() + days * 24 * 60 * 60_000);
+    const location = await resolveApproximateLocation(meta.ipAddress);
 
     await this.prisma.session.create({
       data: {
@@ -822,11 +958,12 @@ export class AuthService {
         tokenHash: refreshTokenHash,
         userAgent: meta.userAgent,
         ipAddress: meta.ipAddress,
+        location,
         rememberMe,
         expiresAt: refreshExpiresAt,
       },
     });
 
-    return { accessToken, refreshToken, refreshExpiresAt };
+    return { accessToken, refreshToken, refreshExpiresAt, location };
   }
 }

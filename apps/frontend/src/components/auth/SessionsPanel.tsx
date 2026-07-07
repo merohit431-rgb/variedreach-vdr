@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Monitor, LogOut } from 'lucide-react';
+import { Monitor, LogOut, MapPin } from 'lucide-react';
 import { useSessions, useRevokeSession, useRevokeOtherSessions } from '@/hooks/use-sessions';
+import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { extractErrorMessage } from '@/lib/error-message';
@@ -22,7 +23,9 @@ export function SessionsPanel() {
   const { data: sessions, isLoading } = useSessions();
   const revokeSession = useRevokeSession();
   const revokeOthers = useRevokeOtherSessions();
+  const { logoutEverywhere } = useAuth();
   const [error, setError] = useState<string | null>(null);
+  const [isLoggingOutEverywhere, setIsLoggingOutEverywhere] = useState(false);
 
   async function handleRevoke(sessionId: string) {
     setError(null);
@@ -39,6 +42,17 @@ export function SessionsPanel() {
       await revokeOthers.mutateAsync();
     } catch (err) {
       setError(extractErrorMessage(err));
+    }
+  }
+
+  async function handleLogoutEverywhere() {
+    setError(null);
+    setIsLoggingOutEverywhere(true);
+    try {
+      await logoutEverywhere();
+    } catch (err) {
+      setError(extractErrorMessage(err));
+      setIsLoggingOutEverywhere(false);
     }
   }
 
@@ -61,15 +75,23 @@ export function SessionsPanel() {
             <Monitor className="mt-0.5 h-4 w-4 flex-shrink-0 text-app-t3" aria-hidden="true" />
             <div>
               <p className="text-sm font-medium text-app-text">
-                {session.device}
+                {session.browser} on {session.os}
                 {session.isCurrent && (
                   <span className="ml-2 inline-flex items-center rounded-full bg-app-primary/15 px-2 py-0.5 text-[10px] font-semibold text-blue-300">
                     This device
                   </span>
                 )}
               </p>
-              <p className="mt-0.5 text-xs text-app-t4">
-                {session.ipAddress ?? 'Unknown IP'} · {relativeTime(session.createdAt)}
+              <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-app-t4">
+                <span>{session.ipAddress ?? 'Unknown IP'}</span>
+                {session.location && (
+                  <span className="inline-flex items-center gap-0.5">
+                    <MapPin className="h-3 w-3" aria-hidden="true" />
+                    {session.location}
+                  </span>
+                )}
+                <span>· Signed in {relativeTime(session.createdAt)}</span>
+                <span>· Active {relativeTime(session.lastActiveAt)}</span>
               </p>
             </div>
           </div>
@@ -89,8 +111,8 @@ export function SessionsPanel() {
 
       {(sessions ?? []).length === 0 && <p className="text-sm text-app-t4">No active sessions found.</p>}
 
-      {hasOtherSessions && (
-        <div className="flex justify-end pt-1">
+      <div className="flex flex-wrap justify-end gap-2 pt-1">
+        {hasOtherSessions && (
           <Button
             variant="secondary"
             onClick={handleRevokeOthers}
@@ -100,8 +122,17 @@ export function SessionsPanel() {
             <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
             Log out of all other devices
           </Button>
-        </div>
-      )}
+        )}
+        <Button
+          variant="secondary"
+          onClick={handleLogoutEverywhere}
+          isLoading={isLoggingOutEverywhere}
+          className="text-red-400 border-red-500/30 hover:bg-red-500/10"
+        >
+          <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+          Log out of ALL sessions
+        </Button>
+      </div>
     </div>
   );
 }

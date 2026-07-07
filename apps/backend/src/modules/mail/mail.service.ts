@@ -16,6 +16,8 @@ import { contactRequestTemplate, ContactRequestField } from './templates/contact
 import { documentUploadedTemplate } from './templates/document-uploaded.template';
 import { mfaOtpCodeTemplate } from './templates/mfa-otp-code.template';
 import { loginAlertTemplate } from './templates/login-alert.template';
+import { passwordChangedTemplate } from './templates/password-changed.template';
+import { mfaStatusChangedTemplate } from './templates/mfa-status-changed.template';
 
 export interface SendResult {
   sent: boolean;
@@ -128,9 +130,34 @@ export class MailService {
     whenLabel: string,
     securityUrl: string,
     context: { userId?: string } = {},
+    location?: string | null,
+    deviceTrusted?: boolean,
   ): Promise<SendResult> {
-    const rendered = loginAlertTemplate({ firstName, device, ipAddress, whenLabel, securityUrl });
+    const rendered = loginAlertTemplate({ firstName, device, ipAddress, whenLabel, securityUrl, location, deviceTrusted });
     return this.dispatch({ template: 'LOGIN_ALERT', to, ...context }, rendered);
+  }
+
+  async sendPasswordChangedEmail(
+    to: string,
+    firstName: string,
+    whenLabel: string,
+    securityUrl: string,
+    context: { userId?: string } = {},
+  ): Promise<SendResult> {
+    const rendered = passwordChangedTemplate({ firstName, whenLabel, securityUrl });
+    return this.dispatch({ template: 'PASSWORD_CHANGED', to, ...context }, rendered);
+  }
+
+  async sendMfaStatusChangedEmail(
+    to: string,
+    firstName: string,
+    enabled: boolean,
+    whenLabel: string,
+    securityUrl: string,
+    context: { userId?: string } = {},
+  ): Promise<SendResult> {
+    const rendered = mfaStatusChangedTemplate({ firstName, enabled, whenLabel, securityUrl });
+    return this.dispatch({ template: 'MFA_STATUS_CHANGED', to, ...context }, rendered);
   }
 
   async sendWelcomeEmail(

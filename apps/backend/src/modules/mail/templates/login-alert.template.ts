@@ -4,17 +4,20 @@ export interface LoginAlertParams {
   firstName: string;
   device: string;
   ipAddress: string;
+  location?: string | null;
   whenLabel: string;
   securityUrl: string;
+  deviceTrusted?: boolean;
 }
 
 export function loginAlertTemplate(params: LoginAlertParams): { subject: string; html: string; text: string } {
-  const { firstName, device, ipAddress, whenLabel, securityUrl } = params;
+  const { firstName, device, ipAddress, location, whenLabel, securityUrl, deviceTrusted } = params;
   const subject = 'New sign-in to your Varied Reach account';
 
   const rows: Array<[string, string]> = [
     ['Device', device],
     ['IP address', ipAddress],
+    ...(location ? ([['Approximate location', location]] as Array<[string, string]>) : []),
     ['Time', whenLabel],
   ];
   const rowsHtml = rows
@@ -27,12 +30,20 @@ export function loginAlertTemplate(params: LoginAlertParams): { subject: string;
     )
     .join('');
 
+  const trustedNote = deviceTrusted
+    ? `<p style="margin: 0 0 16px 0;">This device has also been remembered for 30 days, so you won't be asked for a verification code here again until then.</p>`
+    : '';
+  const trustedNoteText = deviceTrusted
+    ? `\n\nThis device has also been remembered for 30 days, so you won't be asked for a verification code here again until then.`
+    : '';
+
   const bodyHtml = `
     <p style="margin: 0 0 16px 0;">Hi ${firstName}, we noticed a new sign-in to your account:</p>
     <table style="border-collapse: collapse; width: 100%; margin: 0 0 20px 0;">${rowsHtml}</table>
+    ${trustedNote}
     <p style="margin: 0;">If this was you, no action is needed. If you don't recognize this, secure your account immediately and change your password.</p>
   `;
-  const bodyText = `Hi ${firstName}, we noticed a new sign-in to your account:\n\n${rows.map(([l, v]) => `${l}: ${v}`).join('\n')}\n\nIf this was you, no action is needed. If you don't recognize this, secure your account immediately and change your password.`;
+  const bodyText = `Hi ${firstName}, we noticed a new sign-in to your account:\n\n${rows.map(([l, v]) => `${l}: ${v}`).join('\n')}${trustedNoteText}\n\nIf this was you, no action is needed. If you don't recognize this, secure your account immediately and change your password.`;
 
   return {
     subject,

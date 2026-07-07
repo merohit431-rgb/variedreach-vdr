@@ -45,6 +45,15 @@ export function useAuth() {
     }
   }, [clearAuth, router]);
 
+  const logoutEverywhere = useCallback(async () => {
+    try {
+      await apiClient.post('/auth/sessions/revoke-all');
+    } finally {
+      clearAuth();
+      router.push('/login');
+    }
+  }, [clearAuth, router]);
+
   const forgotPassword = useCallback(async (email: string) => {
     try {
       await apiClient.post('/auth/forgot-password', { email });
@@ -78,6 +87,7 @@ export function useAuth() {
     isInitializing,
     login,
     logout,
+    logoutEverywhere,
     forgotPassword,
     resetPassword,
     acceptInvite,
