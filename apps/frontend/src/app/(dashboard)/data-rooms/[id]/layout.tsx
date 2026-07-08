@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useState } from 'react';
 import {
@@ -244,6 +244,13 @@ function WorkspaceSkeleton() {
 export default function DataRoomLayout({ children }: { children: React.ReactNode }) {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const pathname = usePathname();
+  // The overview cards belong only to the room's landing/dashboard page (the
+  // Files index at /data-rooms/{id}). Sub-pages (members, activity, reports,
+  // qna, settings) share this same layout but start directly with their own
+  // content, so the cards are mounted conditionally rather than duplicating
+  // the layout per route.
+  const isFilesPage = pathname === `/data-rooms/${id}`;
   const { data: dataRoom, isLoading } = useDataRoom(id);
   const { data: access } = useDataRoomAccess(id);
   const { data: stats } = useDataRoomStats(id);
@@ -325,7 +332,8 @@ export default function DataRoomLayout({ children }: { children: React.ReactNode
           <p className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>
         )}
 
-        {/* Stat cards */}
+        {/* Overview cards -- Files (landing) page only. */}
+        {isFilesPage && (
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             icon={FileText}
@@ -375,9 +383,11 @@ export default function DataRoomLayout({ children }: { children: React.ReactNode
             }
           />
         </div>
+        )}
 
-        {/* Page content */}
-        <div className="pt-6">{children}</div>
+        {/* Page content -- sub-pages (members/activity/reports/qna/settings)
+            start directly here with no overview cards above. */}
+        <div className={isFilesPage ? 'pt-6' : 'pt-5'}>{children}</div>
       </div>
 
       {/* Right rail */}
