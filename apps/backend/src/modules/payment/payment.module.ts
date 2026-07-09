@@ -16,6 +16,9 @@ import { RazorpayPaymentProvider } from './providers/razorpay-payment.provider';
       inject: [ConfigService, MockPaymentProvider, RazorpayPaymentProvider],
     },
   ],
-  exports: [PAYMENT_PROVIDER],
+  // RazorpayPaymentProvider is exported by concrete class (not just the
+  // PAYMENT_PROVIDER token) so reconciliation can inject the *real* gateway
+  // client regardless of which provider PAYMENT_PROVIDER currently selects.
+  exports: [PAYMENT_PROVIDER, RazorpayPaymentProvider],
 })
 export class PaymentModule {}
