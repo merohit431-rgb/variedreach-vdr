@@ -28,7 +28,7 @@ async function main() {
 
   const orgName = process.env.SEED_ORG_NAME || 'Demo Resolution Professionals LLP';
   const orgSlug = process.env.SEED_ORG_SLUG || 'demo-rp';
-  const adminEmail = process.env.SEED_ADMIN_EMAIL || 'admin@insolvencyvdr.local';
+  const adminEmail = process.env.SEED_ADMIN_EMAIL || 'info@variedreach.com';
   const adminPassword = process.env.SEED_ADMIN_PASSWORD || 'ChangeMe123!';
 
   const organisation = await prisma.organisation.upsert({

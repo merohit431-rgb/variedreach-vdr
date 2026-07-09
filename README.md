@@ -67,7 +67,7 @@ a separate, idempotent step — safe to re-run any time, including after `prisma
 
 **Seeded admin login** (from `apps/backend/.env.example` defaults — change `SEED_ADMIN_PASSWORD`
 before going further than local dev):
-- Email: `admin@insolvencyvdr.local`
+- Email: `info@variedreach.com`
 - Password: `ChangeMe123!`
 
 ### Option B — Manual (without Docker)

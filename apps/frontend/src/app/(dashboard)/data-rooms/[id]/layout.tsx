@@ -245,12 +245,12 @@ export default function DataRoomLayout({ children }: { children: React.ReactNode
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const pathname = usePathname();
-  // The overview cards belong only to the room's landing/dashboard page (the
-  // Files index at /data-rooms/{id}). Sub-pages (members, activity, reports,
-  // qna, settings) share this same layout but start directly with their own
-  // content, so the cards are mounted conditionally rather than duplicating
-  // the layout per route.
-  const isFilesPage = pathname === `/data-rooms/${id}`;
+  // The overview cards (Documents / Members / Storage / Last Activity) live on
+  // the room's Settings page only. The Files page and every other sub-page
+  // share this same layout but start directly with their own content (upload /
+  // filters / search / listing), so the cards are mounted conditionally rather
+  // than duplicating the layout per route.
+  const isSettingsPage = pathname === `/data-rooms/${id}/settings`;
   const { data: dataRoom, isLoading } = useDataRoom(id);
   const { data: access } = useDataRoomAccess(id);
   const { data: stats } = useDataRoomStats(id);
@@ -332,8 +332,8 @@ export default function DataRoomLayout({ children }: { children: React.ReactNode
           <p className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>
         )}
 
-        {/* Overview cards -- Files (landing) page only. */}
-        {isFilesPage && (
+        {/* Overview cards -- Settings page only. */}
+        {isSettingsPage && (
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             icon={FileText}
@@ -385,9 +385,9 @@ export default function DataRoomLayout({ children }: { children: React.ReactNode
         </div>
         )}
 
-        {/* Page content -- sub-pages (members/activity/reports/qna/settings)
-            start directly here with no overview cards above. */}
-        <div className={isFilesPage ? 'pt-6' : 'pt-5'}>{children}</div>
+        {/* Page content -- Files and all other pages start directly here with
+            no overview cards above (cards render only on Settings). */}
+        <div className={isSettingsPage ? 'pt-6' : 'pt-5'}>{children}</div>
       </div>
 
       {/* Right rail */}

@@ -4,7 +4,7 @@ import * as bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  const email = process.env.SUPER_ADMIN_EMAIL ?? 'superadmin@variedreach.com';
+  const email = process.env.SUPER_ADMIN_EMAIL ?? 'rohit@variedreach.com';
   const password = process.env.SUPER_ADMIN_PASSWORD ?? 'SuperAdmin@2026!';
 
   const org = await prisma.organisation.upsert({
