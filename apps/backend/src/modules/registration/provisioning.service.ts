@@ -75,6 +75,12 @@ export class ProvisioningService {
           slug,
           planSlug: reg.selectedPlan,
           userLimit: plan.includedUsers,
+          // Without this, storageLimitGb falls back to the schema default (25)
+          // -- the org's actual enforced cap (read everywhere via
+          // getOrgStorageUsage) would silently disagree with what the
+          // customer selected and paid for (amounts.billableGb, already
+          // floored to the plan minimum above).
+          storageLimitGb: amounts.billableGb,
           ...(reg.gstNumber && { gstNumber: reg.gstNumber }),
           ...(reg.companyAddress && { address: reg.companyAddress }),
           ...(reg.mobileNumber && { mobileNumber: reg.mobileNumber }),
