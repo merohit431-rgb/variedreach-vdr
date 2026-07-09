@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { CouponService } from '../coupon/coupon.service';
+import { AuditLogService } from '../audit/audit-log.service';
 
 // Mirror of packages/shared/src/constants/pricing.constants.ts
 // (cannot be imported directly — shared package ships raw TS with no build step)
@@ -37,6 +38,7 @@ export class ProvisioningService {
     private readonly mailService: MailService,
     private readonly configService: ConfigService,
     private readonly couponService: CouponService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   async provision(
@@ -183,6 +185,25 @@ export class ProvisioningService {
       });
 
       return { org, user, invoiceNumber };
+    });
+
+    // Single shared audit entry for every successful payment, regardless of
+    // which caller reached this method (the normal client-redirect checkout,
+    // or the Razorpay webhook rescuing an interrupted one) -- previously
+    // neither path logged anything here at all.
+    await this.auditLogService.record({
+      action: 'PAYMENT_CAPTURED',
+      userId: user.id,
+      resourceType: 'Organisation',
+      resourceId: org.id,
+      metadata: {
+        invoiceNumber,
+        amountPaisa: netTotal,
+        planSlug: reg.selectedPlan,
+        billingCycle: isYearly ? 'YEARLY' : 'MONTHLY',
+        gatewayOrderId: reg.gatewayOrderId,
+        gatewayPaymentId: gateway?.paymentId ?? null,
+      },
     });
 
     // Fire-and-forget payment-success + welcome email with the receipt summary.

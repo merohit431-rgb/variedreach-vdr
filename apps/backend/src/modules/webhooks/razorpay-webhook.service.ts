@@ -134,12 +134,11 @@ export class RazorpayWebhookService {
     }
 
     try {
+      // provision() itself writes the PAYMENT_CAPTURED audit entry -- shared
+      // with the normal client-redirect path, so there's exactly one entry
+      // per successful payment regardless of which path completed it.
       await this.provisioningService.provision(registration.id, { paymentId: entity.id });
       this.logger.log(`Provisioned registration ${registration.id} via Razorpay webhook (order ${entity.order_id})`);
-      await this.auditLogService.record({
-        action: 'PAYMENT_CAPTURED',
-        metadata: { orderId: entity.order_id, paymentId: entity.id, amountPaisa: entity.amount, viaWebhook: true, rescuedProvisioning: true },
-      });
     } catch (error) {
       // A concurrent client-redirect completion can win the race between
       // our provisionedAt check above and this call -- that's success via
