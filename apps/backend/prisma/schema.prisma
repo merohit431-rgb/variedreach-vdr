@@ -92,6 +92,10 @@ enum AuditAction {
   MFA_OTP_GENERATED
   MFA_OTP_FAILED
   LOGIN_BLOCKED
+  PAYMENT_CAPTURED
+  PAYMENT_FAILED
+  PAYMENT_REFUND_INITIATED
+  PAYMENT_REFUNDED
 }
 
 enum PermissionScope {
@@ -597,6 +601,7 @@ enum EmailTemplate {
   LOGIN_ALERT
   PASSWORD_CHANGED
   MFA_STATUS_CHANGED
+  PAYMENT_FAILED
 }
 
 // userId/dataRoomId are both optional since not every email has either
@@ -729,6 +734,24 @@ model Invoice {
 
   @@index([organisationId, createdAt])
   @@map("invoices")
+}
+
+// Idempotency ledger for inbound payment-gateway webhooks. Razorpay (and any
+// future provider) retries webhook delivery on anything but a prompt 2xx, so
+// the same event can arrive more than once -- this table is the dedup guard:
+// insert-or-skip on (provider, externalId, eventType) before doing any real
+// work. externalId is the gateway's own id for the underlying entity (e.g.
+// a Razorpay payment or refund id), not our own Payment.id.
+model WebhookEvent {
+  id          String   @id @default(uuid())
+  provider    String
+  eventType   String
+  externalId  String
+  payload     Json
+  processedAt DateTime @default(now())
+
+  @@unique([provider, externalId, eventType])
+  @@map("webhook_events")
 }
 
 // ═══════════════════════════════════════════════════════════

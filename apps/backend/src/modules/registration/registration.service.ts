@@ -175,7 +175,10 @@ export class RegistrationService {
     });
     if (!valid) throw new BadRequestException('Payment verification failed');
 
-    const provisioned = await this.provisioningService.provision(reg.id);
+    const provisioned = await this.provisioningService.provision(reg.id, {
+      paymentId: dto.gatewayPaymentId,
+      signature: dto.gatewaySignature,
+    });
 
     const tokens = await this.authService.issueTokensForUser(
       provisioned.userId,

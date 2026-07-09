@@ -11,6 +11,7 @@ import { emailVerificationTemplate } from './templates/email-verification.templa
 import { accountCreatedTemplate } from './templates/account-created.template';
 import { storageWarningTemplate, StorageWarningLevel } from './templates/storage-warning.template';
 import { subscriptionActivatedTemplate } from './templates/subscription-activated.template';
+import { paymentFailedTemplate } from './templates/payment-failed.template';
 import { subscriptionRenewalReminderTemplate } from './templates/subscription-renewal-reminder.template';
 import { contactRequestTemplate, ContactRequestField } from './templates/contact-request.template';
 import { documentUploadedTemplate } from './templates/document-uploaded.template';
@@ -253,6 +254,19 @@ export class MailService {
     const { userId, ...details } = context;
     const rendered = subscriptionActivatedTemplate({ recipientName, planName, ...details });
     return this.dispatch({ template: 'SUBSCRIPTION_ACTIVATED', to, userId }, rendered);
+  }
+
+  // Sent from the Razorpay webhook on payment.failed -- the registration is
+  // untouched, so this is purely informational ("try again"), not a retry
+  // mechanism in itself.
+  async sendPaymentFailedEmail(
+    to: string,
+    recipientName: string,
+    planName: string,
+    context: { reason?: string; retryUrl?: string } = {},
+  ): Promise<SendResult> {
+    const rendered = paymentFailedTemplate({ recipientName, planName, ...context });
+    return this.dispatch({ template: 'PAYMENT_FAILED', to }, rendered);
   }
 
   // Dormant -- no caller invokes this today. See subscription-renewal-reminder.template.ts.

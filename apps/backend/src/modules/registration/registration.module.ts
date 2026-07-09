@@ -9,5 +9,6 @@ import { ProvisioningService } from './provisioning.service';
   imports: [AuthModule, CouponModule],
   controllers: [RegistrationController],
   providers: [RegistrationService, ProvisioningService],
+  exports: [ProvisioningService],
 })
 export class RegistrationModule {}

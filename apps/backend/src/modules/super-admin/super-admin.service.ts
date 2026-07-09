@@ -1,5 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditLogService } from '../audit/audit-log.service';
+import { IPaymentProvider, PAYMENT_PROVIDER } from '../payment/payment-provider.interface';
 import { UpdateOrgDto } from './dto/update-org.dto';
 
 // Mirror of shared pricing constants — same as registration.service.ts
@@ -20,7 +22,11 @@ function computeMonthlyRevenue(planSlug: string, storageGb: number, billingCycle
 
 @Injectable()
 export class SuperAdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogService: AuditLogService,
+    @Inject(PAYMENT_PROVIDER) private readonly paymentProvider: IPaymentProvider,
+  ) {}
 
   async getDashboard() {
     const now = new Date();
@@ -245,6 +251,33 @@ export class SuperAdminService {
       page,
       limit,
     };
+  }
+
+  // Initiates a gateway refund and marks the Payment REFUNDED immediately --
+  // razorpay-webhook.service.ts's refund.processed handler will find the
+  // Payment already in this state and no-op, so this and a Razorpay-dashboard
+  // -initiated refund converge on the same end state either way.
+  async refundPayment(paymentId: string, actorUserId: string) {
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment) throw new NotFoundException('Payment not found');
+    if (payment.status !== 'SUCCESSFUL') {
+      throw new BadRequestException(`Only a SUCCESSFUL payment can be refunded (this one is ${payment.status})`);
+    }
+    if (!payment.gatewayPaymentId) {
+      throw new BadRequestException('Payment has no gateway payment id on record -- cannot refund');
+    }
+
+    await this.auditLogService.record({
+      action: 'PAYMENT_REFUND_INITIATED',
+      userId: actorUserId,
+      resourceType: 'Payment',
+      resourceId: payment.id,
+      metadata: { amountPaisa: payment.amountPaisa, gatewayPaymentId: payment.gatewayPaymentId },
+    });
+
+    await this.paymentProvider.refundPayment(payment.gatewayPaymentId, payment.amountPaisa);
+
+    return this.prisma.payment.update({ where: { id: payment.id }, data: { status: 'REFUNDED' } });
   }
 
   async getSubscriptions(page: number, limit: number, status?: string) {

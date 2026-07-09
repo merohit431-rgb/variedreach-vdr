@@ -39,7 +39,10 @@ export class ProvisioningService {
     private readonly couponService: CouponService,
   ) {}
 
-  async provision(registrationId: string): Promise<{ organisationId: string; userId: string; email: string; firstName: string; lastName: string; role: string }> {
+  async provision(
+    registrationId: string,
+    gateway?: { paymentId?: string; signature?: string },
+  ): Promise<{ organisationId: string; userId: string; email: string; firstName: string; lastName: string; role: string }> {
     const reg = await this.prisma.registration.findUnique({ where: { id: registrationId } });
     if (!reg) throw new BadRequestException('Registration not found');
     if (!reg.verifiedAt) throw new BadRequestException('Email not verified');
@@ -113,6 +116,8 @@ export class ProvisioningService {
           amountPaisa: netTotal, // what was actually charged (after discount)
           status: 'SUCCESSFUL',
           ...(reg.gatewayOrderId && { gatewayOrderId: reg.gatewayOrderId }),
+          ...(gateway?.paymentId && { gatewayPaymentId: gateway.paymentId }),
+          ...(gateway?.signature && { gatewaySignature: gateway.signature }),
           paidAt: now,
         },
       });

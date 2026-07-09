@@ -1,7 +1,9 @@
-import { Body, Controller, Get, Param, Patch, Query, Res } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import type { Response } from 'express';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { SuperAdminService } from './super-admin.service';
 import { InvoicePdfService } from '../billing/invoice-pdf.service';
 import { UpdateOrgDto } from './dto/update-org.dto';
@@ -47,6 +49,11 @@ export class SuperAdminController {
   @Get('payments')
   getPayments(@Query('page') page = '1', @Query('limit') limit = '20') {
     return this.service.getPayments(+page, +limit);
+  }
+
+  @Post('payments/:id/refund')
+  refundPayment(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.refundPayment(id, user.id);
   }
 
   @Get('subscriptions')
