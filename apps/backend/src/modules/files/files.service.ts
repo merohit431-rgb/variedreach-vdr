@@ -83,22 +83,16 @@ export class FilesService {
       await this.assertFolderExists(dataRoomId, folderId);
     }
 
-    // Pre-flight: verify the batch would not exceed the data room's storage quota
-    // before writing a single byte to disk.
+    // Pre-flight: verify the batch would not exceed the ORGANISATION storage
+    // plan (the single source of truth) before writing a single byte to disk.
+    // The legacy per-room DataRoom.storageLimitGb quota is intentionally no
+    // longer enforced -- the org plan is the one cap.
     const dataRoom = await this.prisma.dataRoom.findUnique({
       where: { id: dataRoomId },
-      select: { organisationId: true, storageUsedBytes: true, storageLimitGb: true },
+      select: { organisationId: true },
     });
     const batchBytes = multerFiles.reduce((sum, f) => sum + BigInt(f.size), 0n);
     if (dataRoom) {
-      const quotaBytes = BigInt(dataRoom.storageLimitGb) * 1024n * 1024n * 1024n;
-      if (dataRoom.storageUsedBytes + batchBytes > quotaBytes) {
-        throw new BadRequestException(
-          `Upload would exceed the data room's ${dataRoom.storageLimitGb} GB storage quota`,
-        );
-      }
-      // Organisation-wide cap sits above the per-room quota — a room can have
-      // headroom while the org as a whole is full, so both must pass.
       await this.assertOrgStorageAvailable(dataRoom.organisationId, batchBytes);
     }
 
@@ -287,19 +281,15 @@ export class FilesService {
       );
     }
 
-    // Quota pre-check: the net size delta (new - old) must not push usage over limit.
+    // Quota pre-check: the net size delta (new - old) must not push the
+    // ORGANISATION over its storage plan (the single source of truth). The
+    // legacy per-room quota is no longer enforced.
     const dataRoomForVersion = await this.prisma.dataRoom.findUnique({
       where: { id: dataRoomId },
-      select: { organisationId: true, storageUsedBytes: true, storageLimitGb: true },
+      select: { organisationId: true },
     });
     if (dataRoomForVersion) {
-      const quotaBytes = BigInt(dataRoomForVersion.storageLimitGb) * 1024n * 1024n * 1024n;
       const netDelta = BigInt(multerFile.size) - file.sizeBytes;
-      if (dataRoomForVersion.storageUsedBytes + netDelta > quotaBytes) {
-        throw new BadRequestException(
-          `New version would exceed the data room's ${dataRoomForVersion.storageLimitGb} GB storage quota`,
-        );
-      }
       if (netDelta > 0n) {
         await this.assertOrgStorageAvailable(dataRoomForVersion.organisationId, netDelta);
       }
@@ -687,8 +677,11 @@ export class FilesService {
     const room = await this.prisma.dataRoom.findUnique({ where: { id: dataRoomId } });
     if (!room) return;
 
-    const limitBytes = BigInt(room.storageLimitGb) * 1024n * 1024n * 1024n;
-    const percentUsed = limitBytes > 0n ? Number((room.storageUsedBytes * 100n) / limitBytes) : 0;
+    // Warnings track the ORGANISATION storage plan (the single source of truth),
+    // not the legacy per-room quota -- so the 80/95/100% alerts fire against the
+    // same limit shown in the dashboard and room header.
+    const { usedBytes, limitBytes } = await getOrgStorageUsage(this.prisma, room.organisationId);
+    const percentUsed = limitBytes > 0n ? Number((usedBytes * 100n) / limitBytes) : 0;
 
     const warningPct = this.configService.get<number>('storage.warningPercent')!;
     const criticalPct = this.configService.get<number>('storage.criticalPercent')!;

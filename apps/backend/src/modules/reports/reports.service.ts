@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { DataRoomAccessService } from '../data-room-access/data-room-access.service';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
+import { getOrgStorageUsage } from '../../common/org-storage.util';
 import { ReportQueryDto } from './dto/report-query.dto';
 
 export interface ReportTable {
@@ -84,11 +85,11 @@ export class ReportsService {
 
     const dateFilter = buildDateFilter(query);
 
-    const [dataRoom, downloadCount, viewCount, uploadCount, fileCount, uniqueUserRows] = await Promise.all([
-      this.prisma.dataRoom.findUnique({
-        where: { id: dataRoomId },
-        select: { storageUsedBytes: true, storageLimitGb: true },
-      }),
+    // Storage figures are ORGANISATION-wide (the single source of truth shared
+    // with the dashboard and room header) -- Organisation.storageLimitGb plus
+    // total bytes across every room, NOT the legacy per-room quota.
+    const [orgStorage, downloadCount, viewCount, uploadCount, fileCount, uniqueUserRows] = await Promise.all([
+      getOrgStorageUsage(this.prisma, actor.organisationId),
       this.prisma.auditLog.count({ where: { dataRoomId, action: 'FILE_DOWNLOADED', ...dateFilter } }),
       this.prisma.auditLog.count({ where: { dataRoomId, action: 'FILE_VIEWED', ...dateFilter } }),
       this.prisma.auditLog.count({ where: { dataRoomId, action: 'FILE_UPLOADED', ...dateFilter } }),
@@ -99,9 +100,9 @@ export class ReportsService {
       }),
     ]);
 
-    const usedBytes = dataRoom?.storageUsedBytes ?? 0n;
-    const limitGb = dataRoom?.storageLimitGb ?? 1;
-    const limitBytes = BigInt(limitGb) * 1024n * 1024n * 1024n;
+    const usedBytes = orgStorage.usedBytes;
+    const limitGb = orgStorage.limitGb;
+    const limitBytes = orgStorage.limitBytes;
     const usedPercent = limitBytes > 0n ? Math.round(Number((usedBytes * 100n) / limitBytes)) : 0;
 
     return {
@@ -154,11 +155,11 @@ export class ReportsService {
   async getStorageReport(dataRoomId: string, actor: AuthenticatedUser): Promise<StorageReportTable> {
     await this.dataRoomAccess.assertRoomManager(dataRoomId, actor);
 
-    const [dataRoom, files] = await Promise.all([
-      this.prisma.dataRoom.findUnique({
-        where: { id: dataRoomId },
-        select: { storageUsedBytes: true, storageLimitGb: true },
-      }),
+    // Storage totals/quota are ORGANISATION-wide (the single source of truth);
+    // the file list below is this room's largest files, sized against the org
+    // plan so "% of Quota" matches the org limit shown everywhere else.
+    const [orgStorage, files] = await Promise.all([
+      getOrgStorageUsage(this.prisma, actor.organisationId),
       this.prisma.file.findMany({
         where: { dataRoomId },
         select: { name: true, extension: true, sizeBytes: true, createdAt: true },
@@ -167,9 +168,9 @@ export class ReportsService {
       }),
     ]);
 
-    const usedBytes = dataRoom?.storageUsedBytes ?? 0n;
-    const limitGb = dataRoom?.storageLimitGb ?? 1;
-    const limitBytes = BigInt(limitGb) * 1024n * 1024n * 1024n;
+    const usedBytes = orgStorage.usedBytes;
+    const limitGb = orgStorage.limitGb;
+    const limitBytes = orgStorage.limitBytes;
 
     const byType: Record<string, bigint> = {};
     for (const file of files) {

@@ -201,7 +201,7 @@ function StoragePanel({ usedBytes, limitGb }: { usedBytes: string; limitGb: numb
         </svg>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-app-text">
-            {usedGb.toFixed(usedGb >= 10 ? 0 : 1)} GB{' '}
+            {Number(usedGb.toFixed(2))} GB{' '}
             <span className="font-normal text-app-t4">of {limitGb} GB used</span>
           </p>
           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-app-s3">
@@ -359,7 +359,7 @@ export default function DataRoomLayout({ children }: { children: React.ReactNode
               label="Storage"
               value={
                 stats && stats.storageUsedBytes != null
-                  ? `${bytesToGb(stats.storageUsedBytes).toFixed(1)} GB`
+                  ? `${Number(bytesToGb(stats.storageUsedBytes).toFixed(2))} GB`
                   : '—'
               }
               sub={stats && stats.storageLimitGb != null ? `of ${stats.storageLimitGb} GB used` : undefined}

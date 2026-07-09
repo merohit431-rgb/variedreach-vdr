@@ -14,6 +14,7 @@ import { AuthService } from '../auth/auth.service';
 import { FoldersService } from '../folders/folders.service';
 import { DataRoomAccessService } from '../data-room-access/data-room-access.service';
 import { generateOpaqueToken } from '../../common/utils/crypto.util';
+import { getOrgStorageUsage } from '../../common/org-storage.util';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import {
   CONTENT_DELETE_ROLES,
@@ -484,11 +485,12 @@ export class DataRoomsService {
     const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor);
     const isManager = ADMIN_ROLES.includes(effectiveRole);
 
-    const [room, documents, members, lastActivity, folderGroups] = await Promise.all([
-      this.prisma.dataRoom.findUniqueOrThrow({
-        where: { id: dataRoomId },
-        select: { storageUsedBytes: true, storageLimitGb: true },
-      }),
+    const [orgStorage, documents, members, lastActivity, folderGroups] = await Promise.all([
+      // Storage shown in the room header/panel is ORGANISATION-wide -- the same
+      // single source of truth the dashboard uses (Organisation.storageLimitGb +
+      // total bytes across every room in the org). The per-room
+      // DataRoom.storageLimitGb column is legacy and deliberately never surfaced.
+      getOrgStorageUsage(this.prisma, actor.organisationId),
       this.prisma.file.count({ where: { dataRoomId, deletedAt: null } }),
       this.prisma.dataRoomMember.count({ where: { dataRoomId, removedAt: null } }),
       this.prisma.auditLog.findFirst({
@@ -511,8 +513,8 @@ export class DataRoomsService {
     return {
       documents,
       members: isManager ? members : null,
-      storageUsedBytes: isManager ? room.storageUsedBytes.toString() : null,
-      storageLimitGb: isManager ? room.storageLimitGb : null,
+      storageUsedBytes: isManager ? orgStorage.usedBytes.toString() : null,
+      storageLimitGb: isManager ? orgStorage.limitGb : null,
       lastActivityAt: lastActivity?.createdAt ?? null,
       lastActivityAction: lastActivity?.action ?? null,
       folderCounts,
