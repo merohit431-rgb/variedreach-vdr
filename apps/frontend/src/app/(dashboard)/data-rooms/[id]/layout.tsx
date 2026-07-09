@@ -251,6 +251,11 @@ export default function DataRoomLayout({ children }: { children: React.ReactNode
   // filters / search / listing), so the cards are mounted conditionally rather
   // than duplicating the layout per route.
   const isSettingsPage = pathname === `/data-rooms/${id}/settings`;
+  // Reports gets the right rail (Activity Feed / Storage widget) removed and
+  // the main column expanded full-width -- those panels compete for the same
+  // horizontal space the report table needs, and reports already has its own
+  // export/filter chrome so the right rail is redundant there.
+  const isReportsPage = pathname === `/data-rooms/${id}/reports`;
   const { data: dataRoom, isLoading } = useDataRoom(id);
   const { data: access } = useDataRoomAccess(id);
   const { data: stats } = useDataRoomStats(id);
@@ -390,13 +395,15 @@ export default function DataRoomLayout({ children }: { children: React.ReactNode
         <div className={isSettingsPage ? 'pt-6' : 'pt-5'}>{children}</div>
       </div>
 
-      {/* Right rail */}
-      <aside className="hidden w-72 flex-shrink-0 space-y-4 xl:block">
-        <ActivityFeedPanel dataRoomId={id} />
-        {canManage && stats && stats.storageUsedBytes != null && stats.storageLimitGb != null && (
-          <StoragePanel usedBytes={stats.storageUsedBytes} limitGb={stats.storageLimitGb} />
-        )}
-      </aside>
+      {/* Right rail -- omitted entirely on Reports so the table gets full width. */}
+      {!isReportsPage && (
+        <aside className="hidden w-72 flex-shrink-0 space-y-4 xl:block">
+          <ActivityFeedPanel dataRoomId={id} />
+          {canManage && stats && stats.storageUsedBytes != null && stats.storageLimitGb != null && (
+            <StoragePanel usedBytes={stats.storageUsedBytes} limitGb={stats.storageLimitGb} />
+          )}
+        </aside>
+      )}
 
       <ConfirmDialog
         open={showDeleteDialog}

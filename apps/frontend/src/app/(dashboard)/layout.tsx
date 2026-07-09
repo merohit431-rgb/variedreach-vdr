@@ -55,9 +55,9 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
           isMobileOpen={isMobileOpen}
           onCloseMobile={() => setIsMobileOpen(false)}
         />
-        <div className="flex flex-1 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col">
           <TopNav onOpenMobileMenu={() => setIsMobileOpen(true)} />
-          <main className="flex-1 animate-fade-in p-4 lg:p-6">{children}</main>
+          <main className="min-w-0 flex-1 animate-fade-in p-4 lg:p-6">{children}</main>
         </div>
       </div>
       <StickyUploadManager />

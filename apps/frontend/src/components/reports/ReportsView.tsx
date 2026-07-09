@@ -112,79 +112,12 @@ export function ReportsView({ dataRoomId }: { dataRoomId: string }) {
   }
 
   return (
-    <div className="space-y-5">
-      {/* Header row */}
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="text-lg font-semibold text-app-text">Analytics &amp; Reports</h2>
+    <div className="flex min-w-0 flex-col gap-3">
+      {/* Header */}
+      <h2 className="text-lg font-semibold text-app-text">Analytics &amp; Reports</h2>
 
-        {activeReportName && activeTab !== 'overview' && (
-          <div className="relative">
-            <button
-              onClick={() => setShowExportMenu((v) => !v)}
-              disabled={isExporting !== null}
-              className="flex items-center gap-2 rounded-lg border border-app-border bg-app-s1 px-3 py-2 text-sm font-medium text-app-t2 shadow-sm hover:bg-app-s2 disabled:opacity-50"
-            >
-              <Download className="h-4 w-4" aria-hidden="true" />
-              {isExporting ? 'Exporting…' : 'Export'}
-              <span className="text-app-t3 text-xs">▾</span>
-            </button>
-            {showExportMenu && (
-              <>
-                {/* Click-outside backdrop */}
-                <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
-                <div className="absolute right-0 top-full z-20 mt-1 w-32 rounded-xl border border-app-border bg-app-s1 py-1.5 shadow-dark-popover">
-                  {EXPORT_FORMATS.map((fmt) => (
-                    <button
-                      key={fmt.value}
-                      onClick={() => handleExport(fmt.value)}
-                      className="block w-full px-3 py-2 text-left text-sm text-app-t2 hover:bg-app-s2"
-                    >
-                      {fmt.label}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Date preset row */}
-      <div className="flex flex-wrap items-center gap-2">
-        {DATE_PRESETS.map((preset) => (
-          <button
-            key={preset.value}
-            onClick={() => setDatePreset(preset.value)}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-              datePreset === preset.value
-                ? 'bg-app-primary text-white'
-                : 'border border-app-border bg-app-s1 text-app-t2 hover:bg-app-s2'
-            }`}
-          >
-            {preset.label}
-          </button>
-        ))}
-        {datePreset === 'custom' && (
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={customFrom}
-              onChange={(e) => setCustomFrom(e.target.value)}
-              className="rounded-md border border-app-border2 px-2 py-1.5 text-sm"
-            />
-            <span className="text-sm text-app-t3">to</span>
-            <input
-              type="date"
-              value={customTo}
-              onChange={(e) => setCustomTo(e.target.value)}
-              className="rounded-md border border-app-border2 px-2 py-1.5 text-sm"
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Summary stat cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      {/* Analytics: compact KPI strip */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         <ReportCard
           label="Total Files"
           value={summaryLoading ? '—' : (summary?.totalFiles.toLocaleString() ?? '0')}
@@ -220,113 +153,187 @@ export function ReportsView({ dataRoomId }: { dataRoomId: string }) {
         />
       </div>
 
-      {/* Tab bar */}
-      <div className="border-b border-app-border">
-        <nav className="-mb-px flex">
-          {TABS.map((tab) => (
-            <button
-              key={tab.value}
-              onClick={() => setActiveTab(tab.value)}
-              className={`px-5 py-2.5 text-sm font-medium transition-colors ${
-                activeTab === tab.value
-                  ? 'border-b-2 border-app-primary text-blue-300'
-                  : 'text-app-t3 hover:text-app-text'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-      </div>
+      {/* Filters + Export -- sticky so they stay reachable while the table scrolls */}
+      <div className="sticky top-0 z-20 -mx-4 border-b border-app-border bg-app-bg/95 px-4 py-2 backdrop-blur-sm lg:-mx-6 lg:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {/* Report tabs -- which report is being viewed, scrolls on its own if narrow */}
+          <nav className="flex min-w-0 flex-shrink-0 gap-1 overflow-x-auto">
+            {TABS.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => setActiveTab(tab.value)}
+                className={`flex-shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  activeTab === tab.value
+                    ? 'bg-app-primary text-white'
+                    : 'text-app-t3 hover:bg-app-s2 hover:text-app-text'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
 
-      {/* ── Overview tab ── */}
-      {activeTab === 'overview' && (
-        <div className="rounded-xl border border-app-border bg-app-s1 p-5 shadow-dark-soft">
-          <div className="mb-1 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-app-t2">Download &amp; View Activity</h3>
-            <span className="text-xs text-app-t3">
-              {datePreset === 'all' ? 'Last 30 days' : DATE_PRESETS.find((p) => p.value === datePreset)?.label}
-            </span>
-          </div>
-          {trendsLoading ? (
-            <div className="mt-4 h-24 animate-pulse rounded-md bg-app-s2" />
-          ) : (
-            <TrendBarChart data={trends ?? []} />
-          )}
-        </div>
-      )}
-
-      {/* ── Downloads tab ── */}
-      {activeTab === 'downloads' && (
-        <>
-          {tableLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-10 animate-pulse rounded-md bg-app-s2" />
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Date range filter */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {DATE_PRESETS.map((preset) => (
+                <button
+                  key={preset.value}
+                  onClick={() => setDatePreset(preset.value)}
+                  className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                    datePreset === preset.value
+                      ? 'bg-app-s3 text-app-text'
+                      : 'border border-app-border bg-app-s1 text-app-t2 hover:bg-app-s2'
+                  }`}
+                >
+                  {preset.label}
+                </button>
               ))}
-            </div>
-          ) : !reportTable || reportTable.rows.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-app-border2 p-12 text-center">
-              <p className="text-sm font-medium text-app-t2">No download events in this period</p>
-              <p className="mt-1 text-sm text-app-t3">Try expanding the date range.</p>
-            </div>
-          ) : (
-            <ReportDataTable headers={reportTable.headers} rows={reportTable.rows} />
-          )}
-        </>
-      )}
-
-      {/* ── Users tab ── */}
-      {activeTab === 'users' && (
-        <>
-          {tableLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="h-10 animate-pulse rounded-md bg-app-s2" />
-              ))}
-            </div>
-          ) : !reportTable || reportTable.rows.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-app-border2 p-12 text-center">
-              <p className="text-sm font-medium text-app-t2">No member activity recorded yet</p>
-              <p className="mt-1 text-sm text-app-t3">Activity appears once members access the data room.</p>
-            </div>
-          ) : (
-            <ReportDataTable headers={reportTable.headers} rows={reportTable.rows} />
-          )}
-        </>
-      )}
-
-      {/* ── Storage tab ── */}
-      {activeTab === 'storage' && (
-        <>
-          {tableLoading ? (
-            <div className="h-40 animate-pulse rounded-lg bg-app-s2" />
-          ) : storageTable?.summary ? (
-            <div className="space-y-5">
-              <StorageSummaryCard
-                usedBytes={storageTable.summary.usedBytes}
-                limitGb={storageTable.summary.limitGb}
-                fileCount={storageTable.summary.fileCount}
-                byType={storageTable.summary.byType}
-              />
-              {storageTable.rows.length > 0 && (
-                <div>
-                  <h3 className="mb-3 text-sm font-semibold text-app-t2">Top Files by Size</h3>
-                  <ReportDataTable
-                    headers={storageTable.headers}
-                    rows={storageTable.rows}
-                    pageSize={10}
+              {datePreset === 'custom' && (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="date"
+                    value={customFrom}
+                    onChange={(e) => setCustomFrom(e.target.value)}
+                    className="rounded-md border border-app-border2 px-2 py-1 text-xs"
+                  />
+                  <span className="text-xs text-app-t3">to</span>
+                  <input
+                    type="date"
+                    value={customTo}
+                    onChange={(e) => setCustomTo(e.target.value)}
+                    className="rounded-md border border-app-border2 px-2 py-1 text-xs"
                   />
                 </div>
               )}
             </div>
-          ) : (
-            <div className="rounded-lg border border-dashed border-app-border2 p-12 text-center">
-              <p className="text-sm text-app-t3">No files uploaded yet.</p>
+
+            {/* Export -- beside the filters, not floating */}
+            {activeReportName && activeTab !== 'overview' && (
+              <div className="relative flex-shrink-0">
+                <button
+                  onClick={() => setShowExportMenu((v) => !v)}
+                  disabled={isExporting !== null}
+                  className="flex items-center gap-2 rounded-lg border border-app-border bg-app-s1 px-3 py-1.5 text-xs font-medium text-app-t2 shadow-sm hover:bg-app-s2 disabled:opacity-50"
+                >
+                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                  {isExporting ? 'Exporting…' : 'Export'}
+                  <span className="text-app-t3">▾</span>
+                </button>
+                {showExportMenu && (
+                  <>
+                    {/* Click-outside backdrop */}
+                    <div className="fixed inset-0 z-10" onClick={() => setShowExportMenu(false)} />
+                    <div className="absolute right-0 top-full z-20 mt-1 w-32 rounded-xl border border-app-border bg-app-s1 py-1.5 shadow-dark-popover">
+                      {EXPORT_FORMATS.map((fmt) => (
+                        <button
+                          key={fmt.value}
+                          onClick={() => handleExport(fmt.value)}
+                          className="block w-full px-3 py-2 text-left text-sm text-app-t2 hover:bg-app-s2"
+                        >
+                          {fmt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Report content -- Analytics chart on Overview, Report table on every other tab */}
+      <div className="min-w-0">
+        {/* ── Overview tab ── */}
+        {activeTab === 'overview' && (
+          <div className="rounded-xl border border-app-border bg-app-s1 p-5 shadow-dark-soft">
+            <div className="mb-1 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-app-t2">Download &amp; View Activity</h3>
+              <span className="text-xs text-app-t3">
+                {datePreset === 'all' ? 'Last 30 days' : DATE_PRESETS.find((p) => p.value === datePreset)?.label}
+              </span>
             </div>
-          )}
-        </>
-      )}
+            {trendsLoading ? (
+              <div className="mt-4 h-24 animate-pulse rounded-md bg-app-s2" />
+            ) : (
+              <TrendBarChart data={trends ?? []} />
+            )}
+          </div>
+        )}
+
+        {/* ── Downloads tab ── */}
+        {activeTab === 'downloads' && (
+          <>
+            {tableLoading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="h-10 animate-pulse rounded-md bg-app-s2" />
+                ))}
+              </div>
+            ) : !reportTable || reportTable.rows.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-app-border2 p-12 text-center">
+                <p className="text-sm font-medium text-app-t2">No download events in this period</p>
+                <p className="mt-1 text-sm text-app-t3">Try expanding the date range.</p>
+              </div>
+            ) : (
+              <ReportDataTable headers={reportTable.headers} rows={reportTable.rows} />
+            )}
+          </>
+        )}
+
+        {/* ── Users tab ── */}
+        {activeTab === 'users' && (
+          <>
+            {tableLoading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="h-10 animate-pulse rounded-md bg-app-s2" />
+                ))}
+              </div>
+            ) : !reportTable || reportTable.rows.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-app-border2 p-12 text-center">
+                <p className="text-sm font-medium text-app-t2">No member activity recorded yet</p>
+                <p className="mt-1 text-sm text-app-t3">Activity appears once members access the data room.</p>
+              </div>
+            ) : (
+              <ReportDataTable headers={reportTable.headers} rows={reportTable.rows} />
+            )}
+          </>
+        )}
+
+        {/* ── Storage tab ── */}
+        {activeTab === 'storage' && (
+          <>
+            {tableLoading ? (
+              <div className="h-40 animate-pulse rounded-lg bg-app-s2" />
+            ) : storageTable?.summary ? (
+              <div className="space-y-4">
+                <StorageSummaryCard
+                  usedBytes={storageTable.summary.usedBytes}
+                  limitGb={storageTable.summary.limitGb}
+                  fileCount={storageTable.summary.fileCount}
+                  byType={storageTable.summary.byType}
+                />
+                {storageTable.rows.length > 0 && (
+                  <div>
+                    <h3 className="mb-2 text-sm font-semibold text-app-t2">Top Files by Size</h3>
+                    <ReportDataTable
+                      headers={storageTable.headers}
+                      rows={storageTable.rows}
+                      pageSize={10}
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-app-border2 p-12 text-center">
+                <p className="text-sm text-app-t3">No files uploaded yet.</p>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
