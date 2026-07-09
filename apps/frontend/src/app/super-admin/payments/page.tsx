@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { useSuperAdmin } from '@/hooks/use-super-admin';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { TableContainer, Table, Thead, Tbody, Tr, Th, Td } from '@/components/ui/Table';
-import { CheckCircle2, Clock, XCircle, RefreshCcw } from 'lucide-react';
+import { CheckCircle2, Clock, XCircle, RefreshCcw, ListChecks } from 'lucide-react';
 
 function formatInr(paise: number) {
   return `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
@@ -57,9 +58,18 @@ export default function PaymentsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900">Payments</h1>
-        <p className="mt-0.5 text-sm text-slate-500">All payment transactions across the platform.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">Payments</h1>
+          <p className="mt-0.5 text-sm text-slate-500">All payment transactions across the platform.</p>
+        </div>
+        <Link
+          href="/super-admin/payments/reconcile"
+          className="flex flex-shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+        >
+          <ListChecks className="h-4 w-4" aria-hidden="true" />
+          Reconcile
+        </Link>
       </div>
 
       {/* Analytics cards */}

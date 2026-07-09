@@ -56,6 +56,18 @@ export class SuperAdminController {
     return this.service.refundPayment(id, user.id);
   }
 
+  // Must come before any future `payments/:id` GET route -- "reconcile"
+  // would otherwise be swallowed as an :id param.
+  @Get('payments/reconcile')
+  getPaymentsForReconciliation(@Query('page') page = '1', @Query('limit') limit = '20') {
+    return this.service.getPaymentsForReconciliation(+page, +limit);
+  }
+
+  @Post('payments/:id/reconcile')
+  reconcilePayment(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.reconcilePayment(id, user.id);
+  }
+
   @Get('subscriptions')
   getSubscriptions(
     @Query('page') page = '1',

@@ -2,6 +2,7 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { IPaymentProvider, PAYMENT_PROVIDER } from '../payment/payment-provider.interface';
+import { RazorpayPaymentProvider } from '../payment/providers/razorpay-payment.provider';
 import { UpdateOrgDto } from './dto/update-org.dto';
 
 // Mirror of shared pricing constants — same as registration.service.ts
@@ -26,6 +27,10 @@ export class SuperAdminService {
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
     @Inject(PAYMENT_PROVIDER) private readonly paymentProvider: IPaymentProvider,
+    // Reconciliation always needs the *real* Razorpay client, regardless of
+    // which provider PAYMENT_PROVIDER currently selects -- "compare against
+    // the gateway" is meaningless for the mock provider.
+    private readonly razorpayProvider: RazorpayPaymentProvider,
   ) {}
 
   async getDashboard() {
@@ -278,6 +283,121 @@ export class SuperAdminService {
     await this.paymentProvider.refundPayment(payment.gatewayPaymentId, payment.amountPaisa);
 
     return this.prisma.payment.update({ where: { id: payment.id }, data: { status: 'REFUNDED' } });
+  }
+
+  // Payments → Reconcile: every payment with a gatewayOrderId, plus whatever
+  // the last reconciliation check found (stashed in Payment.metadata rather
+  // than a new column -- keeps this feature schema-neutral). Sync Status is
+  // "Not checked" until an admin actually runs the check for that row; this
+  // deliberately never auto-calls Razorpay on page load, only on demand.
+  async getPaymentsForReconciliation(page: number, limit: number) {
+    const [data, total] = await Promise.all([
+      this.prisma.payment.findMany({
+        where: { gatewayOrderId: { not: null } },
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true, amountPaisa: true, status: true, metadata: true,
+          gatewayOrderId: true, gatewayPaymentId: true, createdAt: true,
+          organisation: { select: { id: true, name: true } },
+          invoice: { select: { invoiceNumber: true } },
+          subscription: { select: { planSlug: true, billingCycle: true, status: true } },
+        },
+      }),
+      this.prisma.payment.count({ where: { gatewayOrderId: { not: null } } }),
+    ]);
+
+    const items = data.map((p) => {
+      const reconciliation = (p.metadata as { reconciliation?: { checkedAt: string; inSync: boolean; razorpayStatus: string } } | null)?.reconciliation;
+      return {
+        id: p.id,
+        amountPaisa: p.amountPaisa,
+        status: p.status,
+        gatewayOrderId: p.gatewayOrderId,
+        gatewayPaymentId: p.gatewayPaymentId,
+        createdAt: p.createdAt,
+        organisation: p.organisation,
+        invoiceNumber: p.invoice?.invoiceNumber ?? null,
+        subscription: p.subscription,
+        syncStatus: reconciliation ? (reconciliation.inSync ? 'IN_SYNC' : 'DRIFTED') : 'NOT_CHECKED',
+        lastCheckedAt: reconciliation?.checkedAt ?? null,
+        lastRazorpayStatus: reconciliation?.razorpayStatus ?? null,
+      };
+    });
+
+    return { items, total, page, limit };
+  }
+
+  // The "Reconcile with Razorpay" button. Looks the order up by
+  // gatewayOrderId (always present once an order was created) rather than
+  // gatewayPaymentId (which may be missing -- exactly the drift this exists
+  // to catch), compares Razorpay's real payment status against our local
+  // Payment.status, and auto-corrects the two drift patterns that actually
+  // matter: a captured payment we never learned about, and a refund that
+  // happened on Razorpay's side without our refund.processed webhook firing
+  // (dashboard-initiated refunds, a delivery failure, etc.).
+  async reconcilePayment(paymentId: string, actorUserId: string) {
+    const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!payment) throw new NotFoundException('Payment not found');
+    if (!payment.gatewayOrderId) {
+      throw new BadRequestException('Payment has no gateway order id -- nothing to reconcile against');
+    }
+
+    const razorpayPayments = await this.razorpayProvider.fetchOrderPayments(payment.gatewayOrderId);
+    const checkedAt = new Date().toISOString();
+
+    if (razorpayPayments.length === 0) {
+      await this.stashReconciliationResult(payment.id, { checkedAt, inSync: false, razorpayStatus: 'no_payment_found' });
+      return { inSync: false, localStatus: payment.status, razorpayStatus: null, discrepancy: 'No payment found on Razorpay for this order', corrected: false };
+    }
+
+    // An order can have more than one payment attempt (e.g. a failed try
+    // followed by a successful one) -- the captured one is the one that
+    // matters; otherwise take the most recent.
+    const captured = razorpayPayments.find((p) => p.status === 'captured');
+    const relevant = captured ?? razorpayPayments.sort((a, b) => b.createdAt - a.createdAt)[0];
+
+    const razorpayImpliesStatus = captured ? 'SUCCESSFUL' : relevant.status === 'refunded' ? 'REFUNDED' : relevant.status === 'failed' ? 'FAILED' : payment.status;
+    // Fully in sync requires both the status to agree AND the payment id to
+    // actually be recorded locally -- a status match alone doesn't catch the
+    // "never backfilled gatewayPaymentId" drift this feature exists for.
+    const statusMatches = razorpayImpliesStatus === payment.status;
+    const gatewayIdRecorded = payment.gatewayPaymentId === relevant.id;
+    const inSync = statusMatches && gatewayIdRecorded;
+
+    let corrected = false;
+    if (!inSync && (razorpayImpliesStatus === 'SUCCESSFUL' || razorpayImpliesStatus === 'REFUNDED')) {
+      await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: { status: razorpayImpliesStatus, gatewayPaymentId: relevant.id },
+      });
+      corrected = true;
+      await this.auditLogService.record({
+        action: razorpayImpliesStatus === 'REFUNDED' ? 'PAYMENT_REFUNDED' : 'PAYMENT_CAPTURED',
+        userId: actorUserId,
+        resourceType: 'Payment',
+        resourceId: payment.id,
+        metadata: { viaReconciliation: true, previousStatus: payment.status, razorpayStatus: relevant.status, razorpayPaymentId: relevant.id },
+      });
+    }
+
+    await this.stashReconciliationResult(payment.id, { checkedAt, inSync: inSync || corrected, razorpayStatus: relevant.status });
+
+    return {
+      inSync: inSync || corrected,
+      localStatus: corrected ? razorpayImpliesStatus : payment.status,
+      razorpayStatus: relevant.status,
+      razorpayPaymentId: relevant.id,
+      discrepancy: corrected ? `Corrected: was ${payment.status}, Razorpay shows ${relevant.status}` : inSync ? null : 'Statuses differ but were not auto-corrected -- needs manual review',
+      corrected,
+    };
+  }
+
+  private async stashReconciliationResult(paymentId: string, result: { checkedAt: string; inSync: boolean; razorpayStatus: string }): Promise<void> {
+    const existing = await this.prisma.payment.findUnique({ where: { id: paymentId }, select: { metadata: true } });
+    const metadata = { ...(existing?.metadata as object ?? {}), reconciliation: result };
+    await this.prisma.payment.update({ where: { id: paymentId }, data: { metadata } });
   }
 
   async getSubscriptions(page: number, limit: number, status?: string) {

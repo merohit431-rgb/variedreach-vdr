@@ -74,6 +74,14 @@ export function useSuperAdmin() {
     [],
   );
 
+  const refundPayment = useCallback((id: string) => post(`/super-admin/payments/${id}/refund`), []);
+
+  const getPaymentsForReconciliation = useCallback(
+    (page = 1, limit = 20) => get(`/super-admin/payments/reconcile?page=${page}&limit=${limit}`),
+    [],
+  );
+  const reconcilePayment = useCallback((id: string) => post(`/super-admin/payments/${id}/reconcile`), []);
+
   const getSubscriptions = useCallback(
     (page = 1, limit = 20, status?: string) => {
       const params = new URLSearchParams({ page: String(page), limit: String(limit) });
@@ -122,6 +130,9 @@ export function useSuperAdmin() {
     updateOrganisation,
     getRegistrations,
     getPayments,
+    refundPayment,
+    getPaymentsForReconciliation,
+    reconcilePayment,
     getSubscriptions,
     getInvoices,
     getRevenue,
