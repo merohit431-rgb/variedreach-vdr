@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -220,9 +219,10 @@ export class DataRoomsService {
     const email = dto.email.toLowerCase().trim();
     let user = await this.prisma.user.findUnique({ where: { email } });
 
-    if (user && user.organisationId !== actor.organisationId) {
-      throw new ConflictException('This email is already registered to a different organisation');
-    }
+    // No cross-org block: email is a global identity, and this is exactly
+    // how a PRA/Auditor/etc. already active on one engagement gets added to
+    // another -- they keep their one identity, gain a second
+    // OrganisationMembership below.
 
     const inviterName = `${actor.firstName} ${actor.lastName}`;
     const frontendUrl = this.configService.get<string>('app.frontendUrl');
@@ -298,6 +298,15 @@ export class DataRoomsService {
       );
       emailSent = result.sent;
     }
+
+    // Ensure org-level membership exists (no-op if they're already a member
+    // of this org -- their existing role there is left untouched; a
+    // different role for THIS room is what roleOverride below is for).
+    await this.prisma.organisationMembership.upsert({
+      where: { userId_organisationId: { userId: user.id, organisationId: actor.organisationId } },
+      update: {},
+      create: { userId: user.id, organisationId: actor.organisationId, role: dto.role, isOwner: false },
+    });
 
     const member = await this.prisma.dataRoomMember.upsert({
       where: { dataRoomId_userId: { dataRoomId, userId: user.id } },

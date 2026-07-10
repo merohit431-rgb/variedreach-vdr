@@ -8,6 +8,10 @@ export interface RecordAuditLogInput {
   action: AuditAction;
   dataRoomId?: string;
   userId?: string;
+  // Which organisation the action was taken in. Not part of the tamper
+  // checksum (same treatment as ipAddress/userAgent below) -- supplementary
+  // scoping context, not identity-bearing content the checksum protects.
+  organisationId?: string;
   resourceType?: string;
   resourceId?: string;
   metadata?: Prisma.InputJsonValue;
@@ -41,6 +45,7 @@ export class AuditLogService {
         action: input.action,
         dataRoomId: input.dataRoomId,
         userId: input.userId,
+        organisationId: input.organisationId,
         resourceType: input.resourceType,
         resourceId: input.resourceId,
         metadata: input.metadata,

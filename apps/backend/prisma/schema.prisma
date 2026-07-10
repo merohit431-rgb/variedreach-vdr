@@ -34,6 +34,11 @@ enum UserStatus {
   DEACTIVATED
 }
 
+enum MembershipStatus {
+  ACTIVE
+  SUSPENDED
+}
+
 enum DataRoomType {
   CIRP
   LIQUIDATION
@@ -134,8 +139,37 @@ model Organisation {
   subscription  Subscription?
   payments      Payment[]
   invoices      Invoice[]
+  memberships   OrganisationMembership[]
 
   @@map("organisations")
+}
+
+// A User is a global identity; membership (with a role scoped to that
+// membership) is a separate relationship, so one email can belong to
+// multiple organisations with a different role in each — e.g. a PRA on
+// one engagement and an Auditor on another. User.organisationId/role
+// remain as a legacy default (kept for backward compat, no longer read
+// by authorization logic — see JwtStrategy) rather than the source of
+// truth once a membership exists for that user.
+model OrganisationMembership {
+  id             String           @id @default(uuid())
+  userId         String
+  organisationId String
+  role           UserRole
+  // The membership created when this org was purchased/provisioned, as
+  // opposed to one granted via a later data-room member invite.
+  isOwner        Boolean          @default(false)
+  status         MembershipStatus @default(ACTIVE)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organisationId])
+  @@index([userId])
+  @@index([organisationId])
+  @@map("organisation_memberships")
 }
 
 model User {
@@ -170,6 +204,7 @@ model User {
   deletedAt           DateTime?
 
   organisation        Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  organisationMemberships OrganisationMembership[]
   dataRoomMemberships DataRoomMember[]
   sessions            Session[]
   emailOtpChallenges  EmailOtpChallenge[]
@@ -263,6 +298,10 @@ model Registration {
 model Session {
   id           String    @id @default(uuid())
   userId       String
+  // Which organisation this session/refresh-token is currently scoped to --
+  // null for SUPER_ADMIN (org-agnostic) and, transiently, for a session
+  // that hasn't completed workspace selection yet.
+  organisationId String?
   tokenHash    String    @unique
   userAgent    String?
   ipAddress    String?
@@ -502,6 +541,11 @@ model AuditLog {
   id           String      @id @default(uuid())
   dataRoomId   String?
   userId       String?
+  // Which organisation this action was taken in -- not part of the tamper
+  // checksum (same reasoning as ipAddress/userAgent: supplementary context,
+  // not identity-bearing content). Nullable: historical rows are backfilled
+  // from the actor's org at the time; system events with no user stay null.
+  organisationId String?
   action       AuditAction
   resourceType String?
   resourceId   String?

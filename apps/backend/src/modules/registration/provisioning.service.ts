@@ -89,20 +89,39 @@ export class ProvisioningService {
         },
       });
 
-      const nameParts = reg.fullName.trim().split(/\s+/);
-      const firstName = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : nameParts[0];
-      const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+      // Email is a global identity, not scoped to one organisation -- someone
+      // who's already a PRA/Auditor/etc. on another engagement must still be
+      // able to buy their own workspace. Reuse the existing User row rather
+      // than creating a second one (which used to throw a unique-constraint
+      // violation on email here, deep inside the transaction, *after*
+      // Razorpay had already captured a real payment with no way to
+      // fulfill it -- this is the actual fix for that). Never touch an
+      // existing user's password/name; only their own account-settings flow
+      // should change those.
+      let user = await tx.user.findUnique({ where: { email: reg.email } });
+      if (!user) {
+        const nameParts = reg.fullName.trim().split(/\s+/);
+        const firstName = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : nameParts[0];
+        const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
 
-      const user = await tx.user.create({
-        data: {
-          email: reg.email,
-          firstName,
-          lastName,
-          password: reg.passwordHash,
-          role: 'ORG_ADMIN',
-          status: 'ACTIVE',
-          organisationId: org.id,
-        },
+        user = await tx.user.create({
+          data: {
+            email: reg.email,
+            firstName,
+            lastName,
+            password: reg.passwordHash,
+            role: 'ORG_ADMIN',
+            status: 'ACTIVE',
+            organisationId: org.id,
+          },
+        });
+      }
+
+      // Every organisation this identity buys gets its own membership --
+      // always a fresh row since org.id was just created above, so this can
+      // never collide with an existing (userId, organisationId) pair.
+      await tx.organisationMembership.create({
+        data: { userId: user.id, organisationId: org.id, role: 'ORG_ADMIN', isOwner: true },
       });
 
       const subscription = await tx.subscription.create({
@@ -194,6 +213,7 @@ export class ProvisioningService {
     await this.auditLogService.record({
       action: 'PAYMENT_CAPTURED',
       userId: user.id,
+      organisationId: org.id,
       resourceType: 'Organisation',
       resourceId: org.id,
       metadata: {
@@ -218,6 +238,10 @@ export class ProvisioningService {
       loginUrl: frontendUrl ? `${frontendUrl}/dashboard` : undefined,
     });
 
-    return { organisationId: org.id, userId: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role };
+    // 'ORG_ADMIN' explicitly, not user.role -- for a reused identity,
+    // user.role reflects whatever role they hold elsewhere (e.g. PRA on a
+    // different org), not their role in the org just created here, which
+    // is always ORG_ADMIN (see the OrganisationMembership created above).
+    return { organisationId: org.id, userId: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: 'ORG_ADMIN' };
   }
 }

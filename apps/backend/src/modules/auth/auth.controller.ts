@@ -25,6 +25,8 @@ import { VerifyMfaLoginDto } from './dto/verify-mfa-login.dto';
 import { VerifyEmailOtpDto } from './dto/verify-email-otp.dto';
 import { ResendEmailOtpDto } from './dto/resend-email-otp.dto';
 import { DisableEmailOtpDto } from './dto/disable-email-otp.dto';
+import { SelectWorkspaceDto } from './dto/select-workspace.dto';
+import { SwitchWorkspaceDto } from './dto/switch-workspace.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { AuthenticatedUser } from './types/jwt-payload.interface';
@@ -59,8 +61,55 @@ export class AuthController {
       return { requiresMfa: true, mfaChallengeToken: result.mfaChallengeToken, mfaMethod: result.mfaMethod };
     }
 
+    if (result.requiresWorkspaceSelection) {
+      return {
+        requiresWorkspaceSelection: true,
+        workspaceSelectionToken: result.workspaceSelectionToken,
+        workspaces: result.workspaces,
+      };
+    }
+
     this.setRefreshCookie(res, result.refreshToken, result.refreshExpiresAt);
 
+    return { accessToken: result.accessToken, user: result.user };
+  }
+
+  @Public()
+  @Throttle({ global: { ttl: 900, limit: 10 } })
+  @Post('select-workspace')
+  async selectWorkspace(
+    @Body() dto: SelectWorkspaceDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.selectWorkspace(dto.workspaceSelectionToken, dto.organisationId, {
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+
+    if (result.requiresMfa || result.requiresWorkspaceSelection) {
+      // Unreachable: selectWorkspace() always completes login once a valid
+      // membership is found, never returns another challenge.
+      throw new UnauthorizedException('Unexpected authentication state');
+    }
+
+    this.setRefreshCookie(res, result.refreshToken, result.refreshExpiresAt);
+    return { accessToken: result.accessToken, user: result.user };
+  }
+
+  @Post('switch-workspace')
+  async switchWorkspace(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: SwitchWorkspaceDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.switchWorkspace(user, dto.organisationId, {
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+
+    this.setRefreshCookie(res, result.refreshToken, result.refreshExpiresAt);
     return { accessToken: result.accessToken, user: result.user };
   }
 
@@ -171,6 +220,20 @@ export class AuthController {
       Boolean(dto.rememberMe),
       { ipAddress: req.ip, userAgent: req.headers['user-agent'] },
     );
+
+    if (result.requiresMfa) {
+      // Unreachable: verifyMfaLogin() never returns another MFA challenge.
+      throw new UnauthorizedException('Unexpected authentication state');
+    }
+
+    if (result.requiresWorkspaceSelection) {
+      return {
+        requiresWorkspaceSelection: true,
+        workspaceSelectionToken: result.workspaceSelectionToken,
+        workspaces: result.workspaces,
+      };
+    }
+
     this.setRefreshCookie(res, result.refreshToken, result.refreshExpiresAt);
     return { accessToken: result.accessToken, user: result.user };
   }
@@ -191,6 +254,15 @@ export class AuthController {
       Boolean(dto.trustDevice),
       { ipAddress: req.ip, userAgent: req.headers['user-agent'] },
     );
+
+    if (result.requiresWorkspaceSelection) {
+      return {
+        requiresWorkspaceSelection: true,
+        workspaceSelectionToken: result.workspaceSelectionToken,
+        workspaces: result.workspaces,
+      };
+    }
+
     this.setRefreshCookie(res, result.refreshToken, result.refreshExpiresAt);
     if (result.trustedDeviceToken && result.trustedDeviceExpiresAt) {
       this.setTrustedDeviceCookie(res, result.trustedDeviceToken, result.trustedDeviceExpiresAt);

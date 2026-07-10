@@ -34,6 +34,12 @@ type PublicUser = {
   organisationId: string;
 };
 
+export interface WorkspaceOption {
+  organisationId: string;
+  organisationName: string;
+  role: string;
+}
+
 export type LoginResult =
   | {
       requiresMfa: true;
@@ -42,20 +48,34 @@ export type LoginResult =
     }
   | {
       requiresMfa?: false;
+      requiresWorkspaceSelection: true;
+      workspaceSelectionToken: string;
+      workspaces: WorkspaceOption[];
+    }
+  | {
+      requiresMfa?: false;
+      requiresWorkspaceSelection?: false;
       accessToken: string;
       refreshToken: string;
       refreshExpiresAt: Date;
       user: PublicUser;
     };
 
-export interface EmailOtpVerifyResult {
-  accessToken: string;
-  refreshToken: string;
-  refreshExpiresAt: Date;
-  user: PublicUser;
-  trustedDeviceToken?: string;
-  trustedDeviceExpiresAt?: Date;
-}
+export type EmailOtpVerifyResult =
+  | {
+      requiresWorkspaceSelection: true;
+      workspaceSelectionToken: string;
+      workspaces: WorkspaceOption[];
+    }
+  | {
+      requiresWorkspaceSelection?: false;
+      accessToken: string;
+      refreshToken: string;
+      refreshExpiresAt: Date;
+      user: PublicUser;
+      trustedDeviceToken?: string;
+      trustedDeviceExpiresAt?: Date;
+    };
 
 export interface SessionSummary {
   id: string;
@@ -178,6 +198,41 @@ export class AuthService {
       },
     });
 
+    // SUPER_ADMIN is org-agnostic -- skips the membership/workspace concept
+    // entirely, same as always. Everyone else resolves which organisation
+    // this login is scoped to.
+    if (user.role !== 'SUPER_ADMIN') {
+      const memberships = await this.prisma.organisationMembership.findMany({
+        where: { userId: user.id, status: 'ACTIVE' },
+        include: { organisation: { select: { name: true } } },
+      });
+
+      if (memberships.length > 1) {
+        const workspaceSelectionToken = this.jwtService.sign(
+          { sub: user.id, workspaceSelection: true, rememberMe },
+          { secret: this.configService.get<string>('jwt.accessSecret'), expiresIn: MFA_CHALLENGE_EXPIRY },
+        );
+        return {
+          requiresWorkspaceSelection: true,
+          workspaceSelectionToken,
+          workspaces: memberships.map((m) => ({
+            organisationId: m.organisationId,
+            organisationName: m.organisation.name,
+            role: m.role,
+          })),
+        };
+      }
+
+      // Exactly one membership -- the case for every user prior to
+      // multi-org support, and the common case for a while yet -- auto-
+      // selects it, so login behaves exactly as before. Zero memberships
+      // (only possible in the brief window before the migration backfill
+      // runs) falls back to the legacy User columns rather than failing.
+      if (memberships.length === 1) {
+        user = { ...user, organisationId: memberships[0].organisationId, role: memberships[0].role };
+      }
+    }
+
     await this.enforceConcurrentSessionLimit(user.id);
 
     const { accessToken, refreshToken, refreshExpiresAt, location } = await this.issueTokens(
@@ -192,6 +247,7 @@ export class AuthService {
     await this.auditLogService.record({
       action: 'USER_LOGGED_IN',
       userId: user.id,
+      organisationId: user.organisationId,
       ipAddress: meta.ipAddress,
       userAgent: meta.userAgent,
     });
@@ -421,7 +477,7 @@ export class AuthService {
     totpCode: string,
     rememberMe: boolean,
     meta: RequestMeta,
-  ): Promise<{ accessToken: string; refreshToken: string; refreshExpiresAt: Date; user: { id: string; email: string; firstName: string; lastName: string; role: string; organisationId: string } }> {
+  ): Promise<LoginResult> {
     let payload: { sub: string; mfaChallenge?: boolean };
     try {
       payload = this.jwtService.verify(mfaChallengeToken, {
@@ -445,40 +501,11 @@ export class AuthService {
       throw new UnauthorizedException('Invalid TOTP code');
     }
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: new Date(), lastLoginIp: meta.ipAddress },
-    });
-
-    const { accessToken, refreshToken, refreshExpiresAt } = await this.issueTokens(
-      user.id,
-      user.email,
-      user.role,
-      user.organisationId,
-      rememberMe,
-      meta,
-    );
-
-    await this.auditLogService.record({
-      action: 'USER_LOGGED_IN',
-      userId: user.id,
-      ipAddress: meta.ipAddress,
-      userAgent: meta.userAgent,
-    });
-
-    return {
-      accessToken,
-      refreshToken,
-      refreshExpiresAt,
-      user: {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role,
-        organisationId: user.organisationId,
-      },
-    };
+    // completeLogin() resets the failed-attempt/lastLogin fields itself, and
+    // now also resolves which organisation this login is scoped to -- a
+    // user with 2+ memberships gets requiresWorkspaceSelection back here
+    // exactly like the email-OTP path, not just the single-org completion.
+    return this.completeLogin(user, rememberMe, meta);
   }
 
   private async verifyEmailOtpChallengeToken(mfaChallengeToken: string): Promise<string> {
@@ -579,6 +606,16 @@ export class AuthService {
       throw new UnauthorizedException('Unexpected authentication state');
     }
 
+    // A user with 2+ memberships picks a workspace before tokens exist --
+    // the TrustedDevice row above is already created either way, just not
+    // attached to this particular response (a narrow gap: on the very next
+    // login they'd still see the OTP step once, since the browser never got
+    // the cookie referencing it -- not worth the complexity to close given
+    // no current user can reach this branch until they hold 2 memberships).
+    if (loginResult.requiresWorkspaceSelection) {
+      return loginResult;
+    }
+
     if (!trustDevice) {
       return loginResult;
     }
@@ -643,6 +680,25 @@ export class AuthService {
       throw new UnauthorizedException('Account is not active');
     }
 
+    // Preserve whichever organisation this session was actually scoped to
+    // (at login, or the last workspace switch) rather than resetting to the
+    // legacy User columns -- otherwise a switched-to workspace would
+    // silently revert on the next token refresh, ~every 15 minutes.
+    // SUPER_ADMIN and pre-migration sessions (organisationId not yet
+    // backfilled) fall back to the User row, same as before.
+    let role: string = session.user.role;
+    let organisationId: string = session.user.organisationId;
+    if (session.user.role !== 'SUPER_ADMIN' && session.organisationId) {
+      const membership = await this.prisma.organisationMembership.findUnique({
+        where: { userId_organisationId: { userId: session.user.id, organisationId: session.organisationId } },
+      });
+      if (!membership || membership.status !== 'ACTIVE') {
+        throw new UnauthorizedException('Session is no longer valid');
+      }
+      role = membership.role;
+      organisationId = membership.organisationId;
+    }
+
     // Rotate: revoke the old session, issue a brand new one.
     await this.prisma.session.update({
       where: { id: session.id },
@@ -652,13 +708,121 @@ export class AuthService {
     const { accessToken, refreshToken, refreshExpiresAt } = await this.issueTokens(
       session.user.id,
       session.user.email,
-      session.user.role,
-      session.user.organisationId,
+      role,
+      organisationId,
       session.rememberMe,
       meta,
     );
 
     return { accessToken, refreshToken, refreshExpiresAt };
+  }
+
+  // Completes the requiresWorkspaceSelection challenge from completeLogin()
+  // -- same shape/pattern as MFA challenge verification, just picking which
+  // of the user's already-authenticated organisations to enter.
+  async selectWorkspace(workspaceSelectionToken: string, organisationId: string, meta: RequestMeta): Promise<LoginResult> {
+    let payload: { sub: string; workspaceSelection?: boolean; rememberMe?: boolean };
+    try {
+      payload = this.jwtService.verify(workspaceSelectionToken, {
+        secret: this.configService.get<string>('jwt.accessSecret'),
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid or expired workspace selection token');
+    }
+    if (!payload.workspaceSelection) {
+      throw new UnauthorizedException('Invalid workspace selection token');
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    if (!user || user.deletedAt || user.status !== 'ACTIVE') {
+      throw new UnauthorizedException('Account is not active');
+    }
+
+    const membership = await this.prisma.organisationMembership.findUnique({
+      where: { userId_organisationId: { userId: user.id, organisationId } },
+    });
+    if (!membership || membership.status !== 'ACTIVE') {
+      throw new UnauthorizedException('You are not a member of that organisation');
+    }
+
+    await this.enforceConcurrentSessionLimit(user.id);
+
+    const { accessToken, refreshToken, refreshExpiresAt } = await this.issueTokens(
+      user.id,
+      user.email,
+      membership.role,
+      membership.organisationId,
+      Boolean(payload.rememberMe),
+      meta,
+    );
+
+    await this.auditLogService.record({
+      action: 'USER_LOGGED_IN',
+      userId: user.id,
+      organisationId: membership.organisationId,
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+    });
+
+    return {
+      accessToken,
+      refreshToken,
+      refreshExpiresAt,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: membership.role,
+        organisationId: membership.organisationId,
+      },
+    };
+  }
+
+  // For an already-logged-in user hopping to a different organisation they
+  // belong to -- the Workspace Switcher. Re-issues tokens scoped to the new
+  // org via a fresh Session (a clean audit boundary between "session in org
+  // A" and "session in org B"); this is a whole-session switch shared via
+  // the refresh-token cookie, not independent per browser tab.
+  async switchWorkspace(actor: AuthenticatedUser, organisationId: string, meta: RequestMeta): Promise<{ accessToken: string; refreshToken: string; refreshExpiresAt: Date; user: PublicUser }> {
+    const membership = await this.prisma.organisationMembership.findUnique({
+      where: { userId_organisationId: { userId: actor.id, organisationId } },
+    });
+    if (!membership || membership.status !== 'ACTIVE') {
+      throw new UnauthorizedException('You are not a member of that organisation');
+    }
+
+    const { accessToken, refreshToken, refreshExpiresAt } = await this.issueTokens(
+      actor.id,
+      actor.email,
+      membership.role,
+      membership.organisationId,
+      true,
+      meta,
+    );
+
+    await this.auditLogService.record({
+      action: 'USER_LOGGED_IN',
+      userId: actor.id,
+      organisationId: membership.organisationId,
+      metadata: { viaWorkspaceSwitch: true, fromOrganisationId: actor.organisationId },
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+    });
+
+    return {
+      accessToken,
+      refreshToken,
+      refreshExpiresAt,
+      user: {
+        id: actor.id,
+        email: actor.email,
+        firstName: actor.firstName,
+        lastName: actor.lastName,
+        role: membership.role,
+        organisationId: membership.organisationId,
+      },
+    };
   }
 
   async forgotPassword(rawEmail: string): Promise<void> {
@@ -956,6 +1120,7 @@ export class AuthService {
     await this.prisma.session.create({
       data: {
         userId,
+        organisationId,
         tokenHash: refreshTokenHash,
         userAgent: meta.userAgent,
         ipAddress: meta.ipAddress,
