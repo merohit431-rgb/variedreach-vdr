@@ -58,12 +58,22 @@ function formatBytesServer(bytes: bigint): string {
   return `${n} B`;
 }
 
+// Date-only "to" values (YYYY-MM-DD) must cover the entire day, not just its
+// first instant -- new Date("2026-07-10") is UTC midnight, so an unadjusted
+// `lte` would exclude virtually all of "today" the moment the clock passes
+// 00:00 UTC, making the most recent day silently vanish from every report.
+function endOfDay(dateStr: string): Date {
+  const d = new Date(dateStr);
+  d.setUTCHours(23, 59, 59, 999);
+  return d;
+}
+
 function buildDateFilter(query: ReportQueryDto): Prisma.AuditLogWhereInput {
   if (!query.from && !query.to) return {};
   return {
     createdAt: {
       ...(query.from ? { gte: new Date(query.from) } : {}),
-      ...(query.to ? { lte: new Date(query.to) } : {}),
+      ...(query.to ? { lte: endOfDay(query.to) } : {}),
     },
   };
 }
@@ -128,7 +138,7 @@ export class ReportsService {
     defaultFrom.setDate(defaultFrom.getDate() - 30);
 
     const from = query.from ? new Date(query.from) : defaultFrom;
-    const to = query.to ? new Date(query.to) : new Date();
+    const to = query.to ? endOfDay(query.to) : new Date();
 
     const entries = await this.prisma.auditLog.findMany({
       where: {
@@ -217,7 +227,7 @@ export class ReportsService {
         ? {
             createdAt: {
               ...(query.from ? { gte: new Date(query.from) } : {}),
-              ...(query.to ? { lte: new Date(query.to) } : {}),
+              ...(query.to ? { lte: endOfDay(query.to) } : {}),
             },
           }
         : {}),

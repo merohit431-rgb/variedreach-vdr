@@ -27,8 +27,8 @@ export function useRegistration() {
 
   const verifyEmail = useCallback(async (token: string) => {
     try {
-      const res = await apiClient.post<{ email: string }>('/registrations/verify-email', { token });
-      return { success: true as const, email: res.data.email };
+      const res = await apiClient.post<{ data: { email: string } }>('/registrations/verify-email', { token });
+      return { success: true as const, email: res.data.data.email };
     } catch (error) {
       return { success: false as const, message: extractErrorMessage(error) };
     }
@@ -45,10 +45,10 @@ export function useRegistration() {
 
   const getDetails = useCallback(async (email: string) => {
     try {
-      const res = await apiClient.get<{ selectedPlan: string; selectedStorageGb: number; billingCycle: string }>(
+      const res = await apiClient.get<{ data: { selectedPlan: string; selectedStorageGb: number; billingCycle: string } }>(
         `/registrations/details?email=${encodeURIComponent(email)}`,
       );
-      return { success: true as const, data: res.data };
+      return { success: true as const, data: res.data.data };
     } catch (error) {
       return { success: false as const, message: extractErrorMessage(error) };
     }
@@ -56,11 +56,11 @@ export function useRegistration() {
 
   const createOrder = useCallback(async (email: string, billingCycle: string, couponCode?: string) => {
     try {
-      const res = await apiClient.post<{ orderId: string; amountPaisa: number; discountPaisa: number; couponCode: string | null; currency: string; keyId: string; planName: string; billingCycle: string }>(
+      const res = await apiClient.post<{ data: { orderId: string; amountPaisa: number; discountPaisa: number; couponCode: string | null; currency: string; keyId: string; planName: string; billingCycle: string } }>(
         '/registrations/create-order',
         { email, billingCycle, ...(couponCode ? { couponCode } : {}) },
       );
-      return { success: true as const, data: res.data };
+      return { success: true as const, data: res.data.data };
     } catch (error) {
       return { success: false as const, message: extractErrorMessage(error) };
     }
@@ -68,11 +68,11 @@ export function useRegistration() {
 
   const completeRegistration = useCallback(async (email: string, gatewayOrderId: string, gatewayPaymentId: string, gatewaySignature: string) => {
     try {
-      const res = await apiClient.post<{ accessToken: string; user: { id: string; email: string; firstName: string; lastName: string; role: string; organisationId: string } }>(
+      const res = await apiClient.post<{ data: { accessToken: string; user: { id: string; email: string; firstName: string; lastName: string; role: string; organisationId: string } } }>(
         '/registrations/complete',
         { email, gatewayOrderId, gatewayPaymentId, gatewaySignature },
       );
-      return { success: true as const, data: res.data };
+      return { success: true as const, data: res.data.data };
     } catch (error) {
       return { success: false as const, message: extractErrorMessage(error) };
     }
