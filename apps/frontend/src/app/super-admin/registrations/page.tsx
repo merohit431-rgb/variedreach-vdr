@@ -85,6 +85,7 @@ export default function RegistrationsPage() {
           <Thead>
             <tr>
               <Th>Company / Email</Th>
+              <Th>Contact</Th>
               <Th>Plan</Th>
               <Th>Billing</Th>
               <Th>Started</Th>
@@ -93,15 +94,23 @@ export default function RegistrationsPage() {
             </tr>
           </Thead>
           <Tbody>
-            {loading && <Tr><Td colSpan={6} className="text-center py-8 text-slate-400">Loading…</Td></Tr>}
+            {loading && <Tr><Td colSpan={7} className="text-center py-8 text-slate-400">Loading…</Td></Tr>}
             {!loading && data?.items?.length === 0 && (
-              <Tr><Td colSpan={6} className="text-center py-8 text-slate-400">No registrations yet.</Td></Tr>
+              <Tr><Td colSpan={7} className="text-center py-8 text-slate-400">No registrations yet.</Td></Tr>
             )}
             {!loading && data?.items?.map((reg: any) => (
               <Tr key={reg.id}>
                 <Td>
                   <p className="font-medium text-slate-800">{reg.companyName}</p>
                   <p className="text-xs text-slate-400">{reg.email}</p>
+                </Td>
+                <Td className="text-slate-600 text-xs">
+                  <p>{reg.mobileNumber || '—'}</p>
+                  {(reg.companyAddress || reg.gstNumber) && (
+                    <p className="text-slate-400" title={reg.companyAddress ?? ''}>
+                      {reg.gstNumber ? `GST: ${reg.gstNumber}` : reg.companyAddress}
+                    </p>
+                  )}
                 </Td>
                 <Td><Badge tone="brand">{reg.selectedPlan}</Badge></Td>
                 <Td className="text-slate-600 text-xs">{reg.billingCycle}</Td>

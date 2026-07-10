@@ -16,6 +16,37 @@ function formatInr(n: number) {
 
 type BillingCycle = 'MONTHLY' | 'YEARLY';
 
+interface RazorpayCheckoutOptions {
+  key: string;
+  amount: number;
+  currency: string;
+  name: string;
+  description: string;
+  order_id: string;
+  prefill?: { email?: string };
+  theme?: { color?: string };
+  handler: (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => void;
+  modal?: { ondismiss?: () => void };
+}
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: RazorpayCheckoutOptions) => { open: () => void };
+  }
+}
+
+// Lazy-loaded on first checkout attempt rather than globally — only this page needs it.
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (window.Razorpay) { resolve(true); return; }
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
 export function CheckoutForm() {
   const searchParams = useSearchParams();
   const email = searchParams.get('email') ?? '';
@@ -80,16 +111,48 @@ export function CheckoutForm() {
     const orderRes = await createOrder(email, cycle, applied?.code);
     if (!orderRes.success) { setError(orderRes.message ?? 'Failed to create order.'); setIsSubmitting(false); return; }
 
-    const { orderId } = orderRes.data;
-    const paymentId = `pay_mock_${Date.now()}`;
-    const signature = 'mock_signature';
+    const scriptOk = await loadRazorpayScript();
+    if (!scriptOk || !window.Razorpay) {
+      setError('Could not load the payment window. Check your connection and try again.');
+      setIsSubmitting(false);
+      return;
+    }
 
-    const completeRes = await completeRegistration(email, orderId, paymentId, signature);
-    if (!completeRes.success) { setError(completeRes.message ?? 'Payment failed.'); setIsSubmitting(false); return; }
+    const { orderId, amountPaisa, currency, keyId } = orderRes.data;
 
-    const { accessToken, user } = completeRes.data;
-    setAuth({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role as never, organisationId: user.organisationId }, accessToken);
-    router.replace('/dashboard');
+    const razorpay = new window.Razorpay({
+      key: keyId,
+      amount: amountPaisa,
+      currency,
+      name: 'Varied Reach',
+      description: `${plan.name} Plan — ${isYearly ? 'Yearly' : 'Monthly'}`,
+      order_id: orderId,
+      prefill: { email },
+      theme: { color: '#083E84' },
+      handler: async (response) => {
+        const completeRes = await completeRegistration(
+          email,
+          response.razorpay_order_id,
+          response.razorpay_payment_id,
+          response.razorpay_signature,
+        );
+        if (!completeRes.success) {
+          // Payment was captured by Razorpay at this point — the webhook will
+          // provision the account independently even if this call failed
+          // (network blip, tab issue), so this isn't a bare failure message.
+          setError(completeRes.message ?? 'Payment received — finishing setup. If your dashboard doesn\'t load within a minute, check your email before trying again.');
+          setIsSubmitting(false);
+          return;
+        }
+        const { accessToken, user } = completeRes.data;
+        setAuth({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role as never, organisationId: user.organisationId }, accessToken);
+        router.replace('/dashboard');
+      },
+      modal: {
+        ondismiss: () => { setIsSubmitting(false); },
+      },
+    });
+    razorpay.open();
   }
 
   if (loading) return <p className="text-center text-sm text-slate-500">Loading your plan details…</p>;

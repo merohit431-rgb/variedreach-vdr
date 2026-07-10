@@ -201,6 +201,7 @@ export class SuperAdminService {
         orderBy: { createdAt: 'desc' },
         select: {
           id: true, email: true, fullName: true, companyName: true,
+          mobileNumber: true, companyAddress: true, gstNumber: true,
           selectedPlan: true, selectedStorageGb: true, billingCycle: true,
           createdAt: true, verifiedAt: true, paymentStatus: true, provisionedAt: true, gatewayOrderId: true,
         },
