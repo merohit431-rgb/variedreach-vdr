@@ -58,6 +58,18 @@ export class RegistrationService {
       throw new ConflictException('An account with this email has already been registered');
     }
 
+    // This is a distinct check from the one above: a Registration and a
+    // User are different tables, so an email invited as a member of some
+    // other organisation (e.g. internal team access) would otherwise sail
+    // through signup, verification, and checkout, and only fail at the
+    // final provision() step -- by which point a real payment has already
+    // been captured with no way to fulfill it. Reject it here instead,
+    // before any of that happens.
+    const existingUser = await this.prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      throw new ConflictException('An account with this email already exists');
+    }
+
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
 
     const registration = await this.prisma.registration.create({
@@ -115,6 +127,16 @@ export class RegistrationService {
     const reg = await this.prisma.registration.findUnique({ where: { email: dto.email.toLowerCase().trim() } });
     if (!reg || !reg.verifiedAt) throw new BadRequestException('Email not verified or registration not found');
     if (reg.provisionedAt) throw new BadRequestException('Account already provisioned');
+
+    // Re-check right before a real charge can happen -- catches both a
+    // registration created before this check existed (register() rejects
+    // new ones now) and a User created in the gap between register() and
+    // this call. Money is never worth risking on a provision() that's
+    // guaranteed to fail at the User.create() unique-constraint step.
+    const existingUser = await this.prisma.user.findUnique({ where: { email: reg.email } });
+    if (existingUser) {
+      throw new BadRequestException('An account with this email already exists -- this registration cannot be completed. Contact support.');
+    }
 
     const billingCycle = dto.billingCycle ?? reg.billingCycle ?? 'MONTHLY';
     const isYearly = billingCycle === 'YEARLY';
