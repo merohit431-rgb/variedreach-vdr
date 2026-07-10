@@ -22,7 +22,7 @@ function resolvePlanId(value: string | null): PlanId {
 
 export function SignupForm() {
   const searchParams = useSearchParams();
-  const { register } = useRegistration();
+  const { register, getDetails } = useRegistration();
 
   const planId = resolvePlanId(searchParams.get('plan'));
   const plan = PRICING_PLANS[planId];
@@ -41,10 +41,12 @@ export function SignupForm() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDone, setIsDone] = useState(false);
+  const [resumableEmail, setResumableEmail] = useState<string | null>(null);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    setResumableEmail(null);
 
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
@@ -70,10 +72,20 @@ export function SignupForm() {
       selectedPlan: planId,
       selectedStorageGb: pricing.billableStorageGb,
     });
-    setIsSubmitting(false);
 
     if (result.success) {
+      setIsSubmitting(false);
       setIsDone(true);
+      return;
+    }
+
+    // "Already registered" can mean the email verified but never paid --
+    // getDetails only succeeds for exactly that state, so it doubles as the
+    // check for whether there's a checkout to resume rather than a dead end.
+    const details = await getDetails(email);
+    setIsSubmitting(false);
+    if (details.success) {
+      setResumableEmail(email);
     } else {
       setError(result.message);
     }
@@ -118,6 +130,18 @@ export function SignupForm() {
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         {error && <Alert tone="danger">{error}</Alert>}
+        {resumableEmail && (
+          <Alert tone="danger">
+            You already started signing up with this email but never completed payment.{' '}
+            <Link
+              href={`/checkout?email=${encodeURIComponent(resumableEmail)}`}
+              className="font-medium underline hover:no-underline"
+            >
+              Resume checkout
+            </Link>{' '}
+            to activate your account.
+          </Alert>
+        )}
 
         <FormField
           label="Full name"

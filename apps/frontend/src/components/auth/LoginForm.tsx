@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, ShieldCheck, Mail } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { useRegistration } from '@/hooks/use-registration';
 import { useVerifyMfaLogin, useVerifyEmailOtpLogin, useResendEmailOtp } from '@/hooks/use-mfa';
 import { FormField } from '@/components/ui/FormField';
 import { Input } from '@/components/ui/Input';
@@ -18,6 +19,7 @@ const RESEND_COOLDOWN_SECONDS = 30;
 export function LoginForm() {
   const router = useRouter();
   const { login } = useAuth();
+  const { getDetails } = useRegistration();
   const { setAuth } = useAuthStore();
   const verifyMfaLogin = useVerifyMfaLogin();
   const verifyEmailOtpLogin = useVerifyEmailOtpLogin();
@@ -28,6 +30,7 @@ export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resumableEmail, setResumableEmail] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [mfaChallengeToken, setMfaChallengeToken] = useState<string | null>(null);
@@ -47,16 +50,26 @@ export function LoginForm() {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    setResumableEmail(null);
     setIsSubmitting(true);
 
     const result = await login({ email, password, rememberMe });
 
-    setIsSubmitting(false);
-
     if (!result.success) {
-      setError(result.message);
+      // A failed login on an email that verified but never paid looks
+      // identical to a wrong password otherwise -- there's no account to
+      // log into yet, just an abandoned checkout with no way back to it.
+      const details = await getDetails(email);
+      setIsSubmitting(false);
+      if (details.success) {
+        setResumableEmail(email);
+      } else {
+        setError(result.message);
+      }
       return;
     }
+
+    setIsSubmitting(false);
 
     if (result.requiresMfa) {
       setMfaChallengeToken(result.mfaChallengeToken);
@@ -260,6 +273,18 @@ export function LoginForm() {
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         {error && <Alert tone="danger">{error}</Alert>}
+        {resumableEmail && (
+          <Alert tone="danger">
+            This email verified but never completed payment, so there&apos;s no account to sign into yet.{' '}
+            <Link
+              href={`/checkout?email=${encodeURIComponent(resumableEmail)}`}
+              className="font-medium underline hover:no-underline"
+            >
+              Resume checkout
+            </Link>{' '}
+            to activate it.
+          </Alert>
+        )}
 
         <FormField
           label="Email"
