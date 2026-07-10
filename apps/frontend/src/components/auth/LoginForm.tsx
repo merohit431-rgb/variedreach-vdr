@@ -3,8 +3,8 @@
 import { useEffect, useState, FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, ShieldCheck, Mail } from 'lucide-react';
-import { useAuth } from '@/hooks/use-auth';
+import { Eye, EyeOff, ShieldCheck, Mail, Building2 } from 'lucide-react';
+import { useAuth, type WorkspaceOption } from '@/hooks/use-auth';
 import { useRegistration } from '@/hooks/use-registration';
 import { useVerifyMfaLogin, useVerifyEmailOtpLogin, useResendEmailOtp } from '@/hooks/use-mfa';
 import { FormField } from '@/components/ui/FormField';
@@ -18,7 +18,7 @@ const RESEND_COOLDOWN_SECONDS = 30;
 
 export function LoginForm() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, selectWorkspace } = useAuth();
   const { getDetails } = useRegistration();
   const { setAuth } = useAuthStore();
   const verifyMfaLogin = useVerifyMfaLogin();
@@ -40,6 +40,10 @@ export function LoginForm() {
   const [trustDevice, setTrustDevice] = useState(true);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
+
+  const [workspaceSelectionToken, setWorkspaceSelectionToken] = useState<string | null>(null);
+  const [workspaces, setWorkspaces] = useState<WorkspaceOption[]>([]);
+  const [selectingOrgId, setSelectingOrgId] = useState<string | null>(null);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -78,6 +82,29 @@ export function LoginForm() {
       return;
     }
 
+    if (result.requiresWorkspaceSelection) {
+      setWorkspaceSelectionToken(result.workspaceSelectionToken);
+      setWorkspaces(result.workspaces);
+      return;
+    }
+
+    const role = useAuthStore.getState().user?.role;
+    router.push(role === 'SUPER_ADMIN' ? '/super-admin/dashboard' : '/dashboard');
+  }
+
+  async function handleSelectWorkspace(organisationId: string) {
+    if (!workspaceSelectionToken) return;
+    setError(null);
+    setSelectingOrgId(organisationId);
+
+    const result = await selectWorkspace(workspaceSelectionToken, organisationId);
+    setSelectingOrgId(null);
+
+    if (!result.success) {
+      setError(result.message);
+      return;
+    }
+
     const role = useAuthStore.getState().user?.role;
     router.push(role === 'SUPER_ADMIN' ? '/super-admin/dashboard' : '/dashboard');
   }
@@ -90,6 +117,13 @@ export function LoginForm() {
 
     try {
       const data = await verifyMfaLogin.mutateAsync({ mfaChallengeToken, totpCode, rememberMe });
+      if (data.requiresWorkspaceSelection) {
+        setWorkspaceSelectionToken(data.workspaceSelectionToken);
+        setWorkspaces(data.workspaces);
+        setMfaChallengeToken(null);
+        setIsSubmitting(false);
+        return;
+      }
       setAuth(data.user as Parameters<typeof setAuth>[0], data.accessToken);
       const role = data.user.role;
       router.push(role === 'SUPER_ADMIN' ? '/super-admin/dashboard' : '/dashboard');
@@ -113,6 +147,13 @@ export function LoginForm() {
         rememberMe,
         trustDevice,
       });
+      if (data.requiresWorkspaceSelection) {
+        setWorkspaceSelectionToken(data.workspaceSelectionToken);
+        setWorkspaces(data.workspaces);
+        setMfaChallengeToken(null);
+        setIsSubmitting(false);
+        return;
+      }
       setAuth(data.user as Parameters<typeof setAuth>[0], data.accessToken);
       const role = data.user.role;
       router.push(role === 'SUPER_ADMIN' ? '/super-admin/dashboard' : '/dashboard');
@@ -262,6 +303,50 @@ export function LoginForm() {
             </button>
           </div>
         </form>
+      </div>
+    );
+  }
+
+  if (workspaceSelectionToken) {
+    return (
+      <div>
+        <div className="flex items-center gap-2">
+          <Building2 className="h-5 w-5 text-brand-600" />
+          <h1 className="text-lg font-semibold text-slate-900">Choose a workspace</h1>
+        </div>
+        <p className="mt-1 text-sm text-slate-500">
+          Your account belongs to more than one organisation. Pick which one to enter.
+        </p>
+
+        <div className="mt-6 space-y-3">
+          {error && <Alert tone="danger">{error}</Alert>}
+
+          {workspaces.map((ws) => (
+            <button
+              key={ws.organisationId}
+              type="button"
+              onClick={() => handleSelectWorkspace(ws.organisationId)}
+              disabled={selectingOrgId !== null}
+              className="flex w-full items-center justify-between rounded-lg border border-slate-200 px-4 py-3 text-left transition-colors hover:border-brand-400 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <span>
+                <span className="block text-sm font-medium text-slate-900">{ws.organisationName}</span>
+                <span className="block text-xs text-slate-500">{ws.role.replace(/_/g, ' ')}</span>
+              </span>
+              {selectingOrgId === ws.organisationId && (
+                <span className="text-xs text-slate-400">Signing in…</span>
+              )}
+            </button>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => { setWorkspaceSelectionToken(null); setWorkspaces([]); setError(null); }}
+            className="w-full text-center text-sm text-slate-500 hover:text-slate-700"
+          >
+            Back to sign in
+          </button>
+        </div>
       </div>
     );
   }

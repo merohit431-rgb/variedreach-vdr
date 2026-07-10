@@ -51,6 +51,20 @@ export function useDisableMfa() {
   });
 }
 
+export interface WorkspaceSelectionChallenge {
+  requiresWorkspaceSelection: true;
+  workspaceSelectionToken: string;
+  workspaces: Array<{ organisationId: string; organisationName: string; role: string }>;
+}
+
+interface MfaLoginSuccess {
+  requiresWorkspaceSelection?: false;
+  accessToken: string;
+  user: { id: string; email: string; firstName: string; lastName: string; role: string; organisationId: string };
+}
+
+export type MfaLoginResult = MfaLoginSuccess | WorkspaceSelectionChallenge;
+
 export function useVerifyMfaLogin() {
   return useMutation({
     mutationFn: async (input: {
@@ -58,9 +72,7 @@ export function useVerifyMfaLogin() {
       totpCode: string;
       rememberMe?: boolean;
     }) => {
-      const response = await apiClient.post<{
-        data: { accessToken: string; user: { id: string; email: string; firstName: string; lastName: string; role: string; organisationId: string } };
-      }>('/auth/mfa/verify-login', input);
+      const response = await apiClient.post<{ data: MfaLoginResult }>('/auth/mfa/verify-login', input);
       return response.data.data;
     },
   });
@@ -116,6 +128,14 @@ export interface AuthenticatedUserResult {
   organisationId: string;
 }
 
+interface EmailOtpLoginSuccess {
+  requiresWorkspaceSelection?: false;
+  accessToken: string;
+  user: AuthenticatedUserResult;
+}
+
+export type EmailOtpLoginResult = EmailOtpLoginSuccess | WorkspaceSelectionChallenge;
+
 export function useVerifyEmailOtpLogin() {
   return useMutation({
     mutationFn: async (input: {
@@ -124,10 +144,7 @@ export function useVerifyEmailOtpLogin() {
       rememberMe?: boolean;
       trustDevice?: boolean;
     }) => {
-      const response = await apiClient.post<{ data: { accessToken: string; user: AuthenticatedUserResult } }>(
-        '/auth/mfa/verify-email-otp',
-        input,
-      );
+      const response = await apiClient.post<{ data: EmailOtpLoginResult }>('/auth/mfa/verify-email-otp', input);
       return response.data.data;
     },
   });

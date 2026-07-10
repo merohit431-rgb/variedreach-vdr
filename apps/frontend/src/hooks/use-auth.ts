@@ -10,6 +10,12 @@ interface LoginInput {
   rememberMe?: boolean;
 }
 
+export interface WorkspaceOption {
+  organisationId: string;
+  organisationName: string;
+  role: string;
+}
+
 export function useAuth() {
   const router = useRouter();
   const { user, accessToken, isInitializing, setAuth, clearAuth } = useAuthStore();
@@ -23,12 +29,36 @@ export function useAuth() {
           return {
             success: true as const,
             requiresMfa: true as const,
+            requiresWorkspaceSelection: false as const,
             mfaChallengeToken: data.mfaChallengeToken as string,
             mfaMethod: data.mfaMethod as 'EMAIL_OTP' | 'TOTP',
           };
         }
+        if (data.requiresWorkspaceSelection) {
+          return {
+            success: true as const,
+            requiresMfa: false as const,
+            requiresWorkspaceSelection: true as const,
+            workspaceSelectionToken: data.workspaceSelectionToken as string,
+            workspaces: data.workspaces as WorkspaceOption[],
+          };
+        }
         setAuth(data.user, data.accessToken);
-        return { success: true as const, requiresMfa: false as const };
+        return { success: true as const, requiresMfa: false as const, requiresWorkspaceSelection: false as const };
+      } catch (error) {
+        return { success: false as const, message: extractErrorMessage(error) };
+      }
+    },
+    [setAuth],
+  );
+
+  const selectWorkspace = useCallback(
+    async (workspaceSelectionToken: string, organisationId: string) => {
+      try {
+        const response = await apiClient.post('/auth/select-workspace', { workspaceSelectionToken, organisationId });
+        const data = response.data.data;
+        setAuth(data.user, data.accessToken);
+        return { success: true as const };
       } catch (error) {
         return { success: false as const, message: extractErrorMessage(error) };
       }
@@ -86,6 +116,7 @@ export function useAuth() {
     accessToken,
     isInitializing,
     login,
+    selectWorkspace,
     logout,
     logoutEverywhere,
     forgotPassword,
