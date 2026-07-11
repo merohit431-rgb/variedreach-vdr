@@ -200,7 +200,7 @@ export class ProvisioningService {
 
       await tx.registration.update({
         where: { id: reg.id },
-        data: { provisionedAt: now },
+        data: { provisionedAt: now, paymentStatus: 'COMPLETED' },
       });
 
       return { org, user, invoiceNumber };
