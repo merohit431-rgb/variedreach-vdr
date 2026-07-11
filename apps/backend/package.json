@@ -20,7 +20,8 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "ts-node --transpile-only prisma/seed.ts",
     "prisma:studio": "prisma studio",
-    "prisma:triggers": "prisma db execute --file prisma/sql/append_only_triggers.sql --schema prisma/schema.prisma"
+    "prisma:triggers": "prisma db execute --file prisma/sql/append_only_triggers.sql --schema prisma/schema.prisma",
+    "prisma:email-check": "prisma db execute --file prisma/sql/email_lowercase_check.sql --schema prisma/schema.prisma"
   },
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"

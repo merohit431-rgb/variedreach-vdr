@@ -6,7 +6,10 @@ import { Transform } from 'class-transformer';
 // invited email stored as "Sudeep.*", one batch of five stored via a manual
 // script that skipped DTO validation entirely). Every touch of User.email --
 // create, update, or lookup -- must go through this one function so there is
-// exactly one place that defines "normalized".
+// exactly one place that defines "normalized". Also enforced at the DB level
+// as a backstop against anything that bypasses this file entirely (a manual
+// psql session, a future ad-hoc script) -- see
+// prisma/sql/email_lowercase_check.sql.
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
