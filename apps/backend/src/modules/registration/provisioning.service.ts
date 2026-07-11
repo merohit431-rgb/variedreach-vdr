@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { CouponService } from '../coupon/coupon.service';
 import { AuditLogService } from '../audit/audit-log.service';
+import { normalizeEmail } from '../../common/utils/email.util';
 
 // Mirror of packages/shared/src/constants/pricing.constants.ts
 // (cannot be imported directly — shared package ships raw TS with no build step)
@@ -98,7 +99,11 @@ export class ProvisioningService {
       // fulfill it -- this is the actual fix for that). Never touch an
       // existing user's password/name; only their own account-settings flow
       // should change those.
-      let user = await tx.user.findUnique({ where: { email: reg.email } });
+      // Defensive re-normalization even though register() already normalizes
+      // Registration.email -- this is the actual point where a User row gets
+      // created, so it must not blindly trust that upstream invariant holds.
+      const email = normalizeEmail(reg.email);
+      let user = await tx.user.findUnique({ where: { email } });
       if (!user) {
         const nameParts = reg.fullName.trim().split(/\s+/);
         const firstName = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : nameParts[0];
@@ -106,7 +111,7 @@ export class ProvisioningService {
 
         user = await tx.user.create({
           data: {
-            email: reg.email,
+            email,
             firstName,
             lastName,
             password: reg.passwordHash,

@@ -13,6 +13,7 @@ import { AuthService } from '../auth/auth.service';
 import { FoldersService } from '../folders/folders.service';
 import { DataRoomAccessService } from '../data-room-access/data-room-access.service';
 import { generateOpaqueToken } from '../../common/utils/crypto.util';
+import { normalizeEmail } from '../../common/utils/email.util';
 import { getOrgStorageUsage } from '../../common/org-storage.util';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import {
@@ -216,7 +217,7 @@ export class DataRoomsService {
   async inviteMember(dataRoomId: string, dto: InviteMemberDto, actor: AuthenticatedUser) {
     const dataRoom = await this.assertManager(dataRoomId, actor);
 
-    const email = dto.email.toLowerCase().trim();
+    const email = normalizeEmail(dto.email);
     let user = await this.prisma.user.findUnique({ where: { email } });
 
     // No cross-org block: email is a global identity, and this is exactly

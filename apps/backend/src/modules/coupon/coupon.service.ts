@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Coupon, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { normalizeEmail } from '../../common/utils/email.util';
 import { CreateCouponDto } from './dto/create-coupon.dto';
 import { UpdateCouponDto } from './dto/update-coupon.dto';
 
@@ -54,7 +55,7 @@ export class CouponService {
     }
     if (coupon.perCustomerLimit && email) {
       const mine = await this.prisma.couponRedemption.count({
-        where: { couponId: coupon.id, email: email.toLowerCase().trim() },
+        where: { couponId: coupon.id, email: normalizeEmail(email) },
       });
       if (mine >= coupon.perCustomerLimit) return fail('You have already used this coupon');
     }
@@ -93,7 +94,7 @@ export class CouponService {
     const coupon = await db.coupon.findUnique({ where: { code: code.toUpperCase() } });
     if (!coupon) return;
     await db.couponRedemption.create({
-      data: { couponId: coupon.id, organisationId, email: email.toLowerCase().trim(), discountPaisa },
+      data: { couponId: coupon.id, organisationId, email: normalizeEmail(email), discountPaisa },
     });
   }
 

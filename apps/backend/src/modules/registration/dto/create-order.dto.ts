@@ -1,10 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
 import { IsEmail, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { NormalizeEmail } from '../../../common/utils/email.util';
 
 export class CreateOrderDto {
   @ApiProperty()
-  @Transform(({ value }) => (typeof value === 'string' ? value.toLowerCase().trim() : value))
+  @NormalizeEmail()
   @IsEmail()
   email!: string;
 

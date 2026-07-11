@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
 import { IsEmail, IsIn, IsInt, IsOptional, IsString, Min, MaxLength } from 'class-validator';
 import { IsStrongPassword } from '../../../common/validators/strong-password.validator';
+import { NormalizeEmail } from '../../../common/utils/email.util';
 
 const PLAN_IDS = ['STARTER', 'PROFESSIONAL', 'BUSINESS'] as const;
 
@@ -17,7 +17,7 @@ export class CreateRegistrationDto {
   companyName!: string;
 
   @ApiProperty()
-  @Transform(({ value }) => (typeof value === 'string' ? value.toLowerCase().trim() : value))
+  @NormalizeEmail()
   @IsEmail()
   email!: string;
 

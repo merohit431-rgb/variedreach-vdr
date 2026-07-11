@@ -1,10 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
 import { IsEmail } from 'class-validator';
+import { NormalizeEmail } from '../../../common/utils/email.util';
 
 export class ResendVerificationDto {
   @ApiProperty()
-  @Transform(({ value }) => (typeof value === 'string' ? value.toLowerCase().trim() : value))
+  @NormalizeEmail()
   @IsEmail()
   email!: string;
 }

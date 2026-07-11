@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
 import { IsEmail, IsIn, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { NormalizeEmail } from '../../../common/utils/email.util';
 
 export const DEMO_USE_CASES = ['CIRP', 'LIQUIDATION', 'MA_DUE_DILIGENCE', 'OTHER'] as const;
 export const TIME_SLOTS = ['MORNING', 'AFTERNOON', 'EVENING'] as const;
@@ -30,7 +30,7 @@ export class DemoRequestDto {
   firmName!: string;
 
   @ApiProperty()
-  @Transform(({ value }) => (typeof value === 'string' ? value.toLowerCase().trim() : value))
+  @NormalizeEmail()
   @IsEmail()
   workEmail!: string;
 

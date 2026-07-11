@@ -1,8 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
 import { UserRole } from '@prisma/client';
 import { IsEmail, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { ASSIGNABLE_MEMBER_ROLES } from '../../../common/constants/content-roles';
+import { NormalizeEmail } from '../../../common/utils/email.util';
 
 export class InviteMemberDto {
   @ApiProperty()
@@ -11,7 +11,7 @@ export class InviteMemberDto {
   fullName!: string;
 
   @ApiProperty()
-  @Transform(({ value }) => (typeof value === 'string' ? value.toLowerCase().trim() : value))
+  @NormalizeEmail()
   @IsEmail()
   email!: string;
 

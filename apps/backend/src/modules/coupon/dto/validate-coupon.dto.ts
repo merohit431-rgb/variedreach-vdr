@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
 import { IsEmail, IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { NormalizeEmail } from '../../../common/utils/email.util';
 
 const PLAN_IDS = ['STARTER', 'PROFESSIONAL', 'BUSINESS'];
 
@@ -25,7 +25,7 @@ export class ValidateCouponDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @Transform(({ value }) => (typeof value === 'string' ? value.toLowerCase().trim() : value))
+  @NormalizeEmail()
   @IsEmail()
   email?: string;
 }

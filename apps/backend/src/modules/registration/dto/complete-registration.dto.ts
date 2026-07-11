@@ -1,10 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
 import { IsEmail, IsString } from 'class-validator';
+import { NormalizeEmail } from '../../../common/utils/email.util';
 
 export class CompleteRegistrationDto {
   @ApiProperty()
-  @Transform(({ value }) => (typeof value === 'string' ? value.toLowerCase().trim() : value))
+  @NormalizeEmail()
   @IsEmail()
   email!: string;
 

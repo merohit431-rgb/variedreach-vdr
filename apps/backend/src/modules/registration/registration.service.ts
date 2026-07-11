@@ -8,6 +8,7 @@ import { IPaymentProvider, PAYMENT_PROVIDER } from '../payment/payment-provider.
 import { ProvisioningService } from './provisioning.service';
 import { CouponService } from '../coupon/coupon.service';
 import { generateOpaqueToken, sha256Hex } from '../../common/utils/crypto.util';
+import { normalizeEmail } from '../../common/utils/email.util';
 import { CreateRegistrationDto } from './dto/create-registration.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { CompleteRegistrationDto } from './dto/complete-registration.dto';
@@ -52,7 +53,7 @@ export class RegistrationService {
   ) {}
 
   async register(dto: CreateRegistrationDto): Promise<void> {
-    const email = dto.email.toLowerCase().trim();
+    const email = normalizeEmail(dto.email);
     const existing = await this.prisma.registration.findUnique({ where: { email } });
     if (existing) {
       throw new ConflictException('An account with this email has already been registered');
@@ -105,7 +106,7 @@ export class RegistrationService {
   }
 
   async resendVerification(rawEmail: string): Promise<void> {
-    const email = rawEmail.toLowerCase().trim();
+    const email = normalizeEmail(rawEmail);
     const registration = await this.prisma.registration.findUnique({ where: { email } });
 
     // Same shape regardless of whether the email exists or is already
@@ -118,7 +119,7 @@ export class RegistrationService {
   }
 
   async createOrder(dto: CreateOrderDto): Promise<{ orderId: string; amountPaisa: number; discountPaisa: number; couponCode: string | null; currency: string; keyId: string; planName: string; billingCycle: string }> {
-    const reg = await this.prisma.registration.findUnique({ where: { email: dto.email.toLowerCase().trim() } });
+    const reg = await this.prisma.registration.findUnique({ where: { email: normalizeEmail(dto.email) } });
     if (!reg || !reg.verifiedAt) throw new BadRequestException('Email not verified or registration not found');
     if (reg.provisionedAt) throw new BadRequestException('Account already provisioned');
 
@@ -164,9 +165,9 @@ export class RegistrationService {
     };
   }
 
-  async getDetails(email: string): Promise<{ selectedPlan: string; selectedStorageGb: number; billingCycle: string } | null> {
+  async getDetails(rawEmail: string): Promise<{ selectedPlan: string; selectedStorageGb: number; billingCycle: string } | null> {
     const reg = await this.prisma.registration.findUnique({
-      where: { email },
+      where: { email: normalizeEmail(rawEmail) },
       select: { verifiedAt: true, provisionedAt: true, selectedPlan: true, selectedStorageGb: true, billingCycle: true },
     });
     if (!reg || !reg.verifiedAt || reg.provisionedAt) return null;
@@ -174,7 +175,7 @@ export class RegistrationService {
   }
 
   async complete(dto: CompleteRegistrationDto): Promise<{ accessToken: string; refreshToken: string; refreshExpiresAt: Date; user: { id: string; email: string; firstName: string; lastName: string; role: string; organisationId: string } }> {
-    const reg = await this.prisma.registration.findUnique({ where: { email: dto.email.toLowerCase().trim() } });
+    const reg = await this.prisma.registration.findUnique({ where: { email: normalizeEmail(dto.email) } });
     if (!reg || !reg.verifiedAt) throw new BadRequestException('Email not verified or registration not found');
     if (reg.provisionedAt) throw new BadRequestException('Account already provisioned');
     if (reg.gatewayOrderId !== dto.gatewayOrderId) throw new BadRequestException('Order ID mismatch');

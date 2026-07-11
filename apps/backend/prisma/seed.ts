@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { normalizeEmail } from '../src/common/utils/email.util';
 
 const prisma = new PrismaClient();
 
@@ -28,7 +29,7 @@ async function main() {
 
   const orgName = process.env.SEED_ORG_NAME || 'Demo Resolution Professionals LLP';
   const orgSlug = process.env.SEED_ORG_SLUG || 'demo-rp';
-  const adminEmail = process.env.SEED_ADMIN_EMAIL || 'info@variedreach.com';
+  const adminEmail = normalizeEmail(process.env.SEED_ADMIN_EMAIL || 'info@variedreach.com');
   const adminPassword = process.env.SEED_ADMIN_PASSWORD || 'ChangeMe123!';
 
   const organisation = await prisma.organisation.upsert({
@@ -101,7 +102,7 @@ async function seedRbacTestData(organisationId: string, adminId: string): Promis
   const testRoles = ['RP_LIQUIDATOR', 'PRA', 'COC_MEMBER', 'AUDITOR', 'LEGAL_ADVISOR', 'GUEST'] as const;
 
   for (const role of testRoles) {
-    const email = `rbac-${role.toLowerCase().replace('_', '-')}@staging.test`;
+    const email = normalizeEmail(`rbac-${role.toLowerCase().replace('_', '-')}@staging.test`);
 
     const user = await prisma.user.upsert({
       where: { email },

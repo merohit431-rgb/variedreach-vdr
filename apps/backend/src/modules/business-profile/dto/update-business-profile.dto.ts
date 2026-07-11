@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEmail, IsOptional, IsString, MaxLength } from 'class-validator';
+import { NormalizeEmail } from '../../../common/utils/email.util';
 
 export class UpdateBusinessProfileDto {
   @ApiPropertyOptional()
@@ -42,6 +43,7 @@ export class UpdateBusinessProfileDto {
 
   @ApiPropertyOptional()
   @IsOptional()
+  @NormalizeEmail()
   @IsEmail()
   supportEmail?: string;
 

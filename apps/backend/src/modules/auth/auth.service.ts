@@ -16,6 +16,7 @@ import { generateOpaqueToken, sha256Hex } from '../../common/utils/crypto.util';
 import { generateNumericOtp } from '../../common/utils/otp.util';
 import { describeUserAgent, parseUserAgent } from '../../common/utils/device.util';
 import { resolveApproximateLocation } from '../../common/utils/geo-ip.util';
+import { normalizeEmail } from '../../common/utils/email.util';
 import { isMfaRequiredForUser, MANDATORY_MFA_ROLES } from '../../common/constants/mfa.constants';
 import { LoginDto } from './dto/login.dto';
 import { JwtPayload, AuthenticatedUser } from './types/jwt-payload.interface';
@@ -116,7 +117,7 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto, meta: RequestMeta): Promise<LoginResult> {
-    const email = dto.email.toLowerCase().trim();
+    const email = normalizeEmail(dto.email);
     const user = await this.prisma.user.findUnique({ where: { email } });
 
     if (!user || user.deletedAt) {
@@ -826,7 +827,7 @@ export class AuthService {
   }
 
   async forgotPassword(rawEmail: string): Promise<void> {
-    const email = rawEmail.toLowerCase().trim();
+    const email = normalizeEmail(rawEmail);
     const user = await this.prisma.user.findUnique({ where: { email } });
 
     // Always behave the same way whether or not the email exists, so this
