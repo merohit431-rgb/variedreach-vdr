@@ -16,7 +16,8 @@
     "prisma:generate": "npm run prisma:generate --workspace=apps/backend",
     "prisma:migrate": "npm run prisma:migrate --workspace=apps/backend",
     "prisma:seed": "npm run prisma:seed --workspace=apps/backend",
-    "prisma:triggers": "npm run prisma:triggers --workspace=apps/backend"
+    "prisma:triggers": "npm run prisma:triggers --workspace=apps/backend",
+    "prisma:email-check": "npm run prisma:email-check --workspace=apps/backend"
   },
   "engines": {
     "node": ">=20.0.0"
