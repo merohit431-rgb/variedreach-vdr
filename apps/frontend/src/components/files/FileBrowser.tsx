@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState, DragEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { FolderOpen, Upload, FolderPlus, Grid3X3, List, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, Cloud, Download, History, PenLine, Trash2 } from 'lucide-react';
+import { FolderOpen, Upload, FolderPlus, Grid3X3, List, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, Cloud, Download, History, PenLine, Trash2, Eye } from 'lucide-react';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Avatar } from '@/components/ui/Avatar';
+import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import {
   useFiles,
   useUpdateFile,
@@ -272,6 +273,29 @@ export function FileBrowser({
       deleteFile.mutate(file.id);
       if (detailsFile?.id === file.id) setDetailsFile(null);
     }
+  }
+
+  function buildFileActions(file: FileRecord): ActionMenuItem[] {
+    const items: ActionMenuItem[] = [
+      { key: 'preview', label: 'Preview', icon: Eye, onClick: () => setPreviewFile(file) },
+    ];
+    if (canDownload) {
+      items.push({
+        key: 'download',
+        label: 'Download',
+        icon: Download,
+        onClick: () =>
+          downloadFile(dataRoomId, file.id, getPreviewFilename(file.name, file.extension)),
+      });
+    }
+    items.push({ key: 'history', label: 'Version history', icon: History, onClick: () => setVersionsFile(file) });
+    if (canUpload) {
+      items.push({ key: 'rename', label: 'Rename', icon: PenLine, onClick: () => handleRename(file) });
+    }
+    if (canDelete) {
+      items.push({ key: 'delete', label: 'Delete', icon: Trash2, danger: true, onClick: () => handleDelete(file) });
+    }
+    return items;
   }
 
   function handleCreateFolder() {
@@ -607,6 +631,12 @@ export function FileBrowser({
                         }`}
                       />
                     )}
+                    <div
+                      className="absolute right-1 top-1 opacity-0 transition-opacity group-hover:opacity-100"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ActionMenu items={buildFileActions(file)} />
+                    </div>
                     <div className="flex flex-col items-center gap-2 pt-2">
                       <Icon className="h-10 w-10 text-app-t3" aria-hidden="true" />
                       <Tooltip label={file.name} side="top">
@@ -664,7 +694,7 @@ export function FileBrowser({
                       Uploaded by
                     </th>
                     <th className="hidden w-14 px-2 py-3 md:table-cell" />
-                    <th className="w-36 px-4 py-3" />
+                    <th className="w-12 px-4 py-3" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-app-border">
@@ -747,51 +777,8 @@ export function FileBrowser({
                           className="px-4 py-3"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <div className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-                            {canDownload && (
-                              <Tooltip label="Download" side="top">
-                                <button
-                                  onClick={() =>
-                                    downloadFile(
-                                      dataRoomId,
-                                      file.id,
-                                      getPreviewFilename(file.name, file.extension),
-                                    )
-                                  }
-                                  className="rounded-md p-1.5 text-app-t3 hover:bg-app-s2 hover:text-app-t2"
-                                >
-                                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                                </button>
-                              </Tooltip>
-                            )}
-                            <Tooltip label="Version history" side="top">
-                              <button
-                                onClick={() => setVersionsFile(file)}
-                                className="rounded-md p-1.5 text-app-t3 hover:bg-app-s2 hover:text-app-t2"
-                              >
-                                <History className="h-3.5 w-3.5" aria-hidden="true" />
-                              </button>
-                            </Tooltip>
-                            {canUpload && (
-                              <Tooltip label="Rename" side="top">
-                                <button
-                                  onClick={() => handleRename(file)}
-                                  className="rounded-md p-1.5 text-app-t3 hover:bg-app-s2 hover:text-app-t2"
-                                >
-                                  <PenLine className="h-3.5 w-3.5" aria-hidden="true" />
-                                </button>
-                              </Tooltip>
-                            )}
-                            {canDelete && (
-                              <Tooltip label="Delete" side="top">
-                                <button
-                                  onClick={() => handleDelete(file)}
-                                  className="rounded-md p-1.5 text-app-t3 hover:bg-red-500/10 hover:text-red-400"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                                </button>
-                              </Tooltip>
-                            )}
+                          <div className="flex items-center justify-end opacity-0 transition-opacity group-hover:opacity-100">
+                            <ActionMenu items={buildFileActions(file)} />
                           </div>
                         </td>
                       </tr>

@@ -23,14 +23,28 @@ import {
   Receipt,
   Plus,
   X,
+  Download,
+  FolderPlus,
+  Pencil,
+  Copy,
+  Trash2,
 } from 'lucide-react';
 import { Logo } from '@/components/brand/Logo';
 import { Avatar } from '@/components/ui/Avatar';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
 import { useAuthStore } from '@/store/auth-store';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { useDataRoomAccess, useDataRoomStats, type DataRoomAccess } from '@/hooks/use-data-rooms';
-import { useFolders, useCreateFolder, type FolderNode } from '@/hooks/use-folders';
+import {
+  useFolders,
+  useCreateFolder,
+  useUpdateFolder,
+  useDeleteFolder,
+  useCopyFolder,
+  type FolderNode,
+} from '@/hooks/use-folders';
+import { useUpdateFile, downloadFolder } from '@/hooks/use-files';
 import { ROLE_LABELS, EXTERNAL_ROLES, type UserRole } from '@variedreach-vdr/shared';
 import { cn } from '@/lib/cn';
 
@@ -197,6 +211,10 @@ function FolderRow({
   isExpanded,
   onToggle,
   onSelect,
+  canUpload,
+  canDelete,
+  canDownload,
+  actions,
 }: {
   folder: FolderNode;
   depth: number;
@@ -206,12 +224,60 @@ function FolderRow({
   isExpanded: boolean;
   onToggle: () => void;
   onSelect: () => void;
+  canUpload: boolean;
+  canDelete: boolean;
+  canDownload: boolean;
+  actions: {
+    onDownload: () => void;
+    onCreateSubfolder: () => void;
+    onRename: () => void;
+    onDuplicate: () => void;
+    onDelete: () => void;
+    onDropFolder: (folderId: string) => void;
+    onDropFile: (fileId: string) => void;
+  };
 }) {
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const menuItems: ActionMenuItem[] = [];
+  if (canDownload) {
+    menuItems.push({ key: 'download', label: 'Download as ZIP', icon: Download, onClick: actions.onDownload });
+  }
+  if (canUpload) {
+    menuItems.push(
+      { key: 'subfolder', label: 'New subfolder', icon: FolderPlus, onClick: actions.onCreateSubfolder },
+      { key: 'rename', label: 'Rename', icon: Pencil, onClick: actions.onRename },
+      { key: 'duplicate', label: 'Duplicate', icon: Copy, onClick: actions.onDuplicate },
+    );
+  }
+  if (canDelete) {
+    menuItems.push({ key: 'delete', label: 'Delete', icon: Trash2, danger: true, onClick: actions.onDelete });
+  }
+
   return (
     <div
+      draggable={canUpload}
+      onDragStart={(e) => e.dataTransfer.setData('text/folder-id', folder.id)}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setIsDragOver(true);
+      }}
+      onDragLeave={() => setIsDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setIsDragOver(false);
+        const folderId = e.dataTransfer.getData('text/folder-id');
+        if (folderId && folderId !== folder.id) {
+          actions.onDropFolder(folderId);
+          return;
+        }
+        const fileId = e.dataTransfer.getData('text/file-id');
+        if (fileId) actions.onDropFile(fileId);
+      }}
       className={cn(
-        'group flex items-center gap-1 rounded-lg pr-2 transition-colors',
+        'group flex items-center gap-1 rounded-lg pr-1 transition-colors',
         isSelected ? 'bg-app-primary/15' : 'hover:bg-app-s2',
+        isDragOver ? 'ring-1 ring-app-primary' : '',
       )}
       style={{ paddingLeft: `${depth * 14}px` }}
     >
@@ -247,12 +313,17 @@ function FolderRow({
       {count > 0 && (
         <span
           className={cn(
-            'flex-shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums',
+            'flex-shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums group-hover:hidden',
             isSelected ? 'bg-app-primary/25 text-blue-300' : 'bg-app-s2 text-app-t4',
           )}
         >
           {count}
         </span>
+      )}
+      {menuItems.length > 0 && (
+        <div className="hidden flex-shrink-0 group-hover:block" onClick={(e) => e.stopPropagation()}>
+          <ActionMenu items={menuItems} />
+        </div>
       )}
     </div>
   );
@@ -265,6 +336,10 @@ function RoomFolderSection({ roomId, onNavigate }: { roomId: string; onNavigate:
   const { data: stats } = useDataRoomStats(roomId);
   const { data: access } = useDataRoomAccess(roomId);
   const createFolder = useCreateFolder(roomId);
+  const updateFolder = useUpdateFolder(roomId);
+  const deleteFolder = useDeleteFolder(roomId);
+  const copyFolder = useCopyFolder(roomId);
+  const updateFile = useUpdateFile(roomId);
   const { selectedFolderId, setSelectedFolder } = useWorkspaceStore();
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -272,6 +347,9 @@ function RoomFolderSection({ roomId, onNavigate }: { roomId: string; onNavigate:
 
   const filesPath = `/data-rooms/${roomId}`;
   const onFilesPage = pathname === filesPath;
+  const canUpload = Boolean(access?.canUploadContent);
+  const canDelete = Boolean(access?.canDeleteContent);
+  const canDownload = Boolean(access?.canDownload);
 
   const childrenOf = useMemo(() => {
     const map = new Map<string | null, FolderNode[]>();
@@ -337,6 +415,44 @@ function RoomFolderSection({ roomId, onNavigate }: { roomId: string; onNavigate:
     if (name) createFolder.mutate({ name, parentId: selectedFolderId ?? undefined });
   }
 
+  function handleCreateSubfolder(parentId: string) {
+    const name = window.prompt('New folder name');
+    if (name) createFolder.mutate({ name, parentId });
+  }
+
+  function handleRenameFolder(folder: FolderNode) {
+    const name = window.prompt('Rename folder', folder.name);
+    if (name && name !== folder.name) updateFolder.mutate({ folderId: folder.id, name });
+  }
+
+  function handleDuplicateFolder(folder: FolderNode) {
+    copyFolder.mutate({ folderId: folder.id, targetParentId: folder.parentId });
+  }
+
+  function handleDeleteFolder(folder: FolderNode) {
+    const hasChildren = (childrenOf.get(folder.id) ?? []).length > 0;
+    if (hasChildren) {
+      alert('This folder has subfolders — delete those first.');
+      return;
+    }
+    if (window.confirm(`Delete "${folder.name}"?`)) {
+      deleteFolder.mutate(folder.id);
+      if (selectedFolderId === folder.id) selectFolder(null);
+    }
+  }
+
+  function handleDownloadFolder(folder: FolderNode) {
+    downloadFolder(roomId, folder.id, `${folder.name}.zip`);
+  }
+
+  function handleDropFolder(targetId: string, draggedFolderId: string) {
+    updateFolder.mutate({ folderId: draggedFolderId, parentId: targetId });
+  }
+
+  function handleDropFile(targetId: string, fileId: string) {
+    updateFile.mutate({ fileId, folderId: targetId });
+  }
+
   function renderTree(parentId: string | null, depth: number): React.ReactNode {
     let nodes = childrenOf.get(parentId) ?? [];
     const isRootLevel = parentId === null;
@@ -359,6 +475,18 @@ function RoomFolderSection({ roomId, onNavigate }: { roomId: string; onNavigate:
                 isExpanded={isExpanded}
                 onToggle={() => toggleExpanded(folder.id)}
                 onSelect={() => selectFolder(folder.id)}
+                canUpload={canUpload}
+                canDelete={canDelete}
+                canDownload={canDownload}
+                actions={{
+                  onDownload: () => handleDownloadFolder(folder),
+                  onCreateSubfolder: () => handleCreateSubfolder(folder.id),
+                  onRename: () => handleRenameFolder(folder),
+                  onDuplicate: () => handleDuplicateFolder(folder),
+                  onDelete: () => handleDeleteFolder(folder),
+                  onDropFolder: (draggedFolderId) => handleDropFolder(folder.id, draggedFolderId),
+                  onDropFile: (fileId) => handleDropFile(folder.id, fileId),
+                }}
               />
               {hasChildren && isExpanded && renderTree(folder.id, depth + 1)}
             </div>
@@ -381,7 +509,7 @@ function RoomFolderSection({ roomId, onNavigate }: { roomId: string; onNavigate:
     <div className="mt-5 border-t border-app-border pt-4">
       <div className="mb-1.5 flex items-center justify-between px-3">
         <p className="text-[10px] font-semibold uppercase tracking-widest text-app-t4">Folders</p>
-        {access?.canUploadContent && (
+        {canUpload && (
           <button
             onClick={handleCreateFolder}
             aria-label="New folder"
@@ -392,8 +520,19 @@ function RoomFolderSection({ roomId, onNavigate }: { roomId: string; onNavigate:
         )}
       </div>
 
-      {/* All files */}
+      {/* All files -- also the drop target for moving a file/folder to the room root. */}
       <div
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          const folderId = e.dataTransfer.getData('text/folder-id');
+          if (folderId) {
+            updateFolder.mutate({ folderId, parentId: null });
+            return;
+          }
+          const fileId = e.dataTransfer.getData('text/file-id');
+          if (fileId) updateFile.mutate({ fileId, folderId: null });
+        }}
         className={cn(
           'group flex items-center rounded-lg pr-2 transition-colors',
           onFilesPage && selectedFolderId === null ? 'bg-app-primary/15' : 'hover:bg-app-s2',
