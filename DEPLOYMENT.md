@@ -221,8 +221,17 @@ this sequence:
 8. **Wait for explicit approval.** Not "looks fine" in passing — an actual go-ahead for *this*
    change.
 9. **Only after approval**, deploy to production.
-10. **Take a fresh production backup immediately before deploying** — `backup-db.sh` run by hand,
-    not waiting for the next 2am cron.
+10. **Take a fresh production backup immediately before deploying** — run by hand, not waiting for
+    the next 2am cron:
+    ```
+    BACKUP_DIR=/opt/pre-change-backups BACKUP_KEEP=2 ./infrastructure/scripts/backup-db.sh
+    ```
+    Always this same `BACKUP_DIR`, every time — never invent a new one per change (e.g.
+    `/opt/pre-<description>-<date>`). A fresh `BACKUP_DIR` starts its own count-based pruning from
+    zero, so the older backups it should be replacing never actually get deleted. Five of those
+    one-off directories accumulated 37GB on 2026-07-14 before anyone noticed. The shared directory
+    plus `BACKUP_KEEP=2` gets the same "verified snapshot right before this change" guarantee, and
+    `backup-db.sh`'s existing pruning (see its own header) keeps it bounded automatically.
 11. **Verify production after deployment** using the same checklist as step 4.
 12. **Monitor for at least 30 minutes post-deploy** and report anything abnormal — error rates,
     memory, restart counts — even if nothing looks obviously wrong.
