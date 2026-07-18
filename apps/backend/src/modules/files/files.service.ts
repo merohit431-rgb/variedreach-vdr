@@ -801,6 +801,16 @@ export class FilesService {
     const frontendUrl = this.configService.get<string>('app.frontendUrl') || '';
     const dataRoomUrl = `${frontendUrl}/data-rooms/${dataRoomId}`;
 
+    // Fire every recipient's send concurrently instead of one `await` per
+    // member in sequence -- with a large membership (Ecstasy Realty has 46),
+    // sequential awaiting held this whole background task open for many
+    // seconds per upload. Under a burst of uploads that meant dozens of
+    // these overlapping for minutes, saturating the DB pool/event loop badly
+    // enough to slow down concurrent request handling (real uploads timing
+    // out client-side despite succeeding server-side, and a folder-path
+    // find-or-create race producing duplicate folders) -- this is the actual
+    // fix for that 2026-07-18 incident, not just a perf tweak.
+    const sends: Promise<unknown>[] = [];
     for (const member of dataRoom.members) {
       if (member.userId === actor.id) continue;
 
@@ -825,19 +835,22 @@ export class FilesService {
 
       if (!shouldNotify) continue;
 
-      await this.mailService
-        .sendDocumentUploadedEmail(
-          member.user.email,
-          `${member.user.firstName} ${member.user.lastName}`,
-          dataRoom.name,
-          folderPath,
-          file.name,
-          uploaderName,
-          uploadedAt,
-          dataRoomUrl,
-          { userId: member.userId, dataRoomId },
-        )
-        .catch(() => undefined);
+      sends.push(
+        this.mailService
+          .sendDocumentUploadedEmail(
+            member.user.email,
+            `${member.user.firstName} ${member.user.lastName}`,
+            dataRoom.name,
+            folderPath,
+            file.name,
+            uploaderName,
+            uploadedAt,
+            dataRoomUrl,
+            { userId: member.userId, dataRoomId },
+          )
+          .catch(() => undefined),
+      );
     }
+    await Promise.allSettled(sends);
   }
 }
