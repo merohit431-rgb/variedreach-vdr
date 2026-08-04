@@ -22,8 +22,9 @@ export class CloudImportService {
     dataRoomId: string,
     dto: ImportGoogleFileDto,
     actor: AuthenticatedUser,
+    clientIp?: string,
   ) {
-    await this.dataRoomAccess.assertContentManager(dataRoomId, actor);
+    await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
 
     const tempPath = path.join(os.tmpdir(), `vdr-import-${crypto.randomUUID()}`);
     try {
@@ -50,6 +51,7 @@ export class CloudImportService {
         dto.folderId,
         dto.relativePath ? [dto.relativePath] : undefined,
         actor,
+        clientIp,
       );
       return results[0];
     } finally {
@@ -63,8 +65,9 @@ export class CloudImportService {
     dataRoomId: string,
     dto: ImportOneDriveFileDto,
     actor: AuthenticatedUser,
+    clientIp?: string,
   ) {
-    await this.dataRoomAccess.assertContentManager(dataRoomId, actor);
+    await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
 
     const tempPath = path.join(os.tmpdir(), `vdr-import-${crypto.randomUUID()}`);
     try {
@@ -88,6 +91,7 @@ export class CloudImportService {
         dto.folderId,
         dto.relativePath ? [dto.relativePath] : undefined,
         actor,
+        clientIp,
       );
       return results[0];
     } finally {

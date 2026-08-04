@@ -19,8 +19,8 @@ export class NdaService {
     private readonly dataRoomAccess: DataRoomAccessService,
   ) {}
 
-  async getStatus(dataRoomId: string, actor: AuthenticatedUser) {
-    const { dataRoom } = await this.dataRoomAccess.getAccess(dataRoomId, actor);
+  async getStatus(dataRoomId: string, actor: AuthenticatedUser, clientIp?: string) {
+    const { dataRoom } = await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
 
     if (!dataRoom.ndaEnabled) {
       return { enabled: false, text: null, hasAccepted: true };
@@ -42,7 +42,7 @@ export class NdaService {
   }
 
   async accept(dataRoomId: string, actor: AuthenticatedUser, ipAddress: string, userAgent?: string) {
-    const { dataRoom } = await this.dataRoomAccess.getAccess(dataRoomId, actor);
+    const { dataRoom } = await this.dataRoomAccess.getAccess(dataRoomId, actor, ipAddress);
 
     if (!dataRoom.ndaEnabled) {
       throw new ForbiddenException('This data room does not require NDA acceptance');

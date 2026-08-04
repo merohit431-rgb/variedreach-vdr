@@ -14,8 +14,9 @@ export class NdaController {
   getStatus(
     @Param('dataRoomId') dataRoomId: string,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.ndaService.getStatus(dataRoomId, user);
+    return this.ndaService.getStatus(dataRoomId, user, req.ip ?? '0.0.0.0');
   }
 
   @Post('accept')

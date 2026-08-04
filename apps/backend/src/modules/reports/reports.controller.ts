@@ -1,6 +1,6 @@
-import { Controller, Get, Param, Query, Res } from '@nestjs/common';
+import { Controller, Get, Param, Query, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { ReportsService, ReportTable, StorageReportTable } from './reports.service';
 import { ReportQueryDto } from './dto/report-query.dto';
 import { toCsv } from './exporters/csv.exporter';
@@ -23,8 +23,9 @@ export class ReportsController {
     @Param('dataRoomId') dataRoomId: string,
     @Query() query: ReportQueryDto,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.reportsService.getSummaryStats(dataRoomId, user, query);
+    return this.reportsService.getSummaryStats(dataRoomId, user, query, req.ip ?? '0.0.0.0');
   }
 
   @Get('download-trends')
@@ -32,8 +33,9 @@ export class ReportsController {
     @Param('dataRoomId') dataRoomId: string,
     @Query() query: ReportQueryDto,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.reportsService.getDownloadTrends(dataRoomId, user, query);
+    return this.reportsService.getDownloadTrends(dataRoomId, user, query, req.ip ?? '0.0.0.0');
   }
 
   @Get('storage')
@@ -42,8 +44,9 @@ export class ReportsController {
     @Query() query: ReportQueryDto,
     @CurrentUser() user: AuthenticatedUser,
     @Res() res: Response,
+    @Req() req: Request,
   ) {
-    const report = await this.reportsService.getStorageReport(dataRoomId, user);
+    const report = await this.reportsService.getStorageReport(dataRoomId, user, req.ip ?? '0.0.0.0');
 
     if (query.format === 'json') {
       res.json({ success: true, statusCode: 200, message: 'Operation successful', data: report });
@@ -79,8 +82,9 @@ export class ReportsController {
     @Query() query: ReportQueryDto,
     @CurrentUser() user: AuthenticatedUser,
     @Res() res: Response,
+    @Req() req: Request,
   ) {
-    const table = await this.reportsService.getDownloadActivityReport(dataRoomId, user, query);
+    const table = await this.reportsService.getDownloadActivityReport(dataRoomId, user, query, req.ip ?? '0.0.0.0');
     await this.respond(res, dataRoomId, 'download-activity', table, query.format, user);
   }
 
@@ -90,8 +94,9 @@ export class ReportsController {
     @Query() query: ReportQueryDto,
     @CurrentUser() user: AuthenticatedUser,
     @Res() res: Response,
+    @Req() req: Request,
   ) {
-    const table = await this.reportsService.getUserActivityReport(dataRoomId, user);
+    const table = await this.reportsService.getUserActivityReport(dataRoomId, user, req.ip ?? '0.0.0.0');
     await this.respond(res, dataRoomId, 'user-activity', table, query.format, user);
   }
 

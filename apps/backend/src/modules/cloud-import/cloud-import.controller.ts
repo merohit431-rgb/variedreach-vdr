@@ -1,5 +1,6 @@
-import { Body, Controller, Param, Post } from '@nestjs/common';
+import { Body, Controller, Param, Post, Req } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import type { Request } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { CloudImportService } from './cloud-import.service';
@@ -15,8 +16,9 @@ export class CloudImportController {
     @Param('dataRoomId') dataRoomId: string,
     @Body() dto: ImportGoogleFileDto,
     @CurrentUser() actor: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.service.importGoogleFile(dataRoomId, dto, actor);
+    return this.service.importGoogleFile(dataRoomId, dto, actor, req.ip ?? '0.0.0.0');
   }
 
   @Post('onedrive')
@@ -24,7 +26,8 @@ export class CloudImportController {
     @Param('dataRoomId') dataRoomId: string,
     @Body() dto: ImportOneDriveFileDto,
     @CurrentUser() actor: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.service.importOneDriveFile(dataRoomId, dto, actor);
+    return this.service.importOneDriveFile(dataRoomId, dto, actor, req.ip ?? '0.0.0.0');
   }
 }

@@ -9,8 +9,10 @@ import {
   Patch,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import type { Request } from 'express';
 import { QnaService } from './qna.service';
 import { AskQuestionDto } from './dto/ask-question.dto';
 import { AnswerQuestionDto } from './dto/answer-question.dto';
@@ -27,9 +29,10 @@ export class QnaController {
   list(
     @Param('dataRoomId') dataRoomId: string,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
     @Query('search') search?: string,
   ) {
-    return this.qnaService.list(dataRoomId, user, search);
+    return this.qnaService.list(dataRoomId, user, search, req.ip ?? '0.0.0.0');
   }
 
   @Post()
@@ -37,8 +40,9 @@ export class QnaController {
     @Param('dataRoomId') dataRoomId: string,
     @Body() dto: AskQuestionDto,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.qnaService.ask(dataRoomId, dto.question, dto.isPrivate ?? false, user);
+    return this.qnaService.ask(dataRoomId, dto.question, dto.isPrivate ?? false, user, req.ip ?? '0.0.0.0');
   }
 
   @Patch(':questionId/status')
@@ -47,8 +51,9 @@ export class QnaController {
     @Param('questionId') questionId: string,
     @Body() dto: UpdateQuestionStatusDto,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.qnaService.updateStatus(dataRoomId, questionId, dto.status, user);
+    return this.qnaService.updateStatus(dataRoomId, questionId, dto.status, user, req.ip ?? '0.0.0.0');
   }
 
   @Post(':questionId/answers')
@@ -57,8 +62,9 @@ export class QnaController {
     @Param('questionId') questionId: string,
     @Body() dto: AnswerQuestionDto,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.qnaService.answer(dataRoomId, questionId, dto.answer, user);
+    return this.qnaService.answer(dataRoomId, questionId, dto.answer, user, req.ip ?? '0.0.0.0');
   }
 
   @Patch(':questionId/answers/:answerId')
@@ -68,8 +74,9 @@ export class QnaController {
     @Param('answerId') answerId: string,
     @Body() dto: AnswerQuestionDto,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.qnaService.editAnswer(dataRoomId, questionId, answerId, dto.answer, user);
+    return this.qnaService.editAnswer(dataRoomId, questionId, answerId, dto.answer, user, req.ip ?? '0.0.0.0');
   }
 
   @Delete(':questionId')
@@ -78,7 +85,8 @@ export class QnaController {
     @Param('dataRoomId') dataRoomId: string,
     @Param('questionId') questionId: string,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.qnaService.deleteQuestion(dataRoomId, questionId, user);
+    return this.qnaService.deleteQuestion(dataRoomId, questionId, user, req.ip ?? '0.0.0.0');
   }
 }

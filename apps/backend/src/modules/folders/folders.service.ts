@@ -19,8 +19,8 @@ export class FoldersService {
     @Inject(STORAGE_SERVICE) private readonly storage: IStorageService,
   ) {}
 
-  async findTree(dataRoomId: string, actor: AuthenticatedUser) {
-    await this.dataRoomAccess.getAccess(dataRoomId, actor);
+  async findTree(dataRoomId: string, actor: AuthenticatedUser, clientIp?: string) {
+    await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
 
     return this.prisma.folder.findMany({
       where: { dataRoomId, deletedAt: null },
@@ -28,8 +28,8 @@ export class FoldersService {
     });
   }
 
-  async create(dataRoomId: string, dto: CreateFolderDto, actor: AuthenticatedUser) {
-    await this.dataRoomAccess.assertContentManager(dataRoomId, actor);
+  async create(dataRoomId: string, dto: CreateFolderDto, actor: AuthenticatedUser, clientIp?: string) {
+    await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
 
     const parent = dto.parentId ? await this.getFolderOrThrow(dataRoomId, dto.parentId) : null;
     const siblingCount = await this.prisma.folder.count({
@@ -60,8 +60,8 @@ export class FoldersService {
     return folder;
   }
 
-  async update(dataRoomId: string, folderId: string, dto: UpdateFolderDto, actor: AuthenticatedUser) {
-    await this.dataRoomAccess.assertContentManager(dataRoomId, actor);
+  async update(dataRoomId: string, folderId: string, dto: UpdateFolderDto, actor: AuthenticatedUser, clientIp?: string) {
+    await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
 
     const folder = await this.getFolderOrThrow(dataRoomId, folderId);
     const renaming = dto.name !== undefined && dto.name !== folder.name;
@@ -109,8 +109,8 @@ export class FoldersService {
     return updated;
   }
 
-  async remove(dataRoomId: string, folderId: string, actor: AuthenticatedUser) {
-    await this.dataRoomAccess.assertContentDeleter(dataRoomId, actor);
+  async remove(dataRoomId: string, folderId: string, actor: AuthenticatedUser, clientIp?: string) {
+    await this.dataRoomAccess.assertContentDeleter(dataRoomId, actor, clientIp);
 
     const folder = await this.getFolderOrThrow(dataRoomId, folderId);
 
@@ -142,8 +142,14 @@ export class FoldersService {
   // depending on FilesService, which already depends on FoldersService);
   // the next upload in this room will pick up the new total and alert if
   // it's now over a threshold, same as any other usage-growing operation.
-  async copy(dataRoomId: string, folderId: string, dto: CopyFolderDto, actor: AuthenticatedUser): Promise<Folder> {
-    await this.dataRoomAccess.assertContentManager(dataRoomId, actor);
+  async copy(
+    dataRoomId: string,
+    folderId: string,
+    dto: CopyFolderDto,
+    actor: AuthenticatedUser,
+    clientIp?: string,
+  ): Promise<Folder> {
+    await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
 
     const source = await this.getFolderOrThrow(dataRoomId, folderId);
     const targetParent = dto.targetParentId ? await this.getFolderOrThrow(dataRoomId, dto.targetParentId) : null;

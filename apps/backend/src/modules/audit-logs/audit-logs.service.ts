@@ -19,8 +19,13 @@ export class AuditLogsService {
   // overrides query.userId rather than just defaulting it — never trust a
   // client-supplied userId from a non-manager to scope down to themselves
   // "voluntarily."
-  async findForDataRoom(dataRoomId: string, query: ListAuditLogsQueryDto, actor: AuthenticatedUser) {
-    const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor);
+  async findForDataRoom(
+    dataRoomId: string,
+    query: ListAuditLogsQueryDto,
+    actor: AuthenticatedUser,
+    clientIp?: string,
+  ) {
+    const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
 
     if (DATA_ROOM_MANAGER_ROLES.includes(effectiveRole)) {
       return this.auditLogService.findForDataRoom(dataRoomId, query);

@@ -47,8 +47,8 @@ export class FilesService {
     @Inject(STORAGE_SERVICE) private readonly storage: IStorageService,
   ) {}
 
-  async list(dataRoomId: string, actor: AuthenticatedUser, query: ListFilesQueryDto) {
-    await this.dataRoomAccess.getAccess(dataRoomId, actor);
+  async list(dataRoomId: string, actor: AuthenticatedUser, query: ListFilesQueryDto, clientIp?: string) {
+    await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
 
     return this.prisma.file.findMany({
       where: {
@@ -72,8 +72,9 @@ export class FilesService {
     folderId: string | undefined,
     relativePaths: string[] | undefined,
     actor: AuthenticatedUser,
+    clientIp?: string,
   ): Promise<File[]> {
-    await this.dataRoomAccess.assertContentManager(dataRoomId, actor);
+    await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
 
     if (!multerFiles || multerFiles.length === 0) {
       throw new BadRequestException('No files were uploaded');
@@ -209,8 +210,8 @@ export class FilesService {
     return created;
   }
 
-  async update(dataRoomId: string, fileId: string, dto: UpdateFileDto, actor: AuthenticatedUser) {
-    await this.dataRoomAccess.assertContentManager(dataRoomId, actor);
+  async update(dataRoomId: string, fileId: string, dto: UpdateFileDto, actor: AuthenticatedUser, clientIp?: string) {
+    await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
     const file = await this.getFileOrThrow(dataRoomId, fileId);
 
     const moving = dto.folderId !== undefined && dto.folderId !== file.folderId;
@@ -238,8 +239,8 @@ export class FilesService {
     return updated;
   }
 
-  async remove(dataRoomId: string, fileId: string, actor: AuthenticatedUser) {
-    await this.dataRoomAccess.assertContentDeleter(dataRoomId, actor);
+  async remove(dataRoomId: string, fileId: string, actor: AuthenticatedUser, clientIp?: string) {
+    await this.dataRoomAccess.assertContentDeleter(dataRoomId, actor, clientIp);
     const file = await this.getFileOrThrow(dataRoomId, fileId);
 
     await this.prisma.file.update({ where: { id: file.id }, data: { deletedAt: new Date() } });
@@ -266,8 +267,9 @@ export class FilesService {
     multerFile: Express.Multer.File,
     comment: string | undefined,
     actor: AuthenticatedUser,
+    clientIp?: string,
   ) {
-    await this.dataRoomAccess.assertContentManager(dataRoomId, actor);
+    await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
     const file = await this.getFileOrThrow(dataRoomId, fileId);
 
     if (file.isLocked) {
@@ -357,8 +359,8 @@ export class FilesService {
     return version;
   }
 
-  async listVersions(dataRoomId: string, fileId: string, actor: AuthenticatedUser) {
-    await this.dataRoomAccess.getAccess(dataRoomId, actor);
+  async listVersions(dataRoomId: string, fileId: string, actor: AuthenticatedUser, clientIp?: string) {
+    await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
     await this.getFileOrThrow(dataRoomId, fileId);
 
     return this.prisma.fileVersion.findMany({ where: { fileId }, orderBy: { versionNumber: 'desc' } });
@@ -373,9 +375,9 @@ export class FilesService {
     versionId?: string,
   ): Promise<WatermarkedContent> {
     if (action === 'FILE_DOWNLOADED') {
-      await this.dataRoomAccess.assertCanDownload(dataRoomId, actor);
+      await this.dataRoomAccess.assertCanDownload(dataRoomId, actor, context.ipAddress);
     } else {
-      await this.dataRoomAccess.getAccess(dataRoomId, actor);
+      await this.dataRoomAccess.getAccess(dataRoomId, actor, context.ipAddress);
     }
     const file = await this.getFileOrThrow(dataRoomId, fileId);
 
@@ -428,7 +430,7 @@ export class FilesService {
     actor: AuthenticatedUser,
     context: { ipAddress: string; userAgent?: string },
   ): Promise<{ buffer: Buffer; filename: string }> {
-    await this.dataRoomAccess.assertCanDownload(dataRoomId, actor);
+    await this.dataRoomAccess.assertCanDownload(dataRoomId, actor, context.ipAddress);
 
     const files = await this.prisma.file.findMany({
       where: { id: { in: fileIds }, dataRoomId, deletedAt: null },
@@ -505,7 +507,7 @@ export class FilesService {
     actor: AuthenticatedUser,
     context: { ipAddress: string; userAgent?: string },
   ): Promise<{ buffer: Buffer; filename: string }> {
-    await this.dataRoomAccess.assertCanDownload(dataRoomId, actor);
+    await this.dataRoomAccess.assertCanDownload(dataRoomId, actor, context.ipAddress);
 
     // Recursively collect all folder IDs in the subtree
     const collectFolderIds = async (rootId: string | null): Promise<(string | null)[]> => {

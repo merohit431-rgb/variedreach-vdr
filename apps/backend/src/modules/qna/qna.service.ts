@@ -16,8 +16,8 @@ export class QnaService {
     private readonly notificationService: NotificationService,
   ) {}
 
-  async list(dataRoomId: string, actor: AuthenticatedUser, search?: string) {
-    const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor);
+  async list(dataRoomId: string, actor: AuthenticatedUser, search?: string, clientIp?: string) {
+    const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
     const isManager = DATA_ROOM_MANAGER_ROLES.includes(effectiveRole);
 
     const questions = await this.prisma.question.findMany({
@@ -53,8 +53,9 @@ export class QnaService {
     question: string,
     isPrivate: boolean,
     actor: AuthenticatedUser,
+    clientIp?: string,
   ) {
-    await this.dataRoomAccess.getAccess(dataRoomId, actor);
+    await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
 
     const created = await this.prisma.question.create({
       data: {
@@ -97,8 +98,9 @@ export class QnaService {
     questionId: string,
     status: QuestionStatus,
     actor: AuthenticatedUser,
+    clientIp?: string,
   ) {
-    const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor);
+    const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
     const isManager = DATA_ROOM_MANAGER_ROLES.includes(effectiveRole);
 
     const q = await this.prisma.question.findFirst({
@@ -137,8 +139,9 @@ export class QnaService {
     questionId: string,
     answerText: string,
     actor: AuthenticatedUser,
+    clientIp?: string,
   ) {
-    await this.dataRoomAccess.assertRoomManager(dataRoomId, actor);
+    await this.dataRoomAccess.assertRoomManager(dataRoomId, actor, clientIp);
 
     const q = await this.prisma.question.findFirst({
       where: { id: questionId, dataRoomId, deletedAt: null },
@@ -188,8 +191,9 @@ export class QnaService {
     answerId: string,
     answerText: string,
     actor: AuthenticatedUser,
+    clientIp?: string,
   ) {
-    await this.dataRoomAccess.assertRoomManager(dataRoomId, actor);
+    await this.dataRoomAccess.assertRoomManager(dataRoomId, actor, clientIp);
 
     const ans = await this.prisma.answer.findFirst({
       where: { id: answerId, questionId, deletedAt: null },
@@ -202,8 +206,8 @@ export class QnaService {
     });
   }
 
-  async deleteQuestion(dataRoomId: string, questionId: string, actor: AuthenticatedUser) {
-    const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor);
+  async deleteQuestion(dataRoomId: string, questionId: string, actor: AuthenticatedUser, clientIp?: string) {
+    const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
     const isManager = DATA_ROOM_MANAGER_ROLES.includes(effectiveRole);
 
     const q = await this.prisma.question.findFirst({

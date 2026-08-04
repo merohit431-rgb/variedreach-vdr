@@ -90,8 +90,9 @@ export class ReportsService {
     dataRoomId: string,
     actor: AuthenticatedUser,
     query: ReportQueryDto,
+    clientIp?: string,
   ): Promise<SummaryStats> {
-    await this.dataRoomAccess.assertRoomManager(dataRoomId, actor);
+    await this.dataRoomAccess.assertRoomManager(dataRoomId, actor, clientIp);
 
     const dateFilter = buildDateFilter(query);
 
@@ -131,8 +132,9 @@ export class ReportsService {
     dataRoomId: string,
     actor: AuthenticatedUser,
     query: ReportQueryDto,
+    clientIp?: string,
   ): Promise<TrendPoint[]> {
-    await this.dataRoomAccess.assertRoomManager(dataRoomId, actor);
+    await this.dataRoomAccess.assertRoomManager(dataRoomId, actor, clientIp);
 
     const defaultFrom = new Date();
     defaultFrom.setDate(defaultFrom.getDate() - 30);
@@ -162,8 +164,8 @@ export class ReportsService {
     return Array.from(byDate.entries()).map(([date, counts]) => ({ date, ...counts }));
   }
 
-  async getStorageReport(dataRoomId: string, actor: AuthenticatedUser): Promise<StorageReportTable> {
-    await this.dataRoomAccess.assertRoomManager(dataRoomId, actor);
+  async getStorageReport(dataRoomId: string, actor: AuthenticatedUser, clientIp?: string): Promise<StorageReportTable> {
+    await this.dataRoomAccess.assertRoomManager(dataRoomId, actor, clientIp);
 
     // Storage totals/quota are ORGANISATION-wide (the single source of truth);
     // the file list below is this room's largest files, sized against the org
@@ -217,8 +219,9 @@ export class ReportsService {
     dataRoomId: string,
     actor: AuthenticatedUser,
     query: ReportQueryDto,
+    clientIp?: string,
   ): Promise<ReportTable> {
-    await this.dataRoomAccess.assertRoomManager(dataRoomId, actor);
+    await this.dataRoomAccess.assertRoomManager(dataRoomId, actor, clientIp);
 
     const where: Prisma.AuditLogWhereInput = {
       dataRoomId,
@@ -265,8 +268,8 @@ export class ReportsService {
     };
   }
 
-  async getUserActivityReport(dataRoomId: string, actor: AuthenticatedUser): Promise<ReportTable> {
-    await this.dataRoomAccess.assertRoomManager(dataRoomId, actor);
+  async getUserActivityReport(dataRoomId: string, actor: AuthenticatedUser, clientIp?: string): Promise<ReportTable> {
+    await this.dataRoomAccess.assertRoomManager(dataRoomId, actor, clientIp);
 
     const [members, totalCounts, actionCounts, lastActivity] = await Promise.all([
       this.prisma.dataRoomMember.findMany({

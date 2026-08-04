@@ -8,8 +8,10 @@ import {
   Param,
   Patch,
   Post,
+  Req,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import type { Request } from 'express';
 import { DataRoomsService } from './data-rooms.service';
 import { CreateDataRoomDto } from './dto/create-data-room.dto';
 import { UpdateDataRoomDto } from './dto/update-data-room.dto';
@@ -43,13 +45,13 @@ export class DataRoomsController {
   }
 
   @Get(':id/access')
-  getMyAccess(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.dataRoomsService.getMyAccess(id, user);
+  getMyAccess(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser, @Req() req: Request) {
+    return this.dataRoomsService.getMyAccess(id, user, req.ip ?? '0.0.0.0');
   }
 
   @Get(':id/stats')
-  getStats(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.dataRoomsService.getStats(id, user);
+  getStats(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser, @Req() req: Request) {
+    return this.dataRoomsService.getStats(id, user, req.ip ?? '0.0.0.0');
   }
 
   @Roles(...MANAGER_ROLES)

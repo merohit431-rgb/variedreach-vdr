@@ -21,6 +21,7 @@ import {
   CONTENT_MANAGER_ROLES,
   DATA_ROOM_MANAGER_ROLES as ADMIN_ROLES,
   NO_DOWNLOAD_ROLES,
+  ROLE_RANK,
 } from '../../common/constants/content-roles';
 import { CreateDataRoomDto } from './dto/create-data-room.dto';
 import { UpdateDataRoomDto } from './dto/update-data-room.dto';
@@ -39,8 +40,8 @@ export class DataRoomsService {
     private readonly dataRoomAccess: DataRoomAccessService,
   ) {}
 
-  async getMyAccess(dataRoomId: string, actor: AuthenticatedUser) {
-    const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor);
+  async getMyAccess(dataRoomId: string, actor: AuthenticatedUser, clientIp?: string) {
+    const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
 
     return {
       effectiveRole,
@@ -216,6 +217,7 @@ export class DataRoomsService {
 
   async inviteMember(dataRoomId: string, dto: InviteMemberDto, actor: AuthenticatedUser) {
     const dataRoom = await this.assertManager(dataRoomId, actor);
+    this.assertCanGrantRole(dto.role, actor);
 
     const email = normalizeEmail(dto.email);
     let user = await this.prisma.user.findUnique({ where: { email } });
@@ -400,6 +402,7 @@ export class DataRoomsService {
 
   async updateMemberRole(dataRoomId: string, userId: string, role: UserRole, actor: AuthenticatedUser) {
     await this.assertManager(dataRoomId, actor);
+    this.assertCanGrantRole(role, actor);
 
     const member = await this.prisma.dataRoomMember.findUnique({
       where: { dataRoomId_userId: { dataRoomId, userId } },
@@ -491,8 +494,8 @@ export class DataRoomsService {
   // but member count and organisation storage are management figures -- they
   // are nulled for non-managers here so a direct API call can't read them
   // (the UI hides the corresponding cards, but the backend is the real gate).
-  async getStats(dataRoomId: string, actor: AuthenticatedUser) {
-    const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor);
+  async getStats(dataRoomId: string, actor: AuthenticatedUser, clientIp?: string) {
+    const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
     const isManager = ADMIN_ROLES.includes(effectiveRole);
 
     const [orgStorage, documents, members, lastActivity, folderGroups] = await Promise.all([
@@ -559,5 +562,17 @@ export class DataRoomsService {
     }
 
     return dataRoom;
+  }
+
+  // assertManager() only checks "is the actor a manager at all" (Super Admin /
+  // Org Admin / RP-Liquidator, flat, no ordering). Without this, any of the
+  // three -- including RP-Liquidator, the lowest of them -- could invite a
+  // new member as, or promote an existing member to, ORG_ADMIN: the requested
+  // role was validated against the same static ASSIGNABLE_MEMBER_ROLES list
+  // regardless of who the actor was. This is the actual privilege boundary.
+  private assertCanGrantRole(role: UserRole, actor: AuthenticatedUser) {
+    if (ROLE_RANK[role] > ROLE_RANK[actor.role]) {
+      throw new ForbiddenException('You cannot assign a role that outranks your own');
+    }
   }
 }

@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Req } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import type { Request } from 'express';
 import { FoldersService } from './folders.service';
 import { CreateFolderDto } from './dto/create-folder.dto';
 import { UpdateFolderDto } from './dto/update-folder.dto';
@@ -13,8 +14,8 @@ export class FoldersController {
   constructor(private readonly foldersService: FoldersService) {}
 
   @Get()
-  findTree(@Param('dataRoomId') dataRoomId: string, @CurrentUser() user: AuthenticatedUser) {
-    return this.foldersService.findTree(dataRoomId, user);
+  findTree(@Param('dataRoomId') dataRoomId: string, @CurrentUser() user: AuthenticatedUser, @Req() req: Request) {
+    return this.foldersService.findTree(dataRoomId, user, req.ip ?? '0.0.0.0');
   }
 
   @Post()
@@ -22,8 +23,9 @@ export class FoldersController {
     @Param('dataRoomId') dataRoomId: string,
     @Body() dto: CreateFolderDto,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.foldersService.create(dataRoomId, dto, user);
+    return this.foldersService.create(dataRoomId, dto, user, req.ip ?? '0.0.0.0');
   }
 
   @Patch(':folderId')
@@ -32,8 +34,9 @@ export class FoldersController {
     @Param('folderId') folderId: string,
     @Body() dto: UpdateFolderDto,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.foldersService.update(dataRoomId, folderId, dto, user);
+    return this.foldersService.update(dataRoomId, folderId, dto, user, req.ip ?? '0.0.0.0');
   }
 
   @Post(':folderId/copy')
@@ -42,8 +45,9 @@ export class FoldersController {
     @Param('folderId') folderId: string,
     @Body() dto: CopyFolderDto,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.foldersService.copy(dataRoomId, folderId, dto, user);
+    return this.foldersService.copy(dataRoomId, folderId, dto, user, req.ip ?? '0.0.0.0');
   }
 
   @Delete(':folderId')
@@ -52,7 +56,8 @@ export class FoldersController {
     @Param('dataRoomId') dataRoomId: string,
     @Param('folderId') folderId: string,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.foldersService.remove(dataRoomId, folderId, user);
+    return this.foldersService.remove(dataRoomId, folderId, user, req.ip ?? '0.0.0.0');
   }
 }

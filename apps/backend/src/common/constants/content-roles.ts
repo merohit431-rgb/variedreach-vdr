@@ -62,3 +62,22 @@ export const EXTERNAL_ROLES: UserRole[] = [
   UserRole.LEGAL_ADVISOR,
   UserRole.GUEST,
 ];
+
+// Strictly-higher-outranks-strictly-lower ordering for the one place rank
+// actually needs comparing: deciding whether an actor is allowed to grant a
+// given role to someone else. assertManager()/@Roles(...MANAGER_ROLES) only
+// ever checked "is the actor A manager", never "does the actor outrank the
+// role being granted" — so any of the three manager roles, including
+// RP_LIQUIDATOR, could invite or promote someone straight to ORG_ADMIN. The
+// external/content roles are intentionally tied at one rank: none of them
+// manages another, so there's no ordering between them to get wrong.
+export const ROLE_RANK: Record<UserRole, number> = {
+  [UserRole.SUPER_ADMIN]: 100,
+  [UserRole.ORG_ADMIN]: 90,
+  [UserRole.RP_LIQUIDATOR]: 80,
+  [UserRole.PRA]: 50,
+  [UserRole.COC_MEMBER]: 50,
+  [UserRole.AUDITOR]: 50,
+  [UserRole.LEGAL_ADVISOR]: 50,
+  [UserRole.GUEST]: 10,
+};

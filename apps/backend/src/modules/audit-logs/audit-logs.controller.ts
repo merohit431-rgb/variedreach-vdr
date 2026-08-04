@@ -1,5 +1,6 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, Req } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import type { Request } from 'express';
 import { AuditLogsService } from './audit-logs.service';
 import { ListAuditLogsQueryDto } from './dto/list-audit-logs-query.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -15,7 +16,8 @@ export class AuditLogsController {
     @Param('dataRoomId') dataRoomId: string,
     @Query() query: ListAuditLogsQueryDto,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.auditLogsService.findForDataRoom(dataRoomId, query, user);
+    return this.auditLogsService.findForDataRoom(dataRoomId, query, user, req.ip ?? '0.0.0.0');
   }
 }

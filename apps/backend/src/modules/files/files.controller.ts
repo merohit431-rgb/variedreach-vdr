@@ -68,8 +68,9 @@ export class FilesController {
     @Param('dataRoomId') dataRoomId: string,
     @Query() query: ListFilesQueryDto,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.filesService.list(dataRoomId, user, query);
+    return this.filesService.list(dataRoomId, user, query, req.ip ?? '0.0.0.0');
   }
 
   @Post()
@@ -84,9 +85,10 @@ export class FilesController {
     @UploadedFiles() files: Express.Multer.File[],
     @Body() dto: UploadFilesDto,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
     const relativePaths = this.parseRelativePaths(dto.relativePaths, files?.length ?? 0);
-    return this.filesService.upload(dataRoomId, files, dto.folderId, relativePaths, user);
+    return this.filesService.upload(dataRoomId, files, dto.folderId, relativePaths, user, req.ip ?? '0.0.0.0');
   }
 
   @Patch(':fileId')
@@ -95,8 +97,9 @@ export class FilesController {
     @Param('fileId') fileId: string,
     @Body() dto: UpdateFileDto,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.filesService.update(dataRoomId, fileId, dto, user);
+    return this.filesService.update(dataRoomId, fileId, dto, user, req.ip ?? '0.0.0.0');
   }
 
   @Delete(':fileId')
@@ -105,8 +108,9 @@ export class FilesController {
     @Param('dataRoomId') dataRoomId: string,
     @Param('fileId') fileId: string,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.filesService.remove(dataRoomId, fileId, user);
+    return this.filesService.remove(dataRoomId, fileId, user, req.ip ?? '0.0.0.0');
   }
 
   @Post(':fileId/versions')
@@ -119,8 +123,9 @@ export class FilesController {
     @UploadedFile() file: Express.Multer.File,
     @Body() dto: AddVersionDto,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.filesService.addVersion(dataRoomId, fileId, file, dto.comment, user);
+    return this.filesService.addVersion(dataRoomId, fileId, file, dto.comment, user, req.ip ?? '0.0.0.0');
   }
 
   @Get(':fileId/versions')
@@ -128,8 +133,9 @@ export class FilesController {
     @Param('dataRoomId') dataRoomId: string,
     @Param('fileId') fileId: string,
     @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
   ) {
-    return this.filesService.listVersions(dataRoomId, fileId, user);
+    return this.filesService.listVersions(dataRoomId, fileId, user, req.ip ?? '0.0.0.0');
   }
 
   @Get(':fileId/preview')
