@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsIn, IsInt, IsOptional, IsString, Min, MaxLength } from 'class-validator';
+import { IsEmail, IsIn, IsInt, IsOptional, IsString, Max, Min, MaxLength } from 'class-validator';
 import { IsStrongPassword } from '../../../common/validators/strong-password.validator';
 import { NormalizeEmail } from '../../../common/utils/email.util';
 
@@ -46,8 +46,16 @@ export class CreateRegistrationDto {
   @IsIn(PLAN_IDS)
   selectedPlan!: string;
 
+  // 200GB keeps every current plan/billing-cycle combination's total (paisa,
+  // an Int32 DB column) comfortably under 2,147,483,647 -- the tightest
+  // case, Starter yearly, only clears ~398GB before overflowing. A customer
+  // who genuinely needs more than this buys in and scales up afterwards via
+  // the existing storage-increase request flow (dashboard.service.ts
+  // requestStorageUpgrade) rather than through self-service signup.
+  // Re-derive this bound before ever raising it or adding a higher-rate plan.
   @ApiProperty()
   @IsInt()
   @Min(1)
+  @Max(200)
   selectedStorageGb!: number;
 }

@@ -11,6 +11,10 @@ export class MockPaymentProvider implements IPaymentProvider {
     return { orderId, amountPaisa: input.amountPaisa, keyId: 'mock_key_id' };
   }
 
+  getKeyId(): string {
+    return 'mock_key_id';
+  }
+
   async verifyPayment(input: VerifyPaymentInput): Promise<boolean> {
     this.logger.log(`[MOCK] Verified payment ${input.paymentId} for order ${input.orderId}`);
     return true;

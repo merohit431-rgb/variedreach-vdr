@@ -129,6 +129,30 @@ export class RegistrationService {
     // the money-orphaning risk it used to be.
 
     const billingCycle = dto.billingCycle ?? reg.billingCycle ?? 'MONTHLY';
+    const plan = PRICING_PLANS[reg.selectedPlan];
+
+    // Idempotent replay: a double-click, dropped-response retry, or a second
+    // tab hitting this with the exact same terms already has a live gateway
+    // order. Minting a second one and overwriting gatewayOrderId would orphan
+    // the first: handlePaymentCaptured (razorpay-webhook.service.ts) looks
+    // registrations up BY gatewayOrderId, so once it's overwritten, a
+    // capture against the original order finds no matching registration and
+    // the customer's payment is never provisioned. Reuse instead of
+    // reissuing whenever the stored terms are unchanged.
+    if (reg.gatewayOrderId && reg.billingCycle === billingCycle && (reg.couponCode ?? null) === (dto.couponCode ?? null)) {
+      const grossPaisa = computeTotal(reg.selectedPlan, reg.selectedStorageGb, billingCycle === 'YEARLY');
+      return {
+        orderId: reg.gatewayOrderId,
+        amountPaisa: Math.max(0, grossPaisa - (reg.discountPaisa ?? 0)),
+        discountPaisa: reg.discountPaisa ?? 0,
+        couponCode: reg.couponCode,
+        currency: 'INR',
+        keyId: this.paymentProvider.getKeyId(),
+        planName: plan.name,
+        billingCycle,
+      };
+    }
+
     const isYearly = billingCycle === 'YEARLY';
     const grossPaisa = computeTotal(reg.selectedPlan, reg.selectedStorageGb, isYearly);
 
@@ -152,7 +176,6 @@ export class RegistrationService {
       data: { gatewayOrderId: order.orderId, billingCycle, couponCode, discountPaisa },
     });
 
-    const plan = PRICING_PLANS[reg.selectedPlan];
     return {
       orderId: order.orderId,
       amountPaisa: order.amountPaisa,

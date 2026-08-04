@@ -22,6 +22,10 @@ export interface IPaymentProvider {
   createOrder(input: CreateOrderInput): Promise<CreateOrderResult>;
   verifyPayment(input: VerifyPaymentInput): Promise<boolean>;
   refundPayment(paymentId: string, amountPaisa: number): Promise<void>;
+  // Static per checkout session (the same public key for every order) --
+  // lets a caller reconstruct a CreateOrderResult-shaped response for an
+  // already-created order without minting a new one just to read this back.
+  getKeyId(): string;
 }
 
 export const PAYMENT_PROVIDER = 'PAYMENT_PROVIDER';

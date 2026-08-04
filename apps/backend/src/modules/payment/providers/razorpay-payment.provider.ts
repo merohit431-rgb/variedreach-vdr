@@ -28,6 +28,10 @@ export class RazorpayPaymentProvider implements IPaymentProvider {
     return { orderId: order.id, amountPaisa: order.amount, keyId: this.keyId };
   }
 
+  getKeyId(): string {
+    return this.keyId;
+  }
+
   async verifyPayment(input: VerifyPaymentInput): Promise<boolean> {
     const body = `${input.orderId}|${input.paymentId}`;
     const expected = crypto.createHmac('sha256', this.keySecret).update(body).digest('hex');

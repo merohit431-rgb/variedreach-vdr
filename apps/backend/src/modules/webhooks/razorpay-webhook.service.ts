@@ -71,10 +71,12 @@ export class RazorpayWebhookService {
     // prompt 2xx, so the same (provider, externalId, eventType) can arrive
     // more than once. Insert-or-skip via the unique constraint -- a
     // duplicate is not an error, it's Razorpay confirming what we already know.
+    let webhookEventId: string;
     try {
-      await this.prisma.webhookEvent.create({
+      const created = await this.prisma.webhookEvent.create({
         data: { provider: 'razorpay', eventType, externalId, payload: body as object },
       });
+      webhookEventId = created.id;
     } catch (error) {
       if ((error as { code?: string }).code === 'P2002') {
         this.logger.log(`Duplicate Razorpay webhook ${eventType}/${externalId} -- already processed, skipping`);
@@ -83,18 +85,32 @@ export class RazorpayWebhookService {
       throw error;
     }
 
-    switch (eventType) {
-      case 'payment.captured':
-        await this.handlePaymentCaptured(entity as RazorpayPaymentEntity);
-        break;
-      case 'payment.failed':
-        await this.handlePaymentFailed(entity as RazorpayPaymentEntity);
-        break;
-      case 'refund.processed':
-        await this.handleRefundProcessed(entity as RazorpayRefundEntity);
-        break;
-      default:
-        this.logger.debug(`Ignoring unhandled Razorpay webhook event: ${eventType}`);
+    // The row above must only mark this delivery as done once the handler
+    // actually succeeds. Recording it beforehand (as this used to) means a
+    // transient handler failure (DB blip, etc.) still leaves the row
+    // committed, so Razorpay's retry -- delivered specifically to recover
+    // from that failure -- hits the same externalId, gets treated as a
+    // harmless duplicate by the P2002 branch above, and is silently
+    // dropped: the registration never gets provisioned despite the
+    // customer having been charged. Delete the marker on failure so a
+    // retry is reprocessed for real.
+    try {
+      switch (eventType) {
+        case 'payment.captured':
+          await this.handlePaymentCaptured(entity as RazorpayPaymentEntity);
+          break;
+        case 'payment.failed':
+          await this.handlePaymentFailed(entity as RazorpayPaymentEntity);
+          break;
+        case 'refund.processed':
+          await this.handleRefundProcessed(entity as RazorpayRefundEntity);
+          break;
+        default:
+          this.logger.debug(`Ignoring unhandled Razorpay webhook event: ${eventType}`);
+      }
+    } catch (error) {
+      await this.prisma.webhookEvent.delete({ where: { id: webhookEventId } }).catch(() => undefined);
+      throw error;
     }
   }
 

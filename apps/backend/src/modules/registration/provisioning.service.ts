@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { Registration } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../mail/mail.service';
 import { CouponService } from '../coupon/coupon.service';
@@ -63,153 +64,7 @@ export class ProvisioningService {
     const periodEnd = new Date(now);
     isYearly ? periodEnd.setFullYear(periodEnd.getFullYear() + 1) : periodEnd.setMonth(periodEnd.getMonth() + 1);
 
-    const { org, user, invoiceNumber } = await this.prisma.$transaction(async (tx) => {
-      // Unique slug from companyName
-      const base = reg.companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-      let slug = base;
-      let n = 1;
-      while (await tx.organisation.findUnique({ where: { slug } })) {
-        slug = `${base}-${n++}`;
-      }
-
-      const org = await tx.organisation.create({
-        data: {
-          name: reg.companyName,
-          slug,
-          planSlug: reg.selectedPlan,
-          userLimit: plan.includedUsers,
-          // Without this, storageLimitGb falls back to the schema default (25)
-          // -- the org's actual enforced cap (read everywhere via
-          // getOrgStorageUsage) would silently disagree with what the
-          // customer selected and paid for (amounts.billableGb, already
-          // floored to the plan minimum above).
-          storageLimitGb: amounts.billableGb,
-          ...(reg.gstNumber && { gstNumber: reg.gstNumber }),
-          ...(reg.companyAddress && { address: reg.companyAddress }),
-          ...(reg.mobileNumber && { mobileNumber: reg.mobileNumber }),
-        },
-      });
-
-      // Email is a global identity, not scoped to one organisation -- someone
-      // who's already a PRA/Auditor/etc. on another engagement must still be
-      // able to buy their own workspace. Reuse the existing User row rather
-      // than creating a second one (which used to throw a unique-constraint
-      // violation on email here, deep inside the transaction, *after*
-      // Razorpay had already captured a real payment with no way to
-      // fulfill it -- this is the actual fix for that). Never touch an
-      // existing user's password/name; only their own account-settings flow
-      // should change those.
-      // Defensive re-normalization even though register() already normalizes
-      // Registration.email -- this is the actual point where a User row gets
-      // created, so it must not blindly trust that upstream invariant holds.
-      const email = normalizeEmail(reg.email);
-      let user = await tx.user.findUnique({ where: { email } });
-      if (!user) {
-        const nameParts = reg.fullName.trim().split(/\s+/);
-        const firstName = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : nameParts[0];
-        const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
-
-        user = await tx.user.create({
-          data: {
-            email,
-            firstName,
-            lastName,
-            password: reg.passwordHash,
-            role: 'ORG_ADMIN',
-            status: 'ACTIVE',
-            organisationId: org.id,
-          },
-        });
-      }
-
-      // Every organisation this identity buys gets its own membership --
-      // always a fresh row since org.id was just created above, so this can
-      // never collide with an existing (userId, organisationId) pair.
-      await tx.organisationMembership.create({
-        data: { userId: user.id, organisationId: org.id, role: 'ORG_ADMIN', isOwner: true },
-      });
-
-      const subscription = await tx.subscription.create({
-        data: {
-          organisationId: org.id,
-          planSlug: reg.selectedPlan,
-          billingCycle: isYearly ? 'YEARLY' : 'MONTHLY',
-          storageGb: amounts.billableGb,
-          status: 'ACTIVE',
-          currentPeriodStart: now,
-          currentPeriodEnd: periodEnd,
-        },
-      });
-
-      const payment = await tx.payment.create({
-        data: {
-          subscriptionId: subscription.id,
-          organisationId: org.id,
-          amountPaisa: netTotal, // what was actually charged (after discount)
-          status: 'SUCCESSFUL',
-          ...(reg.gatewayOrderId && { gatewayOrderId: reg.gatewayOrderId }),
-          ...(gateway?.paymentId && { gatewayPaymentId: gateway.paymentId }),
-          ...(gateway?.signature && { gatewaySignature: gateway.signature }),
-          paidAt: now,
-        },
-      });
-
-      // INV-YYYY-NNNNNN — sequenced within current year
-      const year = now.getFullYear();
-      const lastInv = await tx.invoice.findFirst({
-        where: { createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } },
-        orderBy: { invoiceNumber: 'desc' },
-        select: { invoiceNumber: true },
-      });
-      const seq = lastInv ? parseInt(lastInv.invoiceNumber.split('-')[2], 10) + 1 : 1;
-      const invoiceNumber = `INV-${year}-${String(seq).padStart(6, '0')}`;
-
-      const lineItems: Array<{ description: string; quantity: number; unitPricePaisa: number; amountPaisa: number }> = [
-        {
-          description: `${plan.name} Plan – ${isYearly ? 'Annual' : 'Monthly'} (${amounts.billableGb} GB storage)`,
-          quantity: isYearly ? 12 : 1,
-          unitPricePaisa: amounts.monthlyBase,
-          amountPaisa: amounts.base,
-        },
-      ];
-      if (discountPaisa > 0) {
-        lineItems.push({
-          description: `Discount${reg.couponCode ? ` (coupon ${reg.couponCode})` : ''}`,
-          quantity: 1,
-          unitPricePaisa: -discountPaisa,
-          amountPaisa: -discountPaisa,
-        });
-      }
-
-      await tx.invoice.create({
-        data: {
-          subscriptionId: subscription.id,
-          organisationId: org.id,
-          paymentId: payment.id,
-          invoiceNumber,
-          amountPaisa: amounts.base,
-          gstAmountPaisa: amounts.gst,
-          totalAmountPaisa: netTotal,
-          status: 'PAID',
-          issuedAt: now,
-          paidAt: now,
-          lineItems,
-          ...(reg.gstNumber && { customerGstNumber: reg.gstNumber }),
-        },
-      });
-
-      // Record the coupon redemption in the same transaction as the invoice.
-      if (reg.couponCode && discountPaisa > 0) {
-        await this.couponService.redeem(tx, reg.couponCode, discountPaisa, reg.email, org.id);
-      }
-
-      await tx.registration.update({
-        where: { id: reg.id },
-        data: { provisionedAt: now, paymentStatus: 'COMPLETED' },
-      });
-
-      return { org, user, invoiceNumber };
-    });
+    const { org, user, invoiceNumber } = await this.runProvisioningTransaction(reg, plan, amounts, discountPaisa, netTotal, now, periodEnd, gateway);
 
     // Single shared audit entry for every successful payment, regardless of
     // which caller reached this method (the normal client-redirect checkout,
@@ -248,5 +103,186 @@ export class ProvisioningService {
     // different org), not their role in the org just created here, which
     // is always ORG_ADMIN (see the OrganisationMembership created above).
     return { organisationId: org.id, userId: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: 'ORG_ADMIN' };
+  }
+
+  // Two concurrent checkouts can both read the same "last invoice this
+  // year" row before either commits, compute the same next seq, and race
+  // to insert the same INV-YYYY-NNNNNN -- Invoice.invoiceNumber is unique,
+  // so whichever transaction commits second hits a P2002 and the whole
+  // transaction rolls back, even though its payment was genuinely captured
+  // and everything else about it was fine. That's two unrelated successful
+  // payments landing close together, not a real failure, so retry the
+  // whole transaction rather than surfacing a 500: it's a single
+  // all-or-nothing unit (nothing outside it has run yet), so a clean retry
+  // just re-reads the now-current last invoice number and proceeds.
+  private async runProvisioningTransaction(
+    reg: Registration,
+    plan: (typeof PRICING_PLANS)[string],
+    amounts: ReturnType<typeof computeAmounts>,
+    discountPaisa: number,
+    netTotal: number,
+    now: Date,
+    periodEnd: Date,
+    gateway?: { paymentId?: string; signature?: string },
+  ) {
+    const isYearly = reg.billingCycle === 'YEARLY';
+    const MAX_ATTEMPTS = 5;
+
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          // Unique slug from companyName
+          const base = reg.companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+          let slug = base;
+          let n = 1;
+          while (await tx.organisation.findUnique({ where: { slug } })) {
+            slug = `${base}-${n++}`;
+          }
+
+          const org = await tx.organisation.create({
+            data: {
+              name: reg.companyName,
+              slug,
+              planSlug: reg.selectedPlan,
+              userLimit: plan.includedUsers,
+              // Without this, storageLimitGb falls back to the schema default (25)
+              // -- the org's actual enforced cap (read everywhere via
+              // getOrgStorageUsage) would silently disagree with what the
+              // customer selected and paid for (amounts.billableGb, already
+              // floored to the plan minimum above).
+              storageLimitGb: amounts.billableGb,
+              ...(reg.gstNumber && { gstNumber: reg.gstNumber }),
+              ...(reg.companyAddress && { address: reg.companyAddress }),
+              ...(reg.mobileNumber && { mobileNumber: reg.mobileNumber }),
+            },
+          });
+
+          // Email is a global identity, not scoped to one organisation -- someone
+          // who's already a PRA/Auditor/etc. on another engagement must still be
+          // able to buy their own workspace. Reuse the existing User row rather
+          // than creating a second one (which used to throw a unique-constraint
+          // violation on email here, deep inside the transaction, *after*
+          // Razorpay had already captured a real payment with no way to
+          // fulfill it -- this is the actual fix for that). Never touch an
+          // existing user's password/name; only their own account-settings flow
+          // should change those.
+          // Defensive re-normalization even though register() already normalizes
+          // Registration.email -- this is the actual point where a User row gets
+          // created, so it must not blindly trust that upstream invariant holds.
+          const email = normalizeEmail(reg.email);
+          let user = await tx.user.findUnique({ where: { email } });
+          if (!user) {
+            const nameParts = reg.fullName.trim().split(/\s+/);
+            const firstName = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : nameParts[0];
+            const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+
+            user = await tx.user.create({
+              data: {
+                email,
+                firstName,
+                lastName,
+                password: reg.passwordHash,
+                role: 'ORG_ADMIN',
+                status: 'ACTIVE',
+                organisationId: org.id,
+              },
+            });
+          }
+
+          // Every organisation this identity buys gets its own membership --
+          // always a fresh row since org.id was just created above, so this can
+          // never collide with an existing (userId, organisationId) pair.
+          await tx.organisationMembership.create({
+            data: { userId: user.id, organisationId: org.id, role: 'ORG_ADMIN', isOwner: true },
+          });
+
+          const subscription = await tx.subscription.create({
+            data: {
+              organisationId: org.id,
+              planSlug: reg.selectedPlan,
+              billingCycle: isYearly ? 'YEARLY' : 'MONTHLY',
+              storageGb: amounts.billableGb,
+              status: 'ACTIVE',
+              currentPeriodStart: now,
+              currentPeriodEnd: periodEnd,
+            },
+          });
+
+          const payment = await tx.payment.create({
+            data: {
+              subscriptionId: subscription.id,
+              organisationId: org.id,
+              amountPaisa: netTotal, // what was actually charged (after discount)
+              status: 'SUCCESSFUL',
+              ...(reg.gatewayOrderId && { gatewayOrderId: reg.gatewayOrderId }),
+              ...(gateway?.paymentId && { gatewayPaymentId: gateway.paymentId }),
+              ...(gateway?.signature && { gatewaySignature: gateway.signature }),
+              paidAt: now,
+            },
+          });
+
+          // INV-YYYY-NNNNNN — sequenced within current year
+          const year = now.getFullYear();
+          const lastInv = await tx.invoice.findFirst({
+            where: { createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } },
+            orderBy: { invoiceNumber: 'desc' },
+            select: { invoiceNumber: true },
+          });
+          const seq = lastInv ? parseInt(lastInv.invoiceNumber.split('-')[2], 10) + 1 : 1;
+          const invoiceNumber = `INV-${year}-${String(seq).padStart(6, '0')}`;
+
+          const lineItems: Array<{ description: string; quantity: number; unitPricePaisa: number; amountPaisa: number }> = [
+            {
+              description: `${plan.name} Plan – ${isYearly ? 'Annual' : 'Monthly'} (${amounts.billableGb} GB storage)`,
+              quantity: isYearly ? 12 : 1,
+              unitPricePaisa: amounts.monthlyBase,
+              amountPaisa: amounts.base,
+            },
+          ];
+          if (discountPaisa > 0) {
+            lineItems.push({
+              description: `Discount${reg.couponCode ? ` (coupon ${reg.couponCode})` : ''}`,
+              quantity: 1,
+              unitPricePaisa: -discountPaisa,
+              amountPaisa: -discountPaisa,
+            });
+          }
+
+          await tx.invoice.create({
+            data: {
+              subscriptionId: subscription.id,
+              organisationId: org.id,
+              paymentId: payment.id,
+              invoiceNumber,
+              amountPaisa: amounts.base,
+              gstAmountPaisa: amounts.gst,
+              totalAmountPaisa: netTotal,
+              status: 'PAID',
+              issuedAt: now,
+              paidAt: now,
+              lineItems,
+              ...(reg.gstNumber && { customerGstNumber: reg.gstNumber }),
+            },
+          });
+
+          // Record the coupon redemption in the same transaction as the invoice.
+          if (reg.couponCode && discountPaisa > 0) {
+            await this.couponService.redeem(tx, reg.couponCode, discountPaisa, reg.email, org.id);
+          }
+
+          await tx.registration.update({
+            where: { id: reg.id },
+            data: { provisionedAt: now, paymentStatus: 'COMPLETED' },
+          });
+
+          return { org, user, invoiceNumber };
+        });
+      } catch (error) {
+        const isInvoiceNumberClash =
+          (error as { code?: string }).code === 'P2002' &&
+          String((error as { meta?: { target?: unknown } }).meta?.target ?? '').includes('invoiceNumber');
+        if (!isInvoiceNumberClash || attempt >= MAX_ATTEMPTS) throw error;
+      }
+    }
   }
 }
