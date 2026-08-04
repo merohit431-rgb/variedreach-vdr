@@ -66,11 +66,51 @@ describe('validateProductionEnv', () => {
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
+  it('exits when PAYMENT_PROVIDER is not set to razorpay', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.JWT_ACCESS_SECRET = 'a'.repeat(40);
+    process.env.COOKIE_SECRET = 'b'.repeat(40);
+    delete process.env.PAYMENT_PROVIDER;
+
+    validateProductionEnv();
+
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('exits when PAYMENT_PROVIDER is explicitly "mock"', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.JWT_ACCESS_SECRET = 'a'.repeat(40);
+    process.env.COOKIE_SECRET = 'b'.repeat(40);
+    process.env.PAYMENT_PROVIDER = 'mock';
+
+    validateProductionEnv();
+
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('exits when razorpay is selected but its credentials are missing', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.JWT_ACCESS_SECRET = 'a'.repeat(40);
+    process.env.COOKIE_SECRET = 'b'.repeat(40);
+    process.env.PAYMENT_PROVIDER = 'razorpay';
+    delete process.env.RAZORPAY_KEY_ID;
+    delete process.env.RAZORPAY_KEY_SECRET;
+    delete process.env.RAZORPAY_WEBHOOK_SECRET;
+
+    validateProductionEnv();
+
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
   it('passes when production secrets are real and long enough', () => {
     process.env.NODE_ENV = 'production';
     process.env.JWT_ACCESS_SECRET = 'a'.repeat(40);
     process.env.COOKIE_SECRET = 'b'.repeat(40);
     process.env.SEED_ADMIN_PASSWORD = 'something-else-entirely';
+    process.env.PAYMENT_PROVIDER = 'razorpay';
+    process.env.RAZORPAY_KEY_ID = 'rzp_live_test';
+    process.env.RAZORPAY_KEY_SECRET = 'test-secret';
+    process.env.RAZORPAY_WEBHOOK_SECRET = 'test-webhook-secret';
 
     validateProductionEnv();
 

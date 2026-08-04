@@ -28,6 +28,23 @@ export function validateProductionEnv(): void {
     failures.push('SEED_ADMIN_PASSWORD is still the documented default — change it before seeding production data');
   }
 
+  // payment.config.ts falls back to the mock, always-approve payment provider
+  // whenever PAYMENT_PROVIDER isn't set to exactly 'razorpay' — so an unset
+  // or misconfigured value here would silently start production accepting
+  // fabricated payment confirmations for real checkouts, not just failing to
+  // charge. Same class of risk as the secrets above; same fail-fast response.
+  if (process.env.PAYMENT_PROVIDER !== 'razorpay') {
+    failures.push(
+      `PAYMENT_PROVIDER must be set to "razorpay" in production (currently: ${process.env.PAYMENT_PROVIDER ? `"${process.env.PAYMENT_PROVIDER}"` : 'not set'} — this silently falls back to the mock, always-approve payment provider)`,
+    );
+  } else {
+    for (const key of ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET', 'RAZORPAY_WEBHOOK_SECRET']) {
+      if (!process.env[key]) {
+        failures.push(`${key} is not set (required when PAYMENT_PROVIDER=razorpay)`);
+      }
+    }
+  }
+
   if (failures.length > 0) {
     // eslint-disable-next-line no-console
     console.error(

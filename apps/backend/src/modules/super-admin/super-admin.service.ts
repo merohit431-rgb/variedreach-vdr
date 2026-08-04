@@ -12,13 +12,22 @@ const PRICING_PLANS: Record<string, { name: string; ratePerGbPerMonth: number; m
   BUSINESS:     { name: 'Business',     ratePerGbPerMonth: 4000, minimumStorageGb: 50 },
 };
 
+// Mirror of shared GST constants — same as registration.service.ts /
+// provisioning.service.ts. This function previously always added 18% here
+// regardless of GST_ENABLED, so every MRR/ARR figure on this dashboard (and
+// the revenue chart) overstated real invoiced revenue by a flat 18%, since
+// GST_ENABLED has been false everywhere else since GST was disabled platform-
+// wide -- real invoices carry gstAmountPaisa: 0.
+const GST_RATE = 0.18;
+const GST_ENABLED = false;
+
 function computeMonthlyRevenue(planSlug: string, storageGb: number, billingCycle: string): number {
   const plan = PRICING_PLANS[planSlug];
   if (!plan) return 0;
   const billableGb = Math.max(storageGb, plan.minimumStorageGb);
   const monthlyBase = billableGb * plan.ratePerGbPerMonth;
   const withDiscount = billingCycle === 'YEARLY' ? Math.round(monthlyBase * 0.9) : monthlyBase;
-  return withDiscount + Math.round(withDiscount * 0.18);
+  return GST_ENABLED ? withDiscount + Math.round(withDiscount * GST_RATE) : withDiscount;
 }
 
 @Injectable()
