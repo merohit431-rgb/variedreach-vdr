@@ -57,6 +57,14 @@ export function CheckoutForm() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // planId defaults to a real, valid PRICING_PLANS key ('STARTER') as a
+  // rendering convenience below (avoids threading `| null` through every
+  // PRICING_PLANS[planId]/calculatePricing call) -- it does NOT mean a real
+  // plan was actually loaded. `loaded` is the one true signal for that, and
+  // is what the error branch below must check: checking `plan` truthiness
+  // instead (as this used to) can never catch an error, since PRICING_PLANS
+  // always has a 'STARTER' entry regardless of whether getDetails succeeded.
+  const [loaded, setLoaded] = useState(false);
   const [planId, setPlanId] = useState<PlanId>('STARTER');
   const [storageGb, setStorageGb] = useState(5);
   const [cycle, setCycle] = useState<BillingCycle>('MONTHLY');
@@ -73,6 +81,7 @@ export function CheckoutForm() {
       setPlanId(res.data.selectedPlan as PlanId);
       setStorageGb(res.data.selectedStorageGb);
       setCycle((res.data.billingCycle as BillingCycle) ?? 'MONTHLY');
+      setLoaded(true);
       setLoading(false);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -157,7 +166,7 @@ export function CheckoutForm() {
 
   if (loading) return <p className="text-center text-sm text-slate-500">Loading your plan details…</p>;
 
-  if (error && !plan) {
+  if (error && !loaded) {
     return (
       <div className="text-center">
         <Alert tone="danger">{error}</Alert>
