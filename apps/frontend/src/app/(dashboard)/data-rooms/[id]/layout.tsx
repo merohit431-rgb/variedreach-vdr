@@ -30,6 +30,7 @@ import {
   type AuditActionType,
 } from '@variedreach-vdr/shared';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { NdaGateModal } from '@/components/data-rooms/NdaGateModal';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { cn } from '@/lib/cn';
 import { getStorageLevel, STORAGE_LEVEL_STYLES, type StorageLevel } from '@/lib/storage-status';
@@ -284,6 +285,7 @@ export default function DataRoomLayout({ children }: { children: React.ReactNode
   }
 
   return (
+    <NdaGateModal dataRoomId={id}>
     <div className="flex gap-6">
       {/* Main column */}
       <div className="min-w-0 flex-1">
@@ -416,5 +418,6 @@ export default function DataRoomLayout({ children }: { children: React.ReactNode
         onCancel={() => setShowDeleteDialog(false)}
       />
     </div>
+    </NdaGateModal>
   );
 }

@@ -30,8 +30,8 @@ const ADMIN_ACTIONS: Action[] = [
   },
   {
     href: '/roles',
-    label: 'Manage Access',
-    description: 'Roles & permissions',
+    label: 'Roles & Permissions',
+    description: 'View what each role can do',
     icon: Users,
   },
 ];

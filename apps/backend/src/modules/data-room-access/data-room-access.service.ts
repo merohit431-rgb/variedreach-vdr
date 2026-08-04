@@ -38,23 +38,42 @@ export class DataRoomAccessService {
       this.assertIpAllowed(clientIp, dataRoom.allowedIps);
     }
 
+    let effectiveRole: UserRole;
+
     if (isOrgWide) {
-      return { dataRoom, effectiveRole: actor.role, isMember: true };
+      effectiveRole = actor.role;
+    } else {
+      const membership = await this.prisma.dataRoomMember.findUnique({
+        where: { dataRoomId_userId: { dataRoomId, userId: actor.id } },
+      });
+
+      if (!membership || membership.removedAt) {
+        throw new ForbiddenException('You do not have access to this data room');
+      }
+
+      effectiveRole = membership.roleOverride ?? actor.role;
     }
 
-    const membership = await this.prisma.dataRoomMember.findUnique({
-      where: { dataRoomId_userId: { dataRoomId, userId: actor.id } },
-    });
+    // NDA gate. This is the actual enforcement point -- every content/room
+    // endpoint routes through here via assertContentManager/
+    // assertContentDeleter/assertCanDownload/assertRoomManager, not just the
+    // one Files page that renders <NdaGateModal>. Manager-tier roles are the
+    // room's own internal staff, not external reviewers under confidentiality
+    // obligations, so they bypass it -- mirrors NdaService's own BYPASS_ROLES
+    // rather than re-deriving a second definition of the same set.
+    if (dataRoom.ndaEnabled && !DATA_ROOM_MANAGER_ROLES.includes(effectiveRole)) {
+      const acceptance = await this.prisma.ndaAcceptance.findUnique({
+        where: { dataRoomId_userId: { dataRoomId, userId: actor.id } },
+      });
 
-    if (!membership || membership.removedAt) {
-      throw new ForbiddenException('You do not have access to this data room');
+      if (!acceptance) {
+        throw new ForbiddenException(
+          'You must accept the confidentiality agreement before accessing this data room',
+        );
+      }
     }
 
-    return {
-      dataRoom,
-      effectiveRole: membership.roleOverride ?? actor.role,
-      isMember: true,
-    };
+    return { dataRoom, effectiveRole, isMember: true };
   }
 
   async assertContentManager(dataRoomId: string, actor: AuthenticatedUser, clientIp?: string) {

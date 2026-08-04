@@ -6,7 +6,6 @@ import { useDataRoomAccess } from '@/hooks/use-data-rooms';
 import { useFolders, type FolderNode } from '@/hooks/use-folders';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { FileBrowser } from '@/components/files/FileBrowser';
-import { NdaGateModal } from '@/components/data-rooms/NdaGateModal';
 import { Breadcrumb, collapseBreadcrumbItems } from '@/components/ui/Breadcrumb';
 
 function getAncestorChain(folders: FolderNode[], folderId: string | null): FolderNode[] {
@@ -48,7 +47,7 @@ export default function DataRoomFilesPage() {
   ]);
 
   return (
-    <NdaGateModal dataRoomId={id}>
+    <>
       <div className="mb-4">
         <Breadcrumb items={breadcrumbItems} />
       </div>
@@ -60,6 +59,6 @@ export default function DataRoomFilesPage() {
         canDelete={canDelete}
         canDownload={canDownload}
       />
-    </NdaGateModal>
+    </>
   );
 }
