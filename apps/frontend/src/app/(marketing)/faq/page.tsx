@@ -69,11 +69,11 @@ const FAQS = [
       },
       {
         q: 'What happens to my documents if a payment is missed?',
-        a: 'We never delete documents over a billing issue. Accounts move to a read-only state with a grace period, so you always have time to resolve a payment issue without losing access to your data.',
+        a: "We never delete documents over a billing issue — your data stays intact and safe. If there's ever a payment problem, our support team reaches out directly to help resolve it before anything about your access changes.",
       },
       {
         q: 'Can I change my plan or storage later?',
-        a: 'Yes. You can upgrade, downgrade, or adjust your storage at any time. Changes take effect from the next billing cycle.',
+        a: "Storage increases can be requested anytime from your dashboard and are typically applied the same day. Moving between plan tiers isn't yet self-service — contact our team and we'll handle it directly.",
       },
     ],
   },

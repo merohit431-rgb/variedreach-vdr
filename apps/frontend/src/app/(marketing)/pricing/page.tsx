@@ -124,7 +124,7 @@ export default function PricingPage() {
               },
               {
                 q: 'Can I change my plan or storage later?',
-                a: 'Yes. You can upgrade, downgrade, or adjust your storage at any time. Changes take effect from the next billing cycle.',
+                a: "Storage increases can be requested anytime from your dashboard and are typically applied the same day. Moving between plan tiers isn't yet self-service — contact our team and we'll handle it directly.",
               },
             ].map(({ q, a }) => (
               <div key={q} className="border-b border-slate-200 pb-6 last:border-0">
