@@ -10,6 +10,10 @@ function buildService(overrides: {
   update?: jest.Mock;
   record?: jest.Mock;
   subscriptionUpsert?: jest.Mock;
+  fileAggregate?: jest.Mock;
+  fileVersionAggregate?: jest.Mock;
+  folderCount?: jest.Mock;
+  dataRoomCount?: jest.Mock;
 }) {
   const record = overrides.record ?? jest.fn().mockResolvedValue({});
   const update = overrides.update ?? jest.fn().mockResolvedValue({});
@@ -22,6 +26,14 @@ function buildService(overrides: {
     subscription: {
       upsert: overrides.subscriptionUpsert ?? jest.fn().mockResolvedValue({ id: 'sub-1' }),
     },
+    file: {
+      aggregate: overrides.fileAggregate ?? jest.fn().mockResolvedValue({ _sum: { sizeBytes: 0n }, _count: 0 }),
+    },
+    fileVersion: {
+      aggregate: overrides.fileVersionAggregate ?? jest.fn().mockResolvedValue({ _sum: { sizeBytes: 0n } }),
+    },
+    folder: { count: overrides.folderCount ?? jest.fn().mockResolvedValue(0) },
+    dataRoom: { count: overrides.dataRoomCount ?? jest.fn().mockResolvedValue(0) },
   } as unknown as PrismaService;
   const auditLogService = { record } as unknown as AuditLogService;
   const service = new SuperAdminService(
@@ -260,5 +272,55 @@ describe('SuperAdminService.updateSubscription', () => {
     await service.updateSubscription('org-1', { status: 'ACTIVE' }, 'admin-1');
 
     expect(record).not.toHaveBeenCalled();
+  });
+});
+
+describe('SuperAdminService.getOrganisationStorageDetail', () => {
+  it('404s for a non-existent organisation', async () => {
+    const { service } = buildService({ organisation: null });
+    await expect(service.getOrganisationStorageDetail('missing')).rejects.toThrow('Organisation not found');
+  });
+
+  it('derives priorVersions as total-version bytes minus live+trash, never negative', async () => {
+    // live: 2 current files totalling 5GB; trash: 1 deleted file, 1GB;
+    // allVersions: every version ever stored for this org's files, 9GB --
+    // the 3GB difference is bytes belonging to superseded versions, with no
+    // other representation anywhere in the app today.
+    const fileAggregate = jest
+      .fn()
+      .mockResolvedValueOnce({ _sum: { sizeBytes: 5_000_000_000n }, _count: 2 }) // live
+      .mockResolvedValueOnce({ _sum: { sizeBytes: 1_000_000_000n }, _count: 1 }); // trash
+    const { service } = buildService({
+      organisation: { id: 'org-1', storageLimitGb: 12 },
+      fileAggregate,
+      fileVersionAggregate: jest.fn().mockResolvedValue({ _sum: { sizeBytes: 9_000_000_000n } }),
+      folderCount: jest.fn().mockResolvedValue(14),
+      dataRoomCount: jest.fn().mockResolvedValue(3),
+    });
+
+    const result = await service.getOrganisationStorageDetail('org-1');
+
+    expect(result.breakdown.live).toEqual({ bytes: '5000000000', fileCount: 2 });
+    expect(result.breakdown.trash).toEqual({ bytes: '1000000000', fileCount: 1 });
+    expect(result.breakdown.priorVersions).toEqual({ bytes: '3000000000' });
+    expect(result.counts).toEqual({ folders: 14, dataRooms: 3 });
+  });
+
+  it('never reports negative priorVersions when live+trash already accounts for everything', async () => {
+    const fileAggregate = jest
+      .fn()
+      .mockResolvedValueOnce({ _sum: { sizeBytes: 5_000_000_000n }, _count: 2 })
+      .mockResolvedValueOnce({ _sum: { sizeBytes: 0n }, _count: 0 });
+    const { service } = buildService({
+      organisation: { id: 'org-1', storageLimitGb: 12 },
+      fileAggregate,
+      // No versioning has ever happened -- allVersions equals exactly the
+      // current versions' bytes (each file has exactly one version).
+      fileVersionAggregate: jest.fn().mockResolvedValue({ _sum: { sizeBytes: 5_000_000_000n } }),
+    });
+
+    const result = await service.getOrganisationStorageDetail('org-1');
+
+    expect(result.breakdown.priorVersions).toEqual({ bytes: '0' });
   });
 });

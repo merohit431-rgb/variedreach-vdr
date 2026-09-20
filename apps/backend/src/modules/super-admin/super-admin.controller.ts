@@ -39,6 +39,11 @@ export class SuperAdminController {
     return this.service.getOrganisationById(id);
   }
 
+  @Get('organisations/:id/storage')
+  getOrganisationStorageDetail(@Param('id') id: string) {
+    return this.service.getOrganisationStorageDetail(id);
+  }
+
   @Patch('organisations/:id')
   updateOrganisation(
     @Param('id') id: string,

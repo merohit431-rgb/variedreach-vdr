@@ -2,6 +2,7 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../audit/audit-log.service';
+import { computeStoragePercent } from '../../common/org-storage.util';
 import { IPaymentProvider, PAYMENT_PROVIDER } from '../payment/payment-provider.interface';
 import { RazorpayPaymentProvider } from '../payment/providers/razorpay-payment.provider';
 import { UpdateOrgDto } from './dto/update-org.dto';
@@ -144,28 +145,50 @@ export class SuperAdminService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          subscription: { select: { status: true, billingCycle: true, currentPeriodEnd: true, storageGb: true, planSlug: true } },
-          _count: { select: { users: { where: { deletedAt: null } } } },
+          subscription: { select: { status: true, billingCycle: true, currentPeriodStart: true, currentPeriodEnd: true, storageGb: true, planSlug: true } },
+          // Active OrganisationMembership rows, not User.organisationId --
+          // that legacy column can drift from real membership (confirmed:
+          // one real org shows 56 there against 55 actual active
+          // memberships) since it's a point-in-time snapshot from the
+          // multi-org migration backfill, never updated since. This is the
+          // fix for that, not a cosmetic display change.
+          _count: { select: { memberships: { where: { status: 'ACTIVE' } } } },
+          dataRooms: { where: { deletedAt: null }, select: { storageUsedBytes: true } },
         },
       }),
       this.prisma.organisation.count({ where }),
     ]);
 
-    return { items: data, total, page, limit };
+    const items = data.map(({ dataRooms, ...org }) => {
+      const usedBytes = dataRooms.reduce((sum, r) => sum + r.storageUsedBytes, 0n);
+      const limitBytes = BigInt(org.storageLimitGb) * 1024n * 1024n * 1024n;
+      return {
+        ...org,
+        activeUserCount: org._count.memberships,
+        storage: {
+          usedBytes: usedBytes.toString(),
+          limitGb: org.storageLimitGb,
+          usagePercent: computeStoragePercent(usedBytes, limitBytes),
+        },
+      };
+    });
+
+    return { items, total, page, limit };
   }
 
   // Shared so getOrganisationById and updateOrganisation return an identical
-  // shape. The detail page renders org.users/invoices/payments/subscription
+  // shape. The detail page renders org.invoices/payments/subscription
   // directly, so any endpoint that feeds setOrg() MUST include these
   // relations -- returning the bare organisation row makes the page crash on
-  // the next render (org.users is undefined).
+  // the next render. Deliberately does NOT include `users` -- that relation
+  // is keyed off the legacy User.organisationId snapshot (frozen at
+  // whatever it was during the multi-org migration backfill), which is
+  // confirmed to drift from real membership (one real org: 56 there vs 55
+  // actual active OrganisationMembership rows -- see getOrganisations'
+  // fix). The member list here now comes from TeamPanel, which queries
+  // OrganisationMembership directly.
   private readonly ORG_DETAIL_INCLUDE = {
     subscription: true,
-    users: {
-      where: { deletedAt: null },
-      select: { id: true, email: true, firstName: true, lastName: true, role: true, status: true, lastLoginAt: true, createdAt: true },
-      orderBy: { createdAt: 'desc' as const },
-    },
     invoices: {
       take: 10,
       orderBy: { createdAt: 'desc' as const },
@@ -382,6 +405,51 @@ export class SuperAdminService {
     }
 
     return subscription;
+  }
+
+  // Detailed storage breakdown for one organisation. "Live" is what actually
+  // counts against storageLimitGb (see org-storage.util.ts): current,
+  // non-deleted files only. Two categories are real disk usage that ISN'T
+  // reflected in that headline number, documented rather than silently
+  // rolled in:
+  //  - trash: soft-deleted files (files.service.ts remove() decrements
+  //    storageUsedBytes immediately on delete, so trashed files stop
+  //    counting against quota right away even though nothing purges them)
+  //  - priorVersions: every version before a file's current one. Uploading
+  //    a new version only ever adds the *delta* to storageUsedBytes, so
+  //    older versions' bytes are retained on disk forever but have never
+  //    been counted anywhere until this endpoint.
+  async getOrganisationStorageDetail(organisationId: string) {
+    const org = await this.prisma.organisation.findUnique({ where: { id: organisationId } });
+    if (!org) throw new NotFoundException('Organisation not found');
+
+    const dataRoomWhere = { dataRoom: { organisationId } };
+    const [live, trash, allVersions, folderCount, dataRoomCount] = await Promise.all([
+      this.prisma.file.aggregate({ where: { ...dataRoomWhere, deletedAt: null }, _sum: { sizeBytes: true }, _count: true }),
+      this.prisma.file.aggregate({ where: { ...dataRoomWhere, deletedAt: { not: null } }, _sum: { sizeBytes: true }, _count: true }),
+      this.prisma.fileVersion.aggregate({ where: { file: dataRoomWhere }, _sum: { sizeBytes: true } }),
+      this.prisma.folder.count({ where: { ...dataRoomWhere, deletedAt: null } }),
+      this.prisma.dataRoom.count({ where: { organisationId, deletedAt: null } }),
+    ]);
+
+    const liveBytes = live._sum.sizeBytes ?? 0n;
+    const trashBytes = trash._sum.sizeBytes ?? 0n;
+    // All versions ever stored, minus what's already counted as each file's
+    // current version (liveBytes + trashBytes together are exactly that,
+    // since currentVersionId's file row IS the current version) -- the
+    // remainder is prior-version bytes with no other representation.
+    const priorVersionBytes = (allVersions._sum.sizeBytes ?? 0n) - liveBytes - trashBytes;
+
+    return {
+      organisationId,
+      storageLimitGb: org.storageLimitGb,
+      breakdown: {
+        live: { bytes: liveBytes.toString(), fileCount: live._count },
+        trash: { bytes: trashBytes.toString(), fileCount: trash._count },
+        priorVersions: { bytes: (priorVersionBytes > 0n ? priorVersionBytes : 0n).toString() },
+      },
+      counts: { folders: folderCount, dataRooms: dataRoomCount },
+    };
   }
 
   async getRegistrations(page: number, limit: number) {
