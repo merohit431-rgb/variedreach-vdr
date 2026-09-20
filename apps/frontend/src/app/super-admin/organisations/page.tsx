@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { Search, ExternalLink, Plus, X } from 'lucide-react';
+import { Search, ExternalLink, Plus, X, Power, PowerOff } from 'lucide-react';
 import { useSuperAdmin } from '@/hooks/use-super-admin';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -10,16 +10,25 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { TableContainer, Table, Thead, Tbody, Tr, Th, Td } from '@/components/ui/Table';
-
-const STATUS_TONE: Record<string, 'success' | 'warning' | 'danger' | 'neutral'> = {
-  ACTIVE: 'success', PAST_DUE: 'warning', CANCELLED: 'danger', EXPIRED: 'neutral',
-};
+import { formatBytes } from '@/lib/format';
 
 const PLANS = ['STARTER', 'PROFESSIONAL', 'BUSINESS'] as const;
 
 function formatDate(d: string | null | undefined) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+// One clear status per the org's actual, current state -- combines
+// org-level activate/deactivate (an explicit admin action, takes priority)
+// with the subscription's real state (lapsed = status != ACTIVE OR the
+// period has passed, same rule as the backend's isSubscriptionLapsed()).
+function orgStatus(org: any): { label: string; tone: 'success' | 'warning' | 'danger' | 'neutral' } {
+  if (org.status === 'SUSPENDED') return { label: 'SUSPENDED', tone: 'danger' };
+  if (!org.subscription) return { label: 'NO SUBSCRIPTION', tone: 'neutral' };
+  const lapsed = org.subscription.status !== 'ACTIVE' || new Date(org.subscription.currentPeriodEnd) < new Date();
+  if (lapsed) return { label: 'EXPIRED', tone: 'warning' };
+  return { label: 'ACTIVE', tone: 'success' };
 }
 
 const EMPTY_PROVISION_FORM = {
@@ -153,13 +162,15 @@ function AdminProvisionForm({ onDone }: { onDone: () => void }) {
 }
 
 export default function OrganisationsPage() {
-  const { getOrganisations } = useSuperAdmin();
+  const { getOrganisations, setOrganisationStatus } = useSuperAdmin();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [page, setPage] = useState(1);
   const [showProvisionForm, setShowProvisionForm] = useState(false);
+  const [statusError, setStatusError] = useState('');
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -169,6 +180,26 @@ export default function OrganisationsPage() {
   }, [getOrganisations, page, search]);
 
   useEffect(() => { load(); }, [load]);
+
+  async function handleToggleStatus(org: any) {
+    const next = org.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
+    const verb = next === 'SUSPENDED' ? 'Deactivate' : 'Activate';
+    const message =
+      next === 'SUSPENDED'
+        ? `Deactivate "${org.name}"?\n\nThis will prevent all users belonging to this organisation from accessing the VDR. No data will be deleted.`
+        : `Activate "${org.name}"?\n\nThis will restore VDR access for all users belonging to this organisation.`;
+    if (!window.confirm(message)) return;
+
+    setTogglingId(org.id);
+    setStatusError('');
+    const res = await setOrganisationStatus(org.id, next);
+    setTogglingId(null);
+    if (res.success) {
+      load();
+    } else {
+      setStatusError(res.message || `Could not ${verb.toLowerCase()} this organisation.`);
+    }
+  }
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -213,6 +244,8 @@ export default function OrganisationsPage() {
         </Button>
       </form>
 
+      {statusError && <Alert tone="danger">{statusError}</Alert>}
+
       <TableContainer>
         <Table>
           <Thead>
@@ -221,44 +254,71 @@ export default function OrganisationsPage() {
               <Th>Plan</Th>
               <Th>Users</Th>
               <Th>Storage</Th>
-              <Th>Sub Status</Th>
+              <Th>Subscription</Th>
+              <Th>Status</Th>
               <Th>Created</Th>
-              <Th></Th>
+              <Th>Actions</Th>
             </tr>
           </Thead>
           <Tbody>
             {loading && (
-              <Tr><Td colSpan={7} className="text-center text-slate-400 py-8">Loading…</Td></Tr>
+              <Tr><Td colSpan={8} className="text-center text-slate-400 py-8">Loading…</Td></Tr>
             )}
             {!loading && data?.items?.length === 0 && (
-              <Tr><Td colSpan={7} className="text-center text-slate-400 py-8">No organisations found.</Td></Tr>
+              <Tr><Td colSpan={8} className="text-center text-slate-400 py-8">No organisations found.</Td></Tr>
             )}
-            {!loading && data?.items?.map((org: any) => (
-              <Tr key={org.id}>
-                <Td>
-                  <p className="font-medium text-slate-900">{org.name}</p>
-                  <p className="text-xs text-slate-400">{org.slug}</p>
-                </Td>
-                <Td>{org.planSlug ? <Badge tone="brand">{org.planSlug}</Badge> : <span className="text-slate-400">—</span>}</Td>
-                <Td>{org._count?.users ?? 0} / {org.userLimit}</Td>
-                <Td>{org.subscription?.storageGb ?? org.storageLimitGb} GB</Td>
-                <Td>
-                  {org.subscription ? (
-                    <Badge tone={STATUS_TONE[org.subscription.status] ?? 'neutral'}>
-                      {org.subscription.status}
-                    </Badge>
-                  ) : (
-                    <span className="text-slate-400 text-xs">No subscription</span>
-                  )}
-                </Td>
-                <Td className="whitespace-nowrap text-slate-500">{formatDate(org.createdAt)}</Td>
-                <Td>
-                  <Link href={`/super-admin/organisations/${org.id}`} className="inline-flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700">
-                    View <ExternalLink className="h-3 w-3" />
-                  </Link>
-                </Td>
-              </Tr>
-            ))}
+            {!loading && data?.items?.map((org: any) => {
+              const status = orgStatus(org);
+              const overLimit = org.activeUserCount > org.userLimit;
+              return (
+                <Tr key={org.id}>
+                  <Td>
+                    <p className="font-medium text-slate-900">{org.name}</p>
+                    <p className="text-xs text-slate-400">{org.slug}</p>
+                  </Td>
+                  <Td>{org.planSlug ? <Badge tone="brand">{org.planSlug}</Badge> : <span className="text-slate-400">—</span>}</Td>
+                  <Td className={overLimit ? 'font-medium text-amber-600' : undefined}>
+                    {org.activeUserCount} / {org.userLimit}
+                  </Td>
+                  <Td className="whitespace-nowrap">
+                    <p>{formatBytes(org.storage.usedBytes)} / {org.storage.limitGb} GB</p>
+                    <p className="text-xs text-slate-400">{org.storage.usagePercent}%</p>
+                  </Td>
+                  <Td className="whitespace-nowrap text-xs text-slate-500">
+                    {org.subscription ? (
+                      <>
+                        <p>{formatDate(org.subscription.currentPeriodStart)}</p>
+                        <p>→ {formatDate(org.subscription.currentPeriodEnd)}</p>
+                      </>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </Td>
+                  <Td><Badge tone={status.tone}>{status.label}</Badge></Td>
+                  <Td className="whitespace-nowrap text-slate-500">{formatDate(org.createdAt)}</Td>
+                  <Td>
+                    <div className="flex items-center gap-3">
+                      <Link href={`/super-admin/organisations/${org.id}`} className="inline-flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700">
+                        Manage <ExternalLink className="h-3 w-3" />
+                      </Link>
+                      <button
+                        onClick={() => handleToggleStatus(org)}
+                        disabled={togglingId === org.id}
+                        title={org.status === 'SUSPENDED' ? 'Activate organisation' : 'Deactivate organisation'}
+                        className={
+                          org.status === 'SUSPENDED'
+                            ? 'inline-flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-700 disabled:opacity-50'
+                            : 'inline-flex items-center gap-1 text-xs text-slate-500 hover:text-rose-600 disabled:opacity-50'
+                        }
+                      >
+                        {org.status === 'SUSPENDED' ? <Power className="h-3 w-3" /> : <PowerOff className="h-3 w-3" />}
+                        {org.status === 'SUSPENDED' ? 'Activate' : 'Deactivate'}
+                      </button>
+                    </div>
+                  </Td>
+                </Tr>
+              );
+            })}
           </Tbody>
         </Table>
       </TableContainer>

@@ -31,9 +31,9 @@ async function post<T>(path: string, body?: unknown): Promise<Result<T>> {
   }
 }
 
-async function del(path: string): Promise<Result<null>> {
+async function del(path: string, body?: unknown): Promise<Result<null>> {
   try {
-    await apiClient.delete(path);
+    await apiClient.delete(path, body !== undefined ? { data: body } : undefined);
     return { success: true, data: null };
   } catch (err) {
     return { success: false, message: extractErrorMessage(err) };
@@ -59,8 +59,37 @@ export function useSuperAdmin() {
   );
 
   const updateOrganisation = useCallback(
-    (id: string, body: { userLimit?: number; storageLimitGb?: number; planSlug?: string }) =>
+    (id: string, body: { name?: string; userLimit?: number; storageLimitGb?: number; planSlug?: string }) =>
       patch(`/super-admin/organisations/${id}`, body),
+    [],
+  );
+
+  const setOrganisationStatus = useCallback(
+    (id: string, status: 'ACTIVE' | 'SUSPENDED') => patch(`/super-admin/organisations/${id}/status`, { status }),
+    [],
+  );
+
+  const archiveOrganisation = useCallback(
+    (id: string, confirmName: string) => del(`/super-admin/organisations/${id}`, { confirmName }),
+    [],
+  );
+
+  const updateSubscription = useCallback(
+    (id: string, body: { currentPeriodStart?: string; currentPeriodEnd?: string; status?: string }) =>
+      patch(`/super-admin/organisations/${id}/subscription`, body),
+    [],
+  );
+
+  const getOrganisationStorageDetail = useCallback(
+    (id: string) => get<{
+      storageLimitGb: number;
+      breakdown: {
+        live: { bytes: string; fileCount: number };
+        trash: { bytes: string; fileCount: number };
+        priorVersions: { bytes: string };
+      };
+      counts: { folders: number; dataRooms: number };
+    }>(`/super-admin/organisations/${id}/storage`),
     [],
   );
 
@@ -149,6 +178,10 @@ export function useSuperAdmin() {
     getOrganisations,
     getOrganisationById,
     updateOrganisation,
+    setOrganisationStatus,
+    archiveOrganisation,
+    updateSubscription,
+    getOrganisationStorageDetail,
     adminProvisionOrg,
     getRegistrations,
     getPayments,
