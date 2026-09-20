@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Coupon, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditLogService } from '../audit/audit-log.service';
 import { normalizeEmail } from '../../common/utils/email.util';
 import { CreateCouponDto } from './dto/create-coupon.dto';
 import { UpdateCouponDto } from './dto/update-coupon.dto';
@@ -21,7 +22,10 @@ type Db = PrismaService | Prisma.TransactionClient;
 
 @Injectable()
 export class CouponService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   // ── Server-authoritative validation + discount resolution ──
   // The client never computes the discount; this is the single source used by
@@ -138,38 +142,79 @@ export class CouponService {
     };
   }
 
-  async create(dto: CreateCouponDto) {
+  async create(dto: CreateCouponDto, actorUserId: string) {
     const code = dto.code.trim().toUpperCase();
     const existing = await this.prisma.coupon.findUnique({ where: { code } });
     if (existing) throw new BadRequestException('A coupon with this code already exists');
-    return this.prisma.coupon.create({ data: this.toData(dto) as Prisma.CouponCreateInput });
+    const coupon = await this.prisma.coupon.create({ data: this.toData(dto) as Prisma.CouponCreateInput });
+
+    await this.auditLogService.record({
+      action: 'COUPON_CREATED',
+      userId: actorUserId,
+      resourceType: 'Coupon',
+      resourceId: coupon.id,
+      metadata: { code: coupon.code, type: coupon.type, value: coupon.value },
+    });
+
+    return coupon;
   }
 
-  async update(id: string, dto: UpdateCouponDto) {
-    await this.getById(id);
+  async update(id: string, dto: UpdateCouponDto, actorUserId: string) {
+    const before = await this.getById(id);
     if (dto.code) {
       const clash = await this.prisma.coupon.findFirst({
         where: { code: dto.code.trim().toUpperCase(), id: { not: id } },
       });
       if (clash) throw new BadRequestException('Another coupon already uses this code');
     }
-    return this.prisma.coupon.update({ where: { id }, data: this.toData(dto) });
+    const coupon = await this.prisma.coupon.update({ where: { id }, data: this.toData(dto) });
+
+    // A coupon directly controls real discount amounts -- worth recording
+    // what specifically changed (value/status especially: a status flip to
+    // ACTIVE or a value increase both have immediate revenue effect), not
+    // just that an update happened.
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const key of ['value', 'status', 'maxRedemptions', 'validUntil'] as const) {
+      const fromVal = before[key] instanceof Date ? (before[key] as Date).toISOString() : before[key];
+      const toVal = coupon[key] instanceof Date ? (coupon[key] as Date).toISOString() : coupon[key];
+      if (fromVal !== toVal) changes[key] = { from: fromVal, to: toVal };
+    }
+    if (Object.keys(changes).length > 0) {
+      await this.auditLogService.record({
+        action: 'COUPON_UPDATED',
+        userId: actorUserId,
+        resourceType: 'Coupon',
+        resourceId: id,
+        metadata: { code: coupon.code, ...changes } as Prisma.InputJsonValue,
+      });
+    }
+
+    return coupon;
   }
 
-  async remove(id: string) {
-    await this.getById(id);
+  async remove(id: string, actorUserId: string) {
+    const coupon = await this.getById(id);
     await this.prisma.coupon.delete({ where: { id } });
+
+    await this.auditLogService.record({
+      action: 'COUPON_DELETED',
+      userId: actorUserId,
+      resourceType: 'Coupon',
+      resourceId: id,
+      metadata: { code: coupon.code },
+    });
+
     return { deleted: true };
   }
 
   // Clone with a unique code, DISABLED so it's reviewed before going live.
-  async duplicate(id: string) {
+  async duplicate(id: string, actorUserId: string) {
     const src = await this.prisma.coupon.findUnique({ where: { id } });
     if (!src) throw new NotFoundException('Coupon not found');
     let code = `${src.code}-COPY`;
     let n = 1;
     while (await this.prisma.coupon.findUnique({ where: { code } })) code = `${src.code}-COPY${n++}`;
-    return this.prisma.coupon.create({
+    const coupon = await this.prisma.coupon.create({
       data: {
         code,
         type: src.type,
@@ -186,6 +231,16 @@ export class CouponService {
         internalNotes: src.internalNotes,
       },
     });
+
+    await this.auditLogService.record({
+      action: 'COUPON_CREATED',
+      userId: actorUserId,
+      resourceType: 'Coupon',
+      resourceId: coupon.id,
+      metadata: { code: coupon.code, duplicatedFrom: src.code },
+    });
+
+    return coupon;
   }
 
   async listRedemptions(id: string) {

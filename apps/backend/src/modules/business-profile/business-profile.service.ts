@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuditLogService } from '../audit/audit-log.service';
 import { BUSINESS_INFO } from '../../common/constants/business-info';
 import { UpdateBusinessProfileDto } from './dto/update-business-profile.dto';
 
@@ -12,7 +13,10 @@ export type BusinessProfileData = typeof BUSINESS_PROFILE_DEFAULT & { updatedAt?
 
 @Injectable()
 export class BusinessProfileService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditLogService: AuditLogService,
+  ) {}
 
   // Full profile (all fields) — used internally for invoices/emails and by the
   // Super Admin editor. Falls back to the constant when the row isn't seeded.
@@ -35,7 +39,7 @@ export class BusinessProfileService {
     };
   }
 
-  async update(dto: UpdateBusinessProfileDto): Promise<BusinessProfileData> {
+  async update(dto: UpdateBusinessProfileDto, actorUserId: string): Promise<BusinessProfileData> {
     const current = await this.get();
     const merged = {
       businessName: dto.businessName ?? current.businessName,
@@ -48,10 +52,25 @@ export class BusinessProfileService {
       supportPhone: dto.supportPhone ?? current.supportPhone,
       website: dto.website ?? current.website,
     };
-    return this.prisma.businessProfile.upsert({
+    const updated = await this.prisma.businessProfile.upsert({
       where: { id: 'default' },
       create: { id: 'default', ...merged },
       update: merged,
     });
+
+    const changedFields = (Object.keys(merged) as Array<keyof typeof merged>).filter(
+      (key) => merged[key] !== current[key],
+    );
+    if (changedFields.length > 0) {
+      await this.auditLogService.record({
+        action: 'BUSINESS_PROFILE_UPDATED',
+        userId: actorUserId,
+        resourceType: 'BusinessProfile',
+        resourceId: 'default',
+        metadata: { changedFields },
+      });
+    }
+
+    return updated;
   }
 }

@@ -9,6 +9,8 @@ import { UpdateCouponDto } from './dto/update-coupon.dto';
 import { ValidateCouponDto } from './dto/validate-coupon.dto';
 import { Public } from '../auth/decorators/public.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { computeOrderPaise } from '../../common/pricing.util';
 
 @ApiTags('Coupons')
@@ -35,8 +37,8 @@ export class CouponController {
 
   @Roles(UserRole.SUPER_ADMIN)
   @Post()
-  create(@Body() dto: CreateCouponDto) {
-    return this.service.create(dto);
+  create(@Body() dto: CreateCouponDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.create(dto, user.id);
   }
 
   @Roles(UserRole.SUPER_ADMIN)
@@ -47,20 +49,20 @@ export class CouponController {
 
   @Roles(UserRole.SUPER_ADMIN)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateCouponDto) {
-    return this.service.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateCouponDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.update(id, dto, user.id);
   }
 
   @Roles(UserRole.SUPER_ADMIN)
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  remove(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.remove(id, user.id);
   }
 
   @Roles(UserRole.SUPER_ADMIN)
   @Post(':id/duplicate')
-  duplicate(@Param('id') id: string) {
-    return this.service.duplicate(id);
+  duplicate(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.duplicate(id, user.id);
   }
 
   @Roles(UserRole.SUPER_ADMIN)

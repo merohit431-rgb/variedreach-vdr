@@ -37,8 +37,12 @@ export class SuperAdminController {
   }
 
   @Patch('organisations/:id')
-  updateOrganisation(@Param('id') id: string, @Body() dto: UpdateOrgDto) {
-    return this.service.updateOrganisation(id, dto);
+  updateOrganisation(
+    @Param('id') id: string,
+    @Body() dto: UpdateOrgDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.updateOrganisation(id, dto, user.id);
   }
 
   @Get('registrations')

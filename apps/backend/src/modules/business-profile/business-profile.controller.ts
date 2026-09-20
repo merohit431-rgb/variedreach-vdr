@@ -5,6 +5,8 @@ import { BusinessProfileService } from './business-profile.service';
 import { UpdateBusinessProfileDto } from './dto/update-business-profile.dto';
 import { Public } from '../auth/decorators/public.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 
 @ApiTags('Business Profile')
 @Controller({ path: 'business-profile', version: '1' })
@@ -27,7 +29,7 @@ export class BusinessProfileController {
 
   @Roles(UserRole.SUPER_ADMIN)
   @Patch()
-  update(@Body() dto: UpdateBusinessProfileDto) {
-    return this.service.update(dto);
+  update(@Body() dto: UpdateBusinessProfileDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.update(dto, user.id);
   }
 }

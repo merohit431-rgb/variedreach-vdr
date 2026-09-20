@@ -1,4 +1,5 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { IPaymentProvider, PAYMENT_PROVIDER } from '../payment/payment-provider.interface';
@@ -185,16 +186,42 @@ export class SuperAdminService {
     return org;
   }
 
-  async updateOrganisation(id: string, dto: UpdateOrgDto) {
+  async updateOrganisation(id: string, dto: UpdateOrgDto, actorUserId: string) {
     const org = await this.prisma.organisation.findUnique({ where: { id } });
     if (!org) throw new NotFoundException('Organisation not found');
+
+    // Record only the fields actually present in this request, each as a
+    // {from, to} pair -- these limits gate real customer capability
+    // (seats, storage, plan tier), so "something changed" isn't enough for
+    // a defensible record of what a Super Admin did and why it might be
+    // asked about later.
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const key of ['userLimit', 'storageLimitGb', 'planSlug'] as const) {
+      if (dto[key] !== undefined && dto[key] !== org[key]) {
+        changes[key] = { from: org[key], to: dto[key] };
+      }
+    }
+
     // Return the full detail shape (with relations) so the client can swap it
     // straight into state without a follow-up refetch or a crash.
-    return this.prisma.organisation.update({
+    const updated = await this.prisma.organisation.update({
       where: { id },
       data: dto,
       include: this.ORG_DETAIL_INCLUDE,
     });
+
+    if (Object.keys(changes).length > 0) {
+      await this.auditLogService.record({
+        action: 'ORGANISATION_UPDATED',
+        userId: actorUserId,
+        organisationId: id,
+        resourceType: 'Organisation',
+        resourceId: id,
+        metadata: changes as Prisma.InputJsonValue,
+      });
+    }
+
+    return updated;
   }
 
   async getRegistrations(page: number, limit: number) {

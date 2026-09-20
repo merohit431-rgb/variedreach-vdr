@@ -133,7 +133,7 @@ export class DataRoomsService {
   }
 
   async updateSecuritySettings(id: string, dto: UpdateSecuritySettingsDto, actor: AuthenticatedUser) {
-    await this.assertManager(id, actor);
+    const before = await this.assertManager(id, actor);
 
     const dataRoom = await this.prisma.dataRoom.update({
       where: { id },
@@ -145,13 +145,32 @@ export class DataRoomsService {
       },
     });
 
+    // These gate real, security-relevant access decisions (Wave 0 made both
+    // enforcement paths real) -- "a security setting changed" isn't enough
+    // of a record for either an incident review or a defensible export;
+    // ndaText itself is omitted (can be long, and its presence/length is
+    // what matters for an audit trail, not its content).
+    const changes: Record<string, Prisma.InputJsonValue> = {};
+    if (dto.ipAllowlistEnabled !== undefined && dto.ipAllowlistEnabled !== before.ipAllowlistEnabled) {
+      changes.ipAllowlistEnabled = { from: before.ipAllowlistEnabled, to: dto.ipAllowlistEnabled };
+    }
+    if (dto.allowedIps !== undefined && JSON.stringify(dto.allowedIps) !== JSON.stringify(before.allowedIps)) {
+      changes.allowedIps = { from: before.allowedIps, to: dto.allowedIps };
+    }
+    if (dto.ndaEnabled !== undefined && dto.ndaEnabled !== before.ndaEnabled) {
+      changes.ndaEnabled = { from: before.ndaEnabled, to: dto.ndaEnabled };
+    }
+    if (dto.ndaText !== undefined && dto.ndaText !== before.ndaText) {
+      changes.ndaText = { changed: true };
+    }
+
     await this.auditLogService.record({
       action: 'DATA_ROOM_UPDATED',
       dataRoomId: id,
       userId: actor.id,
       resourceType: 'DataRoom',
       resourceId: id,
-      metadata: { securitySettings: true },
+      metadata: { securitySettings: true, ...changes } as Prisma.InputJsonValue,
     });
 
     return dataRoom;
