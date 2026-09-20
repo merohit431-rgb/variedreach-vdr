@@ -287,6 +287,20 @@ export default function OrgDetailPage() {
         </Card>
       </div>
 
+      {/* Subscription seat count -- currently active, accepted members only.
+          TeamPanel below deliberately lists everyone (including pending
+          invitations and suspended members), since managing those is the
+          point of that view; this line is specifically the number that
+          counts toward the plan's user limit. */}
+      <div className="flex items-center gap-3 text-sm">
+        <span className={org.activeUserCount > org.userLimit ? 'font-semibold text-amber-600' : 'font-semibold text-slate-800'}>
+          {org.activeUserCount} / {org.userLimit} Users
+        </span>
+        {org.pendingInvitationCount > 0 && (
+          <span className="text-slate-400">{org.pendingInvitationCount} pending invitation{org.pendingInvitationCount === 1 ? '' : 's'} (not counted)</span>
+        )}
+      </div>
+
       {/* Team -- membership-scoped (post multi-org), with suspend/reinstate */}
       <TeamPanel organisationId={params.id as string} />
 

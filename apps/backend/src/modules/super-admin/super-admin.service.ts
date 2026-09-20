@@ -3,6 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { computeStoragePercent } from '../../common/org-storage.util';
+import { countOrgMembers } from '../../common/utils/org-member-count.util';
 import { IPaymentProvider, PAYMENT_PROVIDER } from '../payment/payment-provider.interface';
 import { RazorpayPaymentProvider } from '../payment/providers/razorpay-payment.provider';
 import { UpdateOrgDto } from './dto/update-org.dto';
@@ -146,32 +147,40 @@ export class SuperAdminService {
         orderBy: { createdAt: 'desc' },
         include: {
           subscription: { select: { status: true, billingCycle: true, currentPeriodStart: true, currentPeriodEnd: true, storageGb: true, planSlug: true } },
-          // Active OrganisationMembership rows, not User.organisationId --
-          // that legacy column can drift from real membership (confirmed:
-          // one real org shows 56 there against 55 actual active
-          // memberships) since it's a point-in-time snapshot from the
-          // multi-org migration backfill, never updated since. This is the
-          // fix for that, not a cosmetic display change.
-          _count: { select: { memberships: { where: { status: 'ACTIVE' } } } },
           dataRooms: { where: { deletedAt: null }, select: { storageUsedBytes: true } },
         },
       }),
       this.prisma.organisation.count({ where }),
     ]);
 
-    const items = data.map(({ dataRooms, ...org }) => {
-      const usedBytes = dataRooms.reduce((sum, r) => sum + r.storageUsedBytes, 0n);
-      const limitBytes = BigInt(org.storageLimitGb) * 1024n * 1024n * 1024n;
-      return {
-        ...org,
-        activeUserCount: org._count.memberships,
-        storage: {
-          usedBytes: usedBytes.toString(),
-          limitGb: org.storageLimitGb,
-          usagePercent: computeStoragePercent(usedBytes, limitBytes),
-        },
-      };
-    });
+    // Per-org member counts against the subscription/seat definition -- see
+    // org-member-count.util.ts's own comment for the exact rule (confirmed
+    // directly with the customer): an ACTIVE membership, an ACTIVE
+    // (accepted, not pending) user, not deleted, not a Super Admin, AND
+    // assigned to at least one of the org's current data rooms. This
+    // replaced two earlier, narrower attempts -- counting legacy
+    // User.organisationId (56, includes a Super Admin caught by a stale
+    // pointer and every never-accepted invite) and then counting bare
+    // OrganisationMembership rows (55, still includes never-accepted
+    // invites) -- neither matched "currently active, accepted members" once
+    // checked against real production data.
+    const items = await Promise.all(
+      data.map(async ({ dataRooms, ...org }) => {
+        const usedBytes = dataRooms.reduce((sum, r) => sum + r.storageUsedBytes, 0n);
+        const limitBytes = BigInt(org.storageLimitGb) * 1024n * 1024n * 1024n;
+        const memberCounts = await countOrgMembers(this.prisma, org.id);
+        return {
+          ...org,
+          activeUserCount: memberCounts.activeAcceptedCount,
+          pendingInvitationCount: memberCounts.pendingInvitationCount,
+          storage: {
+            usedBytes: usedBytes.toString(),
+            limitGb: org.storageLimitGb,
+            usagePercent: computeStoragePercent(usedBytes, limitBytes),
+          },
+        };
+      }),
+    );
 
     return { items, total, page, limit };
   }
@@ -207,7 +216,13 @@ export class SuperAdminService {
       include: this.ORG_DETAIL_INCLUDE,
     });
     if (!org) throw new NotFoundException('Organisation not found');
-    return org;
+
+    const memberCounts = await countOrgMembers(this.prisma, id);
+    return {
+      ...org,
+      activeUserCount: memberCounts.activeAcceptedCount,
+      pendingInvitationCount: memberCounts.pendingInvitationCount,
+    };
   }
 
   async updateOrganisation(id: string, dto: UpdateOrgDto, actorUserId: string) {

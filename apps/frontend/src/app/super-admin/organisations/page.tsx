@@ -278,7 +278,10 @@ export default function OrganisationsPage() {
                   </Td>
                   <Td>{org.planSlug ? <Badge tone="brand">{org.planSlug}</Badge> : <span className="text-slate-400">—</span>}</Td>
                   <Td className={overLimit ? 'font-medium text-amber-600' : undefined}>
-                    {org.activeUserCount} / {org.userLimit}
+                    <p>{org.activeUserCount} / {org.userLimit}</p>
+                    {org.pendingInvitationCount > 0 && (
+                      <p className="text-xs text-slate-400">{org.pendingInvitationCount} pending invite{org.pendingInvitationCount === 1 ? '' : 's'}</p>
+                    )}
                   </Td>
                   <Td className="whitespace-nowrap">
                     <p>{formatBytes(org.storage.usedBytes)} / {org.storage.limitGb} GB</p>
