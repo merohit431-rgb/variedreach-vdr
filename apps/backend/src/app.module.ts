@@ -38,6 +38,7 @@ import { ContactModule } from './modules/contact/contact.module';
 import { BusinessProfileModule } from './modules/business-profile/business-profile.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { CouponModule } from './modules/coupon/coupon.module';
+import { OrgMembersModule } from './modules/org-members/org-members.module';
 
 @Module({
   imports: [
@@ -86,6 +87,7 @@ import { CouponModule } from './modules/coupon/coupon.module';
     BusinessProfileModule,
     BillingModule,
     CouponModule,
+    OrgMembersModule,
   ],
   controllers: [AppController],
   providers: [
