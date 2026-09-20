@@ -146,6 +146,9 @@ export interface SecuritySettings {
   allowedIps?: string[];
   ndaEnabled?: boolean;
   ndaText?: string | null;
+  watermarkTemplate?: string;
+  watermarkOpacity?: number;
+  watermarkPosition?: 'diagonal' | 'tiled';
 }
 
 export function useUpdateSecuritySettings(id: string) {

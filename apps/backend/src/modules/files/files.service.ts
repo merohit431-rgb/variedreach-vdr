@@ -13,7 +13,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { DataRoomAccessService } from '../data-room-access/data-room-access.service';
 import { FoldersService } from '../folders/folders.service';
-import { WatermarkService } from '../watermark/watermark.service';
+import { WatermarkService, WatermarkConfig } from '../watermark/watermark.service';
 import { OfficeConversionService } from '../office-conversion/office-conversion.service';
 import { MailService } from '../mail/mail.service';
 import { IStorageService, STORAGE_SERVICE } from '../storage/storage.interface';
@@ -374,11 +374,10 @@ export class FilesService {
     action: 'FILE_VIEWED' | 'FILE_DOWNLOADED',
     versionId?: string,
   ): Promise<WatermarkedContent> {
-    if (action === 'FILE_DOWNLOADED') {
-      await this.dataRoomAccess.assertCanDownload(dataRoomId, actor, context.ipAddress);
-    } else {
-      await this.dataRoomAccess.getAccess(dataRoomId, actor, context.ipAddress);
-    }
+    const { dataRoom } =
+      action === 'FILE_DOWNLOADED'
+        ? await this.dataRoomAccess.assertCanDownload(dataRoomId, actor, context.ipAddress)
+        : await this.dataRoomAccess.getAccess(dataRoomId, actor, context.ipAddress);
     const file = await this.getFileOrThrow(dataRoomId, fileId);
 
     const version = versionId
@@ -396,7 +395,12 @@ export class FilesService {
     const sourceExtension = isOffice ? 'pdf' : file.extension;
 
     const elements = this.watermarkService.buildElements(actor, context.ipAddress);
-    const watermarkedBuffer = await this.watermarkService.apply(sourceBuffer, sourceExtension, elements);
+    const watermarkedBuffer = await this.watermarkService.apply(
+      sourceBuffer,
+      sourceExtension,
+      elements,
+      this.watermarkConfigFor(dataRoom),
+    );
 
     const auditLog = await this.auditLogService.record({
       action,
@@ -430,7 +434,7 @@ export class FilesService {
     actor: AuthenticatedUser,
     context: { ipAddress: string; userAgent?: string },
   ): Promise<{ buffer: Buffer; filename: string }> {
-    await this.dataRoomAccess.assertCanDownload(dataRoomId, actor, context.ipAddress);
+    const { dataRoom } = await this.dataRoomAccess.assertCanDownload(dataRoomId, actor, context.ipAddress);
 
     const files = await this.prisma.file.findMany({
       where: { id: { in: fileIds }, dataRoomId, deletedAt: null },
@@ -442,6 +446,7 @@ export class FilesService {
     }
 
     const elements = this.watermarkService.buildElements(actor, context.ipAddress);
+    const watermarkConfig = this.watermarkConfigFor(dataRoom);
     const archive = createArchive('zip', { zlib: { level: 6 } });
     const chunks: Buffer[] = [];
     archive.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -455,7 +460,7 @@ export class FilesService {
         ? await this.getOrCreateConvertedPdf(dataRoomId, file, version)
         : await this.storage.read(version.storagePath);
 
-      const watermarked = await this.watermarkService.apply(sourceBuffer, isOffice ? 'pdf' : file.extension, elements);
+      const watermarked = await this.watermarkService.apply(sourceBuffer, isOffice ? 'pdf' : file.extension, elements, watermarkConfig);
       const entryName = isOffice ? getPreviewFilename(file.name, file.extension) : file.name;
       archive.append(watermarked, { name: entryName });
 
@@ -507,7 +512,7 @@ export class FilesService {
     actor: AuthenticatedUser,
     context: { ipAddress: string; userAgent?: string },
   ): Promise<{ buffer: Buffer; filename: string }> {
-    await this.dataRoomAccess.assertCanDownload(dataRoomId, actor, context.ipAddress);
+    const { dataRoom } = await this.dataRoomAccess.assertCanDownload(dataRoomId, actor, context.ipAddress);
 
     // Recursively collect all folder IDs in the subtree
     const collectFolderIds = async (rootId: string | null): Promise<(string | null)[]> => {
@@ -550,6 +555,7 @@ export class FilesService {
       : null;
 
     const elements = this.watermarkService.buildElements(actor, context.ipAddress);
+    const watermarkConfig = this.watermarkConfigFor(dataRoom);
     const archive = createArchive('zip', { zlib: { level: 6 } });
     const chunks: Buffer[] = [];
     archive.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -563,7 +569,7 @@ export class FilesService {
         ? await this.getOrCreateConvertedPdf(dataRoomId, file, version)
         : await this.storage.read(version.storagePath);
 
-      const watermarked = await this.watermarkService.apply(sourceBuffer, isOffice ? 'pdf' : file.extension, elements);
+      const watermarked = await this.watermarkService.apply(sourceBuffer, isOffice ? 'pdf' : file.extension, elements, watermarkConfig);
       const entryName = isOffice ? getPreviewFilename(file.name, file.extension) : file.name;
       const folderPath = file.folder?.path ?? '';
       const zipPath = folderPath ? `${folderPath}/${entryName}` : entryName;
@@ -645,6 +651,18 @@ export class FilesService {
       throw new NotFoundException('File not found');
     }
     return file;
+  }
+
+  private watermarkConfigFor(dataRoom: {
+    watermarkTemplate: string;
+    watermarkOpacity: number;
+    watermarkPosition: string;
+  }): WatermarkConfig {
+    return {
+      template: dataRoom.watermarkTemplate,
+      opacity: dataRoom.watermarkOpacity,
+      position: dataRoom.watermarkPosition,
+    };
   }
 
   private async assertFolderExists(dataRoomId: string, folderId: string): Promise<void> {

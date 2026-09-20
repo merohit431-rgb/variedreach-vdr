@@ -142,6 +142,9 @@ export class DataRoomsService {
         ...(dto.allowedIps !== undefined && { allowedIps: dto.allowedIps }),
         ...(dto.ndaEnabled !== undefined && { ndaEnabled: dto.ndaEnabled }),
         ...(dto.ndaText !== undefined && { ndaText: dto.ndaText }),
+        ...(dto.watermarkTemplate !== undefined && { watermarkTemplate: dto.watermarkTemplate }),
+        ...(dto.watermarkOpacity !== undefined && { watermarkOpacity: dto.watermarkOpacity }),
+        ...(dto.watermarkPosition !== undefined && { watermarkPosition: dto.watermarkPosition }),
       },
     });
 
@@ -162,6 +165,15 @@ export class DataRoomsService {
     }
     if (dto.ndaText !== undefined && dto.ndaText !== before.ndaText) {
       changes.ndaText = { changed: true };
+    }
+    if (dto.watermarkTemplate !== undefined && dto.watermarkTemplate !== before.watermarkTemplate) {
+      changes.watermarkTemplate = { from: before.watermarkTemplate, to: dto.watermarkTemplate };
+    }
+    if (dto.watermarkOpacity !== undefined && dto.watermarkOpacity !== before.watermarkOpacity) {
+      changes.watermarkOpacity = { from: before.watermarkOpacity, to: dto.watermarkOpacity };
+    }
+    if (dto.watermarkPosition !== undefined && dto.watermarkPosition !== before.watermarkPosition) {
+      changes.watermarkPosition = { from: before.watermarkPosition, to: dto.watermarkPosition };
     }
 
     await this.auditLogService.record({

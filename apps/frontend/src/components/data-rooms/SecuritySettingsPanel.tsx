@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Globe, FileText } from 'lucide-react';
+import { Globe, FileText, Stamp } from 'lucide-react';
 import { useDataRoom, useUpdateSecuritySettings } from '@/hooks/use-data-rooms';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
@@ -13,7 +13,12 @@ interface ExtendedDataRoom {
   allowedIps?: string[];
   ndaEnabled?: boolean;
   ndaText?: string | null;
+  watermarkTemplate?: string;
+  watermarkOpacity?: number;
+  watermarkPosition?: string;
 }
+
+const WATERMARK_TOKENS = ['{{name}}', '{{email}}', '{{date}}', '{{time}}', '{{ip}}'];
 
 export function SecuritySettingsPanel({ dataRoomId }: { dataRoomId: string }) {
   const { data: dataRoom } = useDataRoom(dataRoomId);
@@ -24,6 +29,9 @@ export function SecuritySettingsPanel({ dataRoomId }: { dataRoomId: string }) {
   const [ipsText, setIpsText] = useState('');
   const [ndaEnabled, setNdaEnabled] = useState(false);
   const [ndaText, setNdaText] = useState('');
+  const [watermarkTemplate, setWatermarkTemplate] = useState('');
+  const [watermarkOpacity, setWatermarkOpacity] = useState(0.25);
+  const [watermarkPosition, setWatermarkPosition] = useState<'diagonal' | 'tiled'>('diagonal');
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -33,6 +41,9 @@ export function SecuritySettingsPanel({ dataRoomId }: { dataRoomId: string }) {
       setIpsText((room.allowedIps ?? []).join('\n'));
       setNdaEnabled(room.ndaEnabled ?? false);
       setNdaText(room.ndaText ?? '');
+      setWatermarkTemplate(room.watermarkTemplate ?? '{{name}} | {{email}} | {{date}} | {{ip}} | CONFIDENTIAL');
+      setWatermarkOpacity(room.watermarkOpacity ?? 0.25);
+      setWatermarkPosition(room.watermarkPosition === 'tiled' ? 'tiled' : 'diagonal');
     }
   }, [room]);
 
@@ -50,6 +61,9 @@ export function SecuritySettingsPanel({ dataRoomId }: { dataRoomId: string }) {
         allowedIps,
         ndaEnabled,
         ndaText: ndaEnabled ? ndaText || null : null,
+        watermarkTemplate,
+        watermarkOpacity,
+        watermarkPosition,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -143,6 +157,64 @@ export function SecuritySettingsPanel({ dataRoomId }: { dataRoomId: string }) {
                 />
               </div>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* Watermarking */}
+      <div className="rounded-lg border border-app-border bg-app-s1 p-5">
+        <div className="flex items-start gap-3">
+          <Stamp className="mt-0.5 h-5 w-5 text-app-t3 flex-shrink-0" />
+          <div className="flex-1">
+            <h3 className="text-sm font-semibold text-app-text">Watermarking</h3>
+            <p className="mt-0.5 text-xs text-app-t3">
+              Every preview and download is stamped with the viewer&apos;s identity. Customize how
+              it reads and how visible it is — it can&apos;t be turned off.
+            </p>
+
+            <div className="mt-3">
+              <label className="text-xs font-medium text-app-t2">Text template</label>
+              <input
+                type="text"
+                value={watermarkTemplate}
+                onChange={(e) => setWatermarkTemplate(e.target.value)}
+                placeholder="{{name}} | {{email}} | {{date}} | {{ip}} | CONFIDENTIAL"
+                className="mt-1 w-full rounded-md border border-app-border2 px-3 py-2 font-mono text-xs focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+              />
+              <p className="mt-1 text-xs text-app-t3">
+                Tokens: {WATERMARK_TOKENS.map((t) => (
+                  <code key={t} className="mx-0.5 rounded bg-app-s2 px-1 py-0.5 font-mono">{t}</code>
+                ))}
+              </p>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="text-xs font-medium text-app-t2">
+                  Visibility — {Math.round(watermarkOpacity * 100)}%
+                </label>
+                <input
+                  type="range"
+                  min={0.05}
+                  max={1}
+                  step={0.05}
+                  value={watermarkOpacity}
+                  onChange={(e) => setWatermarkOpacity(parseFloat(e.target.value))}
+                  className="mt-2 w-full"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-app-t2">Pattern</label>
+                <select
+                  value={watermarkPosition}
+                  onChange={(e) => setWatermarkPosition(e.target.value === 'tiled' ? 'tiled' : 'diagonal')}
+                  className="mt-1 w-full rounded-md border border-app-border2 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                >
+                  <option value="diagonal">Diagonal</option>
+                  <option value="tiled">Straight</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
       </div>
