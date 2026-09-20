@@ -360,6 +360,42 @@ describe('SuperAdminService.updateSubscription', () => {
 
     expect(record).not.toHaveBeenCalled();
   });
+
+  // Regression: a status-only update against an EXISTING subscription used to
+  // throw PrismaClientValidationError for real (never surfaced by the mocked
+  // jest.fn() here, which doesn't validate its input the way real Prisma
+  // does) -- the `create` branch's date fields were always built from
+  // dto.currentPeriodStart/End even though that branch can only run when
+  // !existing, and Prisma's client validates the whole upsert payload
+  // upfront regardless of which branch the server will actually take.
+  // Confirmed live against staging: `updateSubscription(orgId, {status:
+  // 'EXPIRED'}, actor)` on an org with a real subscription row threw
+  // "Provided Date object is invalid" until this fix.
+  it('a status-only update against an existing subscription builds a well-formed (not Invalid Date) create branch', async () => {
+    const existingSub = {
+      id: 'sub-1',
+      status: 'ACTIVE',
+      currentPeriodStart: new Date('2026-06-28'),
+      currentPeriodEnd: new Date('2026-12-28'),
+    };
+    const upsert = jest.fn().mockResolvedValue({ ...existingSub, status: 'EXPIRED' });
+    const { service } = buildService({
+      organisation: { id: 'org-1', planSlug: 'PROFESSIONAL', storageLimitGb: 12, subscription: existingSub },
+      subscriptionUpsert: upsert,
+    });
+
+    await service.updateSubscription('org-1', { status: 'EXPIRED' }, 'admin-1');
+
+    const { create } = upsert.mock.calls[0][0];
+    expect(create.currentPeriodStart).toBeInstanceOf(Date);
+    expect(create.currentPeriodEnd).toBeInstanceOf(Date);
+    expect(Number.isNaN(create.currentPeriodStart.getTime())).toBe(false);
+    expect(Number.isNaN(create.currentPeriodEnd.getTime())).toBe(false);
+    // And since `existing` is truthy, `update` (not `create`) is what
+    // Postgres actually applies -- the create branch's dates are filler
+    // that must merely be valid, not correct.
+    expect(upsert.mock.calls[0][0].update).toEqual({ status: 'EXPIRED' });
+  });
 });
 
 describe('SuperAdminService.getOrganisationStorageDetail', () => {

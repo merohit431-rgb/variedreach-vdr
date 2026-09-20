@@ -413,6 +413,15 @@ export class SuperAdminService {
       }
     }
 
+    // The `create` branch below is only ever actually applied by Postgres
+    // when `existing` is falsy -- in which case the guard above already
+    // guarantees both dto dates are present. But Prisma's client validates
+    // the ENTIRE upsert payload (both branches) before it knows which one
+    // the server will take, so `create`'s date fields must still be valid
+    // Dates even when `existing` is truthy and this is really a status-only
+    // update -- falling back to the existing row's own dates (never used,
+    // since `update` wins) keeps that branch well-typed without changing
+    // what actually gets written.
     const subscription = await this.prisma.subscription.upsert({
       where: { organisationId },
       create: {
@@ -421,8 +430,8 @@ export class SuperAdminService {
         billingCycle: 'YEARLY',
         storageGb: org.storageLimitGb,
         status: dto.status ?? 'ACTIVE',
-        currentPeriodStart: new Date(dto.currentPeriodStart!),
-        currentPeriodEnd: new Date(dto.currentPeriodEnd!),
+        currentPeriodStart: new Date(dto.currentPeriodStart ?? existing?.currentPeriodStart ?? new Date()),
+        currentPeriodEnd: new Date(dto.currentPeriodEnd ?? existing?.currentPeriodEnd ?? new Date()),
       },
       update: {
         ...(dto.currentPeriodStart && { currentPeriodStart: new Date(dto.currentPeriodStart) }),
