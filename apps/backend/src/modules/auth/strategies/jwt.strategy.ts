@@ -48,10 +48,18 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // takes effect on the very next request, same guarantee as before.
     const membership = await this.prisma.organisationMembership.findUnique({
       where: { userId_organisationId: { userId: user.id, organisationId: payload.organisationId } },
+      include: { organisation: true },
     });
 
     if (!membership || membership.status !== 'ACTIVE') {
       throw new UnauthorizedException('Session is no longer valid');
+    }
+
+    // Org-level Super Admin deactivation/archive -- same immediate-effect
+    // guarantee as a membership suspend, but blocks every member of the org
+    // at once rather than needing each one suspended individually.
+    if (!membership.organisation || membership.organisation.deletedAt || membership.organisation.status !== 'ACTIVE') {
+      throw new UnauthorizedException('This organisation is not currently active');
     }
 
     return {

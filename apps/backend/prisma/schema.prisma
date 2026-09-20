@@ -106,6 +106,12 @@ enum AuditAction {
   COUPON_UPDATED
   COUPON_DELETED
   BUSINESS_PROFILE_UPDATED
+  ORGANISATION_RENAMED
+  ORGANISATION_ACTIVATED
+  ORGANISATION_DEACTIVATED
+  ORGANISATION_DELETED
+  SUBSCRIPTION_DATES_UPDATED
+  SUBSCRIPTION_REACTIVATED
 }
 
 enum PermissionScope {
@@ -124,19 +130,31 @@ enum PermissionPrincipal {
 // ═══════════════════════════════════════════════════════════
 
 model Organisation {
-  id             String    @id @default(uuid())
+  id             String             @id @default(uuid())
   name           String
-  slug           String    @unique
+  slug           String             @unique
   logoUrl        String?
-  storageLimitGb Int       @default(25)
+  storageLimitGb Int                @default(25)
   // SaaS plan limits — null for legacy/manually-provisioned orgs
   planSlug       String?
-  userLimit      Int       @default(10)
+  userLimit      Int                @default(10)
   gstNumber      String?
   address        String?
   mobileNumber   String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  // Super Admin manual activate/deactivate -- independent of subscription
+  // status (a SUSPENDED org blocks access immediately regardless of what
+  // its subscription says; a subscription lapsing is a separate, later
+  // path to the same effective lockout, not the same field).
+  status         OrganisationStatus @default(ACTIVE)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  // Soft-delete/archive -- deliberately the only deletion path exposed by
+  // the product (see super-admin.service.ts archiveOrganisation()). Every
+  // relation below is onDelete: Cascade, so a real hard-delete of this row
+  // would be immediate and unrecoverable across memberships, data rooms
+  // and everything under them, subscriptions, payments, and invoices --
+  // status quo before this field existed was that deletedAt was already
+  // present on this model but read nowhere, i.e. fully decorative.
   deletedAt      DateTime?
 
   users         User[]
@@ -147,6 +165,11 @@ model Organisation {
   memberships   OrganisationMembership[]
 
   @@map("organisations")
+}
+
+enum OrganisationStatus {
+  ACTIVE
+  SUSPENDED
 }
 
 // A User is a global identity; membership (with a role scoped to that

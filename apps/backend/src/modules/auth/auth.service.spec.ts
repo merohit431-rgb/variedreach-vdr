@@ -44,3 +44,49 @@ describe('AuthService email normalization', () => {
     expect(findUnique).toHaveBeenCalledWith({ where: { email: 'manthan.jhaveri@crawfordbayley.com' } });
   });
 });
+
+describe('AuthService organisation-status enforcement', () => {
+  const actor = { id: 'user-1', email: 'x@y.com', role: 'PRA', organisationId: 'org-1', firstName: 'X', lastName: 'Y' } as any;
+
+  function buildServiceWithMembership(membershipFindUnique: jest.Mock) {
+    const prisma = { organisationMembership: { findUnique: membershipFindUnique } } as unknown as PrismaService;
+    return new AuthService(prisma, {} as JwtService, {} as ConfigService, {} as AuditLogService, {} as MailService);
+  }
+
+  it('switchWorkspace() rejects a target organisation that is SUSPENDED, before issuing any token', async () => {
+    const findUnique = jest.fn().mockResolvedValue({
+      role: 'PRA',
+      organisationId: 'org-2',
+      status: 'ACTIVE',
+      organisation: { status: 'SUSPENDED', deletedAt: null },
+    });
+    const service = buildServiceWithMembership(findUnique);
+
+    await expect(service.switchWorkspace(actor, 'org-2', {} as any)).rejects.toThrow(
+      'This organisation is not currently active',
+    );
+  });
+
+  it('switchWorkspace() rejects a target organisation that is soft-deleted', async () => {
+    const findUnique = jest.fn().mockResolvedValue({
+      role: 'PRA',
+      organisationId: 'org-2',
+      status: 'ACTIVE',
+      organisation: { status: 'ACTIVE', deletedAt: new Date() },
+    });
+    const service = buildServiceWithMembership(findUnique);
+
+    await expect(service.switchWorkspace(actor, 'org-2', {} as any)).rejects.toThrow(
+      'This organisation is not currently active',
+    );
+  });
+
+  it('switchWorkspace() still rejects an inactive membership before even checking the organisation', async () => {
+    const findUnique = jest.fn().mockResolvedValue(null);
+    const service = buildServiceWithMembership(findUnique);
+
+    await expect(service.switchWorkspace(actor, 'org-2', {} as any)).rejects.toThrow(
+      'You are not a member of that organisation',
+    );
+  });
+});

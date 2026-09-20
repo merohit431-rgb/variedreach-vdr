@@ -203,10 +203,20 @@ export class AuthService {
     // entirely, same as always. Everyone else resolves which organisation
     // this login is scoped to.
     if (user.role !== 'SUPER_ADMIN') {
-      const memberships = await this.prisma.organisationMembership.findMany({
+      const allMemberships = await this.prisma.organisationMembership.findMany({
         where: { userId: user.id, status: 'ACTIVE' },
-        include: { organisation: { select: { name: true } } },
+        include: { organisation: { select: { name: true, status: true, deletedAt: true } } },
       });
+      // A suspended/archived org's membership must not appear as a workspace
+      // choice, and must never silently fall through to the "zero
+      // memberships" legacy-column path below (that path exists for the
+      // pre-migration-backfill window, not for "every org this user belongs
+      // to happens to be suspended") -- so partition explicitly rather than
+      // just filtering.
+      const memberships = allMemberships.filter((m) => m.organisation.status === 'ACTIVE' && !m.organisation.deletedAt);
+      if (memberships.length === 0 && allMemberships.length > 0) {
+        throw new UnauthorizedException('Your organisation is not currently active. Contact your administrator.');
+      }
 
       if (memberships.length > 1) {
         const workspaceSelectionToken = this.jwtService.sign(
@@ -692,9 +702,13 @@ export class AuthService {
     if (session.user.role !== 'SUPER_ADMIN' && session.organisationId) {
       const membership = await this.prisma.organisationMembership.findUnique({
         where: { userId_organisationId: { userId: session.user.id, organisationId: session.organisationId } },
+        include: { organisation: true },
       });
       if (!membership || membership.status !== 'ACTIVE') {
         throw new UnauthorizedException('Session is no longer valid');
+      }
+      if (!membership.organisation || membership.organisation.deletedAt || membership.organisation.status !== 'ACTIVE') {
+        throw new UnauthorizedException('This organisation is not currently active');
       }
       role = membership.role;
       organisationId = membership.organisationId;
@@ -741,9 +755,13 @@ export class AuthService {
 
     const membership = await this.prisma.organisationMembership.findUnique({
       where: { userId_organisationId: { userId: user.id, organisationId } },
+      include: { organisation: true },
     });
     if (!membership || membership.status !== 'ACTIVE') {
       throw new UnauthorizedException('You are not a member of that organisation');
+    }
+    if (!membership.organisation || membership.organisation.deletedAt || membership.organisation.status !== 'ACTIVE') {
+      throw new UnauthorizedException('This organisation is not currently active');
     }
 
     await this.enforceConcurrentSessionLimit(user.id);
@@ -788,9 +806,13 @@ export class AuthService {
   async switchWorkspace(actor: AuthenticatedUser, organisationId: string, meta: RequestMeta): Promise<{ accessToken: string; refreshToken: string; refreshExpiresAt: Date; user: PublicUser }> {
     const membership = await this.prisma.organisationMembership.findUnique({
       where: { userId_organisationId: { userId: actor.id, organisationId } },
+      include: { organisation: true },
     });
     if (!membership || membership.status !== 'ACTIVE') {
       throw new UnauthorizedException('You are not a member of that organisation');
+    }
+    if (!membership.organisation || membership.organisation.deletedAt || membership.organisation.status !== 'ACTIVE') {
+      throw new UnauthorizedException('This organisation is not currently active');
     }
 
     const { accessToken, refreshToken, refreshExpiresAt } = await this.issueTokens(

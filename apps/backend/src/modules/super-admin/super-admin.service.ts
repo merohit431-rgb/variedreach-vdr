@@ -190,6 +190,17 @@ export class SuperAdminService {
     const org = await this.prisma.organisation.findUnique({ where: { id } });
     if (!org) throw new NotFoundException('Organisation not found');
 
+    // Rename gets its own audit action (ORGANISATION_RENAMED) and its own
+    // slug regeneration -- kept out of the generic limits/plan diff below so
+    // "who renamed this org and from what" is a single, unambiguous entry
+    // rather than buried inside a general-purpose update. slug is read-only
+    // display text everywhere in the frontend (never a routing key or a
+    // lookup identifier), so regenerating it alongside the name is safe.
+    let slugUpdate: string | undefined;
+    if (dto.name !== undefined && dto.name !== org.name) {
+      slugUpdate = await this.generateUniqueSlug(dto.name, id);
+    }
+
     // Record only the fields actually present in this request, each as a
     // {from, to} pair -- these limits gate real customer capability
     // (seats, storage, plan tier), so "something changed" isn't enough for
@@ -206,9 +217,20 @@ export class SuperAdminService {
     // straight into state without a follow-up refetch or a crash.
     const updated = await this.prisma.organisation.update({
       where: { id },
-      data: dto,
+      data: { ...dto, ...(slugUpdate && { slug: slugUpdate }) },
       include: this.ORG_DETAIL_INCLUDE,
     });
+
+    if (slugUpdate) {
+      await this.auditLogService.record({
+        action: 'ORGANISATION_RENAMED',
+        userId: actorUserId,
+        organisationId: id,
+        resourceType: 'Organisation',
+        resourceId: id,
+        metadata: { from: org.name, to: dto.name } as Prisma.InputJsonValue,
+      });
+    }
 
     if (Object.keys(changes).length > 0) {
       await this.auditLogService.record({
@@ -222,6 +244,74 @@ export class SuperAdminService {
     }
 
     return updated;
+  }
+
+  private async generateUniqueSlug(name: string, excludeOrgId: string): Promise<string> {
+    const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    let slug = base;
+    let n = 1;
+    while (await this.prisma.organisation.findFirst({ where: { slug, id: { not: excludeOrgId } } })) {
+      slug = `${base}-${n++}`;
+    }
+    return slug;
+  }
+
+  // Org-level activate/deactivate -- independent of, and immediately
+  // effective on top of, per-member suspend (OrgMembersService). Blocks
+  // every member of the org on their very next request (see
+  // jwt.strategy.ts / auth.service.ts's organisation.status checks) without
+  // touching any user, file, folder, or subscription row.
+  async setOrganisationStatus(id: string, status: 'ACTIVE' | 'SUSPENDED', actorUserId: string) {
+    const org = await this.prisma.organisation.findUnique({ where: { id } });
+    if (!org) throw new NotFoundException('Organisation not found');
+    if (org.deletedAt) throw new BadRequestException('Cannot change the status of an archived organisation');
+    if (org.status === status) return org;
+
+    const updated = await this.prisma.organisation.update({ where: { id }, data: { status } });
+
+    await this.auditLogService.record({
+      action: status === 'SUSPENDED' ? 'ORGANISATION_DEACTIVATED' : 'ORGANISATION_ACTIVATED',
+      userId: actorUserId,
+      organisationId: id,
+      resourceType: 'Organisation',
+      resourceId: id,
+    });
+
+    return updated;
+  }
+
+  // Soft-delete/archive -- the only deletion path this product exposes (see
+  // the Organisation model's own comment on why: every relation cascades,
+  // so a real hard-delete is immediate and unrecoverable). Sets deletedAt
+  // and SUSPENDED together so an archived org is blocked exactly like a
+  // deactivated one, but stays clearly distinguished in the audit trail and
+  // in any listing that filters deletedAt. Nothing else is touched --
+  // users, files, folders, subscriptions, audit logs all remain, fully
+  // recoverable by unsetting deletedAt (no product-facing "reactivate an
+  // archived org" path yet; recovery today is a deliberate, manual step).
+  async archiveOrganisation(id: string, confirmName: string, actorUserId: string) {
+    const org = await this.prisma.organisation.findUnique({ where: { id } });
+    if (!org) throw new NotFoundException('Organisation not found');
+    if (org.deletedAt) throw new BadRequestException('This organisation is already archived');
+    if (confirmName.trim() !== org.name) {
+      throw new BadRequestException('Organisation name confirmation does not match');
+    }
+
+    await this.prisma.organisation.update({
+      where: { id },
+      data: { deletedAt: new Date(), status: 'SUSPENDED' },
+    });
+
+    await this.auditLogService.record({
+      action: 'ORGANISATION_DELETED',
+      userId: actorUserId,
+      organisationId: id,
+      resourceType: 'Organisation',
+      resourceId: id,
+      metadata: { name: org.name, note: 'Soft-delete/archive -- no data removed, recoverable' },
+    });
+
+    return { archived: true };
   }
 
   async getRegistrations(page: number, limit: number) {

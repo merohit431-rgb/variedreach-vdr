@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import type { Response } from 'express';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -7,6 +7,8 @@ import type { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { SuperAdminService } from './super-admin.service';
 import { InvoicePdfService } from '../billing/invoice-pdf.service';
 import { UpdateOrgDto } from './dto/update-org.dto';
+import { SetOrgStatusDto } from './dto/set-org-status.dto';
+import { ArchiveOrgDto } from './dto/archive-org.dto';
 
 @Controller({ path: 'super-admin', version: '1' })
 @Roles(UserRole.SUPER_ADMIN)
@@ -43,6 +45,24 @@ export class SuperAdminController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.service.updateOrganisation(id, dto, user.id);
+  }
+
+  @Patch('organisations/:id/status')
+  setOrganisationStatus(
+    @Param('id') id: string,
+    @Body() dto: SetOrgStatusDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.setOrganisationStatus(id, dto.status, user.id);
+  }
+
+  @Delete('organisations/:id')
+  archiveOrganisation(
+    @Param('id') id: string,
+    @Body() dto: ArchiveOrgDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.archiveOrganisation(id, dto.confirmName, user.id);
   }
 
   @Get('registrations')
