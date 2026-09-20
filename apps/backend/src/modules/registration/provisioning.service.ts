@@ -46,6 +46,7 @@ export class ProvisioningService {
   async provision(
     registrationId: string,
     gateway?: { paymentId?: string; signature?: string },
+    invoiceMeta?: { invoicedByUserId: string; poNumber?: string; notes?: string },
   ): Promise<{ organisationId: string; userId: string; email: string; firstName: string; lastName: string; role: string }> {
     const reg = await this.prisma.registration.findUnique({ where: { id: registrationId } });
     if (!reg) throw new BadRequestException('Registration not found');
@@ -64,7 +65,7 @@ export class ProvisioningService {
     const periodEnd = new Date(now);
     isYearly ? periodEnd.setFullYear(periodEnd.getFullYear() + 1) : periodEnd.setMonth(periodEnd.getMonth() + 1);
 
-    const { org, user, invoiceNumber } = await this.runProvisioningTransaction(reg, plan, amounts, discountPaisa, netTotal, now, periodEnd, gateway);
+    const { org, user, invoiceNumber } = await this.runProvisioningTransaction(reg, plan, amounts, discountPaisa, netTotal, now, periodEnd, gateway, invoiceMeta);
 
     // Single shared audit entry for every successful payment, regardless of
     // which caller reached this method (the normal client-redirect checkout,
@@ -83,6 +84,11 @@ export class ProvisioningService {
         billingCycle: isYearly ? 'YEARLY' : 'MONTHLY',
         gatewayOrderId: reg.gatewayOrderId,
         gatewayPaymentId: gateway?.paymentId ?? null,
+        ...(invoiceMeta && {
+          paymentMethod: 'INVOICE',
+          invoicedByUserId: invoiceMeta.invoicedByUserId,
+          poNumber: invoiceMeta.poNumber ?? null,
+        }),
       },
     });
 
@@ -124,6 +130,7 @@ export class ProvisioningService {
     now: Date,
     periodEnd: Date,
     gateway?: { paymentId?: string; signature?: string },
+    invoiceMeta?: { invoicedByUserId: string; poNumber?: string; notes?: string },
   ) {
     const isYearly = reg.billingCycle === 'YEARLY';
     const MAX_ATTEMPTS = 5;
@@ -217,6 +224,20 @@ export class ProvisioningService {
               ...(reg.gatewayOrderId && { gatewayOrderId: reg.gatewayOrderId }),
               ...(gateway?.paymentId && { gatewayPaymentId: gateway.paymentId }),
               ...(gateway?.signature && { gatewaySignature: gateway.signature }),
+              // No gateway involved -- an invoice-billed org is marked paid on
+              // the Super Admin's own action, same trust boundary as any
+              // manually-approved invoice in a B2B SaaS. Recorded in metadata
+              // (not a new column) so reconciliation/reporting can tell an
+              // invoice payment apart from a gateway one without a schema
+              // change beyond the AuditAction enum values already added.
+              ...(invoiceMeta && {
+                metadata: {
+                  paymentMethod: 'INVOICE',
+                  invoicedByUserId: invoiceMeta.invoicedByUserId,
+                  ...(invoiceMeta.poNumber && { poNumber: invoiceMeta.poNumber }),
+                  ...(invoiceMeta.notes && { notes: invoiceMeta.notes }),
+                },
+              }),
               paidAt: now,
             },
           });

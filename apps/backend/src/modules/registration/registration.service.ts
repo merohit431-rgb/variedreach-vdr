@@ -12,6 +12,7 @@ import { normalizeEmail } from '../../common/utils/email.util';
 import { CreateRegistrationDto } from './dto/create-registration.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { CompleteRegistrationDto } from './dto/complete-registration.dto';
+import { AdminProvisionOrgDto } from './dto/admin-provision-org.dto';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -82,6 +83,58 @@ export class RegistrationService {
     });
 
     await this.issueVerificationToken(registration.id, registration.fullName, registration.email);
+  }
+
+  // Invoice/PO-billed onboarding for deals that don't fit self-service
+  // checkout -- Super Admin only (enforced at the controller). Skips email
+  // verification and payment-gateway checkout entirely: verifiedAt is set
+  // immediately (a Super Admin creating this account IS the verification),
+  // and provision() is called straight away with invoiceMeta instead of a
+  // gateway result, marking the resulting Payment as invoice-paid rather
+  // than gateway-paid. The created user gets an unusable placeholder
+  // password (same pattern as data-rooms.service.ts's inviteMember) and a
+  // real password-reset email via the existing forgot-password flow --
+  // deliberately reusing that infrastructure rather than building a
+  // parallel invite-token/email path for what's the same "set your own
+  // password" need.
+  async adminProvision(dto: AdminProvisionOrgDto, actorUserId: string) {
+    const email = normalizeEmail(dto.email);
+    const existing = await this.prisma.registration.findUnique({ where: { email } });
+    if (existing) {
+      throw new ConflictException('An account with this email has already been registered');
+    }
+
+    const placeholderHash = generateOpaqueToken().hash;
+    const now = new Date();
+
+    const registration = await this.prisma.registration.create({
+      data: {
+        fullName: dto.fullName,
+        companyName: dto.companyName,
+        email,
+        mobileNumber: dto.mobileNumber,
+        passwordHash: placeholderHash,
+        gstNumber: dto.gstNumber,
+        companyAddress: dto.companyAddress,
+        selectedPlan: dto.selectedPlan,
+        selectedStorageGb: dto.selectedStorageGb,
+        billingCycle: dto.billingCycle,
+        verifiedAt: now,
+      },
+    });
+
+    const provisioned = await this.provisioningService.provision(registration.id, undefined, {
+      invoicedByUserId: actorUserId,
+      poNumber: dto.poNumber,
+      notes: dto.notes,
+    });
+
+    // Fire-and-forget, matching the pattern already used for the welcome
+    // email inside provision() itself -- a delivery failure here shouldn't
+    // fail an otherwise-successful provisioning.
+    void this.authService.forgotPassword(email);
+
+    return provisioned;
   }
 
   async verifyEmail(token: string): Promise<{ email: string }> {

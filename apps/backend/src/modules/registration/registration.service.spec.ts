@@ -126,3 +126,58 @@ describe('RegistrationService.createOrder idempotency', () => {
     expect(result.orderId).toBe('order_new');
   });
 });
+
+describe('RegistrationService.adminProvision', () => {
+  const dto = {
+    fullName: 'Manthan Jhaveri',
+    companyName: 'Crawford Bayley',
+    email: 'Admin.Invoice@CrawfordBayley.com',
+    mobileNumber: '9999999999',
+    selectedPlan: 'STARTER',
+    selectedStorageGb: 20,
+    billingCycle: 'YEARLY',
+    poNumber: 'PO-1234',
+  } as import('./dto/admin-provision-org.dto').AdminProvisionOrgDto;
+
+  it('rejects an email that already has a registration', async () => {
+    const findUnique = jest.fn().mockResolvedValue({ id: 'existing-reg' });
+    const prisma = { registration: { findUnique } } as unknown as PrismaService;
+    const service = new RegistrationService(
+      prisma, {} as ConfigService, {} as MailService, {} as AuthService,
+      {} as IPaymentProvider, {} as ProvisioningService, {} as CouponService,
+    );
+
+    await expect(service.adminProvision(dto, 'super-admin-1')).rejects.toThrow(ConflictException);
+    expect(findUnique).toHaveBeenCalledWith({ where: { email: 'admin.invoice@crawfordbayley.com' } });
+  });
+
+  it('creates a pre-verified registration and provisions immediately with invoiceMeta, then sends a password-reset email instead of a verification one', async () => {
+    const create = jest.fn().mockResolvedValue({ id: 'reg-1' });
+    const prisma = {
+      registration: { findUnique: jest.fn().mockResolvedValue(null), create },
+    } as unknown as PrismaService;
+    const provision = jest.fn().mockResolvedValue({ organisationId: 'org-1', userId: 'user-1' });
+    const forgotPassword = jest.fn().mockResolvedValue(undefined);
+
+    const service = new RegistrationService(
+      prisma, {} as ConfigService, { sendEmailVerificationEmail: jest.fn() } as unknown as MailService,
+      { forgotPassword } as unknown as AuthService, {} as IPaymentProvider,
+      { provision } as unknown as ProvisioningService, {} as CouponService,
+    );
+
+    const result = await service.adminProvision(dto, 'super-admin-1');
+
+    const createArgs = create.mock.calls[0][0].data;
+    expect(createArgs.verifiedAt).toBeInstanceOf(Date);
+    expect(createArgs.billingCycle).toBe('YEARLY');
+    expect(createArgs.email).toBe('admin.invoice@crawfordbayley.com');
+
+    expect(provision).toHaveBeenCalledWith('reg-1', undefined, {
+      invoicedByUserId: 'super-admin-1',
+      poNumber: 'PO-1234',
+      notes: undefined,
+    });
+    expect(forgotPassword).toHaveBeenCalledWith('admin.invoice@crawfordbayley.com');
+    expect(result).toEqual({ organisationId: 'org-1', userId: 'user-1' });
+  });
+});

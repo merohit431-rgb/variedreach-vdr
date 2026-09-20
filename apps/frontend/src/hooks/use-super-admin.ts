@@ -64,6 +64,27 @@ export function useSuperAdmin() {
     [],
   );
 
+  // Invoice/PO-billed onboarding -- provisions the org immediately, no
+  // payment gateway involved. Lives under /registrations (it shares that
+  // service's provisioning path), not /super-admin, even though this hook
+  // is otherwise the Super Admin API surface.
+  const adminProvisionOrg = useCallback(
+    (body: {
+      fullName: string;
+      companyName: string;
+      email: string;
+      mobileNumber: string;
+      gstNumber?: string;
+      companyAddress?: string;
+      selectedPlan: string;
+      selectedStorageGb: number;
+      billingCycle: string;
+      poNumber?: string;
+      notes?: string;
+    }) => post<{ organisationId: string }>('/registrations/admin-provision', body),
+    [],
+  );
+
   const getRegistrations = useCallback(
     (page = 1, limit = 20) => get(`/super-admin/registrations?page=${page}&limit=${limit}`),
     [],
@@ -128,6 +149,7 @@ export function useSuperAdmin() {
     getOrganisations,
     getOrganisationById,
     updateOrganisation,
+    adminProvisionOrg,
     getRegistrations,
     getPayments,
     refundPayment,

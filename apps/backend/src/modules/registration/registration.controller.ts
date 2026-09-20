@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, HttpStatus, NotFoundException, Post, Q
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import { ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
+import { UserRole } from '@prisma/client';
 import type { Response } from 'express';
 import { RegistrationService } from './registration.service';
 import { CreateRegistrationDto } from './dto/create-registration.dto';
@@ -9,7 +10,11 @@ import { VerifyEmailDto } from './dto/verify-email.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { CompleteRegistrationDto } from './dto/complete-registration.dto';
+import { AdminProvisionOrgDto } from './dto/admin-provision-org.dto';
 import { Public } from '../auth/decorators/public.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 
 const REFRESH_COOKIE_NAME = 'refresh_token';
 
@@ -77,5 +82,13 @@ export class RegistrationController {
       expires: result.refreshExpiresAt,
     });
     return { accessToken: result.accessToken, user: result.user };
+  }
+
+  // Invoice/PO-billed onboarding -- no @Public(), so the global auth guard
+  // applies by default; @Roles restricts it to Super Admin on top of that.
+  @Roles(UserRole.SUPER_ADMIN)
+  @Post('admin-provision')
+  adminProvision(@Body() dto: AdminProvisionOrgDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.registrationService.adminProvision(dto, user.id);
   }
 }
