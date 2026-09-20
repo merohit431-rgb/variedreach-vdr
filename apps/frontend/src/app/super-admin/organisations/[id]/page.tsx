@@ -381,7 +381,7 @@ export default function OrgDetailPage() {
                 <p className="text-sm text-rose-900">
                   This will archive <b>{org.name}</b> and immediately block every one of its users from the VDR.
                   No data is deleted and this can be reversed, but only by direct database access — there is no
-                  self-service "reactivate an archived organisation" button yet.
+                  self-service &ldquo;reactivate an archived organisation&rdquo; button yet.
                   {hasActiveSubscription && ' This organisation currently has an active subscription.'}
                 </p>
                 <div>
