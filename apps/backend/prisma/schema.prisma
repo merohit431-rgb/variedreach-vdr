@@ -134,7 +134,16 @@ model Organisation {
   name           String
   slug           String             @unique
   logoUrl        String?
+  // The actual enforced/displayed total -- always plan.minimumStorageGb +
+  // storageAddOnGb, recomputed by updateOrganisation() whenever either
+  // input changes. Never edited directly so a plan change can't silently
+  // wipe out a purchased add-on, and an add-on purchase can't drift out of
+  // sync with a later plan change.
   storageLimitGb Int                @default(25)
+  // Purchased on top of the plan's base allocation -- tracked separately
+  // specifically so changing planSlug recomputes storageLimitGb from the
+  // new plan's base + this, rather than overwriting a customer's add-on.
+  storageAddOnGb Int                @default(0)
   // SaaS plan limits — null for legacy/manually-provisioned orgs
   planSlug       String?
   userLimit      Int                @default(10)

@@ -10,10 +10,10 @@ import { UpdateOrgDto } from './dto/update-org.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
 
 // Mirror of shared pricing constants — same as registration.service.ts
-const PRICING_PLANS: Record<string, { name: string; ratePerGbPerMonth: number; minimumStorageGb: number }> = {
-  STARTER:      { name: 'Starter',      ratePerGbPerMonth: 4999, minimumStorageGb: 5  },
-  PROFESSIONAL: { name: 'Professional', ratePerGbPerMonth: 4500, minimumStorageGb: 10 },
-  BUSINESS:     { name: 'Business',     ratePerGbPerMonth: 4000, minimumStorageGb: 50 },
+const PRICING_PLANS: Record<string, { name: string; ratePerGbPerMonth: number; minimumStorageGb: number; includedUsers: number }> = {
+  STARTER:      { name: 'Starter',      ratePerGbPerMonth: 4999, minimumStorageGb: 5,  includedUsers: 10 },
+  PROFESSIONAL: { name: 'Professional', ratePerGbPerMonth: 4500, minimumStorageGb: 10, includedUsers: 25 },
+  BUSINESS:     { name: 'Business',     ratePerGbPerMonth: 4000, minimumStorageGb: 50, includedUsers: 50 },
 };
 
 // Mirror of shared GST constants — same as registration.service.ts /
@@ -222,6 +222,9 @@ export class SuperAdminService {
       ...org,
       activeUserCount: memberCounts.activeAcceptedCount,
       pendingInvitationCount: memberCounts.pendingInvitationCount,
+      // So the frontend can show "10 GB (Professional base) + 2 GB add-on"
+      // without hard-coding any plan's numbers itself.
+      planBaseStorageGb: org.planSlug ? (PRICING_PLANS[org.planSlug]?.minimumStorageGb ?? null) : null,
     };
   }
 
@@ -240,15 +243,38 @@ export class SuperAdminService {
       slugUpdate = await this.generateUniqueSlug(dto.name, id);
     }
 
+    // storageLimitGb and userLimit are derived from (plan base + add-on) and
+    // (plan's included users) respectively, UNLESS the caller explicitly
+    // overrides one directly in this same request -- that's the mechanism
+    // that makes "changing the plan must not remove a storage add-on" and
+    // "must not silently reset a manually-negotiated seat count" both hold:
+    // recomputation only kicks in when the plan or the add-on actually
+    // changed, and always starts from whichever value (existing or
+    // newly-supplied) is currently in effect for the other one.
+    const effectivePlanSlug = dto.planSlug ?? org.planSlug;
+    const effectiveAddOnGb = dto.storageAddOnGb ?? org.storageAddOnGb;
+    const planChanged = dto.planSlug !== undefined && dto.planSlug !== org.planSlug;
+    const addOnChanged = dto.storageAddOnGb !== undefined && dto.storageAddOnGb !== org.storageAddOnGb;
+    const plan = effectivePlanSlug ? PRICING_PLANS[effectivePlanSlug] : undefined;
+
+    const resolvedData: UpdateOrgDto = { ...dto };
+    if (dto.storageLimitGb === undefined && (planChanged || addOnChanged) && plan) {
+      resolvedData.storageLimitGb = plan.minimumStorageGb + effectiveAddOnGb;
+    }
+    if (dto.userLimit === undefined && planChanged && plan) {
+      resolvedData.userLimit = plan.includedUsers;
+    }
+
     // Record only the fields actually present in this request, each as a
     // {from, to} pair -- these limits gate real customer capability
     // (seats, storage, plan tier), so "something changed" isn't enough for
     // a defensible record of what a Super Admin did and why it might be
-    // asked about later.
+    // asked about later. Uses resolvedData so a plan-driven recomputation
+    // (not just a directly-typed value) still shows up in the audit trail.
     const changes: Record<string, { from: unknown; to: unknown }> = {};
-    for (const key of ['userLimit', 'storageLimitGb', 'planSlug'] as const) {
-      if (dto[key] !== undefined && dto[key] !== org[key]) {
-        changes[key] = { from: org[key], to: dto[key] };
+    for (const key of ['userLimit', 'storageLimitGb', 'storageAddOnGb', 'planSlug'] as const) {
+      if (resolvedData[key] !== undefined && resolvedData[key] !== org[key]) {
+        changes[key] = { from: org[key], to: resolvedData[key] };
       }
     }
 
@@ -256,7 +282,7 @@ export class SuperAdminService {
     // straight into state without a follow-up refetch or a crash.
     const updated = await this.prisma.organisation.update({
       where: { id },
-      data: { ...dto, ...(slugUpdate && { slug: slugUpdate }) },
+      data: { ...resolvedData, ...(slugUpdate && { slug: slugUpdate }) },
       include: this.ORG_DETAIL_INCLUDE,
     });
 

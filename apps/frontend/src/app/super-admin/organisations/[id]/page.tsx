@@ -17,6 +17,8 @@ const STATUS_TONE: Record<string, 'success' | 'warning' | 'danger' | 'neutral'> 
   ACTIVE: 'success', PAST_DUE: 'warning', CANCELLED: 'danger', EXPIRED: 'neutral', PENDING_INVITE: 'neutral',
 };
 
+const PLANS = ['STARTER', 'PROFESSIONAL', 'BUSINESS'] as const;
+
 function formatInr(paise: number) {
   return `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 }
@@ -48,8 +50,17 @@ export default function OrgDetailPage() {
   const [saveMsg, setSaveMsg] = useState('');
   const [saveError, setSaveError] = useState('');
   const [editUserLimit, setEditUserLimit] = useState('');
-  const [editStorageGb, setEditStorageGb] = useState('');
+  const [editStorageAddOnGb, setEditStorageAddOnGb] = useState('');
   const [editPlan, setEditPlan] = useState('');
+  // What was actually loaded from the server -- handleSave only sends a
+  // field if it genuinely differs from this, so changing just the plan
+  // dropdown doesn't also resend a stale userLimit/storageAddOnGb value and
+  // accidentally override the server's plan-driven auto-recomputation of
+  // storageLimitGb/userLimit (see updateOrganisation's own comment on why
+  // that recomputation only fires when the caller omits the field).
+  const [loadedUserLimit, setLoadedUserLimit] = useState('');
+  const [loadedStorageAddOnGb, setLoadedStorageAddOnGb] = useState('');
+  const [loadedPlan, setLoadedPlan] = useState('');
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState('');
@@ -77,8 +88,11 @@ export default function OrgDetailPage() {
         const d = res.data as any;
         setOrg(d);
         setEditUserLimit(String(d.userLimit));
-        setEditStorageGb(String(d.storageLimitGb));
+        setEditStorageAddOnGb(String(d.storageAddOnGb ?? 0));
         setEditPlan(d.planSlug ?? '');
+        setLoadedUserLimit(String(d.userLimit));
+        setLoadedStorageAddOnGb(String(d.storageAddOnGb ?? 0));
+        setLoadedPlan(d.planSlug ?? '');
         setEditName(d.name);
         setSubStart(toDateInput(d.subscription?.currentPeriodStart));
         setSubEnd(toDateInput(d.subscription?.currentPeriodEnd));
@@ -103,14 +117,24 @@ export default function OrgDetailPage() {
   async function handleSave() {
     setSaving(true); setSaveMsg(''); setSaveError('');
     const res = await updateOrganisation(params.id as string, {
-      userLimit: parseInt(editUserLimit) || undefined,
-      storageLimitGb: parseInt(editStorageGb) || undefined,
-      planSlug: editPlan || undefined,
+      // Only sent when actually changed from what was loaded -- otherwise a
+      // plan change would also resend the old userLimit/storageAddOnGb and
+      // suppress the server's plan-driven auto-recomputation.
+      ...(editUserLimit !== loadedUserLimit && { userLimit: parseInt(editUserLimit) || undefined }),
+      ...(editStorageAddOnGb !== loadedStorageAddOnGb && { storageAddOnGb: parseInt(editStorageAddOnGb) || 0 }),
+      ...(editPlan !== loadedPlan && { planSlug: editPlan || undefined }),
     });
     setSaving(false);
     if (res.success) {
       setSaveMsg('Changes saved successfully.');
-      mergeOrg(res.data);
+      const saved = res.data as any;
+      mergeOrg(saved);
+      setEditUserLimit(String(saved.userLimit));
+      setEditStorageAddOnGb(String(saved.storageAddOnGb ?? 0));
+      setEditPlan(saved.planSlug ?? '');
+      setLoadedUserLimit(String(saved.userLimit));
+      setLoadedStorageAddOnGb(String(saved.storageAddOnGb ?? 0));
+      setLoadedPlan(saved.planSlug ?? '');
     } else {
       setSaveError(res.message || 'Could not save changes. Please try again.');
     }
@@ -246,18 +270,37 @@ export default function OrgDetailPage() {
           <CardHeader><CardTitle>Admin Controls</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             {saveMsg && <Alert tone="success">{saveMsg}</Alert>}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Plan</label>
+                <select
+                  value={editPlan}
+                  onChange={(e) => setEditPlan(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                >
+                  <option value="">— No plan (legacy) —</option>
+                  {PLANS.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <p className="mt-1 text-xs text-slate-400">Changing the plan updates the base user/storage entitlement below, unless you also edit them in this same save.</p>
+              </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">User Limit</label>
                 <Input type="number" min={1} value={editUserLimit} onChange={(e) => setEditUserLimit(e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Storage Limit (GB)</label>
-                <Input type="number" min={1} value={editStorageGb} onChange={(e) => setEditStorageGb(e.target.value)} />
+                <label className="block text-xs font-medium text-slate-600 mb-1">Storage Add-on (GB)</label>
+                <Input type="number" min={0} value={editStorageAddOnGb} onChange={(e) => setEditStorageAddOnGb(e.target.value)} />
+                <p className="mt-1 text-xs text-slate-400">On top of the plan&apos;s base storage. Preserved automatically if the plan later changes.</p>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Plan Slug</label>
-                <Input value={editPlan} onChange={(e) => setEditPlan(e.target.value)} placeholder="STARTER" />
+                <label className="block text-xs font-medium text-slate-600 mb-1">Effective Storage Limit</label>
+                <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                  {org.planBaseStorageGb != null ? (
+                    <>{org.planBaseStorageGb} GB ({org.planSlug} base) + {org.storageAddOnGb ?? 0} GB add-on = <strong>{org.storageLimitGb} GB</strong></>
+                  ) : (
+                    <>{org.storageLimitGb} GB (server-computed)</>
+                  )}
+                </p>
               </div>
             </div>
             <Button onClick={handleSave} isLoading={saving} size="sm">

@@ -161,6 +161,93 @@ describe('SuperAdminService.updateOrganisation rename', () => {
   });
 });
 
+describe('SuperAdminService.updateOrganisation plan/storage-add-on resolution', () => {
+  it('setting planSlug to PROFESSIONAL auto-derives userLimit=25 and storageLimitGb=10 (no add-on yet)', async () => {
+    const update = jest.fn().mockResolvedValue({});
+    const { service } = buildService({
+      organisation: { id: 'arck', name: 'ARCK', slug: 'arck', userLimit: 10, storageLimitGb: 25, storageAddOnGb: 0, planSlug: null },
+      update,
+    });
+
+    await service.updateOrganisation('arck', { planSlug: 'PROFESSIONAL' }, 'admin-1');
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ planSlug: 'PROFESSIONAL', userLimit: 25, storageLimitGb: 10 }) }),
+    );
+  });
+
+  it('ARCK exact scenario: PROFESSIONAL + a 2GB add-on in the same request resolves to 25 users / 12GB total', async () => {
+    const update = jest.fn().mockResolvedValue({});
+    const { service } = buildService({
+      organisation: { id: 'arck', name: 'ARCK', slug: 'arck', userLimit: 10, storageLimitGb: 25, storageAddOnGb: 0, planSlug: null },
+      update,
+    });
+
+    await service.updateOrganisation('arck', { planSlug: 'PROFESSIONAL', storageAddOnGb: 2 }, 'admin-1');
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ planSlug: 'PROFESSIONAL', storageAddOnGb: 2, userLimit: 25, storageLimitGb: 12 }),
+      }),
+    );
+  });
+
+  it('a later plan change preserves an existing add-on instead of dropping it', async () => {
+    // Already PROFESSIONAL (10GB base) + a 2GB add-on already on file (12GB
+    // total) -- upgrading to BUSINESS (50GB base) must keep the 2GB add-on,
+    // landing on 52GB, not silently reset to bare BUSINESS-base 50GB.
+    const update = jest.fn().mockResolvedValue({});
+    const { service } = buildService({
+      organisation: { id: 'arck', name: 'ARCK', slug: 'arck', userLimit: 25, storageLimitGb: 12, storageAddOnGb: 2, planSlug: 'PROFESSIONAL' },
+      update,
+    });
+
+    await service.updateOrganisation('arck', { planSlug: 'BUSINESS' }, 'admin-1');
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ planSlug: 'BUSINESS', userLimit: 50, storageLimitGb: 52 }) }),
+    );
+  });
+
+  it('an explicit userLimit in the same request overrides the plan-derived default', async () => {
+    const update = jest.fn().mockResolvedValue({});
+    const { service } = buildService({
+      organisation: { id: 'arck', name: 'ARCK', slug: 'arck', userLimit: 10, storageLimitGb: 25, storageAddOnGb: 0, planSlug: null },
+      update,
+    });
+
+    await service.updateOrganisation('arck', { planSlug: 'PROFESSIONAL', userLimit: 30 }, 'admin-1');
+
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ userLimit: 30 }) }));
+  });
+
+  it('an explicit storageLimitGb in the same request overrides plan-derived recomputation entirely', async () => {
+    const update = jest.fn().mockResolvedValue({});
+    const { service } = buildService({
+      organisation: { id: 'arck', name: 'ARCK', slug: 'arck', userLimit: 10, storageLimitGb: 25, storageAddOnGb: 0, planSlug: null },
+      update,
+    });
+
+    await service.updateOrganisation('arck', { planSlug: 'PROFESSIONAL', storageLimitGb: 999 }, 'admin-1');
+
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ storageLimitGb: 999 }) }));
+  });
+
+  it('changing only storageAddOnGb (no plan change) recomputes storageLimitGb from the existing plan', async () => {
+    const update = jest.fn().mockResolvedValue({});
+    const { service } = buildService({
+      organisation: { id: 'arck', name: 'ARCK', slug: 'arck', userLimit: 25, storageLimitGb: 10, storageAddOnGb: 0, planSlug: 'PROFESSIONAL' },
+      update,
+    });
+
+    await service.updateOrganisation('arck', { storageAddOnGb: 5 }, 'admin-1');
+
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ storageAddOnGb: 5, storageLimitGb: 15 }) }),
+    );
+  });
+});
+
 describe('SuperAdminService.updateSubscription', () => {
   it('requires both dates when creating a subscription for an org that has none yet', async () => {
     const { service } = buildService({
