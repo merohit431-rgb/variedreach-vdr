@@ -5,6 +5,7 @@ import { AuditLogService } from '../audit/audit-log.service';
 import { IPaymentProvider, PAYMENT_PROVIDER } from '../payment/payment-provider.interface';
 import { RazorpayPaymentProvider } from '../payment/providers/razorpay-payment.provider';
 import { UpdateOrgDto } from './dto/update-org.dto';
+import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
 
 // Mirror of shared pricing constants — same as registration.service.ts
 const PRICING_PLANS: Record<string, { name: string; ratePerGbPerMonth: number; minimumStorageGb: number }> = {
@@ -312,6 +313,75 @@ export class SuperAdminService {
     });
 
     return { archived: true };
+  }
+
+  // Manual Super Admin control over subscription dates/status --
+  // "extend", "early-expire", and "reactivate" are all this one operation
+  // with different values, not different endpoints. Upserts: some real
+  // organisations (manually provisioned before self-service billing
+  // existed) have no Subscription row at all yet -- creating one uses the
+  // organisation's own planSlug/storageLimitGb as sane defaults, since this
+  // endpoint manages dates/status, not plan selection.
+  async updateSubscription(organisationId: string, dto: UpdateSubscriptionDto, actorUserId: string) {
+    const org = await this.prisma.organisation.findUnique({
+      where: { id: organisationId },
+      include: { subscription: true },
+    });
+    if (!org) throw new NotFoundException('Organisation not found');
+
+    const existing = org.subscription;
+    if (!existing && (!dto.currentPeriodStart || !dto.currentPeriodEnd)) {
+      throw new BadRequestException(
+        'This organisation has no subscription yet -- provide both currentPeriodStart and currentPeriodEnd to create one',
+      );
+    }
+    if (dto.currentPeriodStart && dto.currentPeriodEnd && new Date(dto.currentPeriodStart) >= new Date(dto.currentPeriodEnd)) {
+      throw new BadRequestException('currentPeriodStart must be before currentPeriodEnd');
+    }
+
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    if (existing) {
+      for (const key of ['currentPeriodStart', 'currentPeriodEnd', 'status'] as const) {
+        const incoming = dto[key];
+        if (incoming === undefined) continue;
+        const fromVal = key === 'status' ? existing[key] : existing[key].toISOString();
+        if (incoming !== fromVal) changes[key] = { from: fromVal, to: incoming };
+      }
+    }
+
+    const subscription = await this.prisma.subscription.upsert({
+      where: { organisationId },
+      create: {
+        organisationId,
+        planSlug: org.planSlug ?? 'CUSTOM',
+        billingCycle: 'YEARLY',
+        storageGb: org.storageLimitGb,
+        status: dto.status ?? 'ACTIVE',
+        currentPeriodStart: new Date(dto.currentPeriodStart!),
+        currentPeriodEnd: new Date(dto.currentPeriodEnd!),
+      },
+      update: {
+        ...(dto.currentPeriodStart && { currentPeriodStart: new Date(dto.currentPeriodStart) }),
+        ...(dto.currentPeriodEnd && { currentPeriodEnd: new Date(dto.currentPeriodEnd) }),
+        ...(dto.status && { status: dto.status }),
+      },
+    });
+
+    const wasReactivated = existing && existing.status !== 'ACTIVE' && dto.status === 'ACTIVE';
+    if (!existing || Object.keys(changes).length > 0) {
+      await this.auditLogService.record({
+        action: wasReactivated ? 'SUBSCRIPTION_REACTIVATED' : 'SUBSCRIPTION_DATES_UPDATED',
+        userId: actorUserId,
+        organisationId,
+        resourceType: 'Subscription',
+        resourceId: subscription.id,
+        metadata: (existing
+          ? changes
+          : { created: true, currentPeriodStart: dto.currentPeriodStart, currentPeriodEnd: dto.currentPeriodEnd }) as Prisma.InputJsonValue,
+      });
+    }
+
+    return subscription;
   }
 
   async getRegistrations(page: number, limit: number) {

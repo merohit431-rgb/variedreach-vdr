@@ -9,6 +9,7 @@ function buildService(overrides: {
   organisation?: unknown;
   update?: jest.Mock;
   record?: jest.Mock;
+  subscriptionUpsert?: jest.Mock;
 }) {
   const record = overrides.record ?? jest.fn().mockResolvedValue({});
   const update = overrides.update ?? jest.fn().mockResolvedValue({});
@@ -17,6 +18,9 @@ function buildService(overrides: {
       findUnique: jest.fn().mockResolvedValue(overrides.organisation ?? null),
       findFirst: jest.fn().mockResolvedValue(null), // slug uniqueness check: nothing taken
       update,
+    },
+    subscription: {
+      upsert: overrides.subscriptionUpsert ?? jest.fn().mockResolvedValue({ id: 'sub-1' }),
     },
   } as unknown as PrismaService;
   const auditLogService = { record } as unknown as AuditLogService;
@@ -142,5 +146,119 @@ describe('SuperAdminService.updateOrganisation rename', () => {
     expect(update.mock.calls[0][0].data).not.toHaveProperty('slug');
     expect(record).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'ORGANISATION_RENAMED' }));
     expect(record).toHaveBeenCalledWith(expect.objectContaining({ action: 'ORGANISATION_UPDATED' }));
+  });
+});
+
+describe('SuperAdminService.updateSubscription', () => {
+  it('requires both dates when creating a subscription for an org that has none yet', async () => {
+    const { service } = buildService({
+      organisation: { id: 'org-1', planSlug: null, storageLimitGb: 12, subscription: null },
+    });
+    await expect(service.updateSubscription('org-1', { currentPeriodEnd: '2026-12-28' }, 'admin-1')).rejects.toThrow(
+      'provide both currentPeriodStart and currentPeriodEnd',
+    );
+  });
+
+  it('rejects a period end that is not after the period start', async () => {
+    const { service } = buildService({
+      organisation: { id: 'org-1', planSlug: null, storageLimitGb: 12, subscription: null },
+    });
+    await expect(
+      service.updateSubscription(
+        'org-1',
+        { currentPeriodStart: '2026-12-28', currentPeriodEnd: '2026-06-28' },
+        'admin-1',
+      ),
+    ).rejects.toThrow('currentPeriodStart must be before currentPeriodEnd');
+  });
+
+  it('creates ARCK-style subscription (6 months, no prior row) and logs creation, not a diff', async () => {
+    const upsert = jest.fn().mockResolvedValue({ id: 'sub-new' });
+    const { service, record } = buildService({
+      organisation: { id: 'org-1', planSlug: null, storageLimitGb: 12, subscription: null },
+      subscriptionUpsert: upsert,
+    });
+
+    await service.updateSubscription(
+      'org-1',
+      { currentPeriodStart: '2026-06-28', currentPeriodEnd: '2026-12-28', status: 'ACTIVE' },
+      'admin-1',
+    );
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { organisationId: 'org-1' },
+        create: expect.objectContaining({
+          organisationId: 'org-1',
+          storageGb: 12,
+          status: 'ACTIVE',
+          currentPeriodStart: new Date('2026-06-28'),
+          currentPeriodEnd: new Date('2026-12-28'),
+        }),
+      }),
+    );
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'SUBSCRIPTION_DATES_UPDATED',
+        metadata: expect.objectContaining({ created: true }),
+      }),
+    );
+  });
+
+  it('extends an existing subscription and logs the old/new end date', async () => {
+    const existingSub = {
+      id: 'sub-1',
+      status: 'ACTIVE',
+      currentPeriodStart: new Date('2026-06-28'),
+      currentPeriodEnd: new Date('2026-12-28'),
+    };
+    const upsert = jest.fn().mockResolvedValue({ ...existingSub, currentPeriodEnd: new Date('2027-03-31') });
+    const { service, record } = buildService({
+      organisation: { id: 'org-1', planSlug: 'STARTER', storageLimitGb: 12, subscription: existingSub },
+      subscriptionUpsert: upsert,
+    });
+
+    await service.updateSubscription('org-1', { currentPeriodEnd: '2027-03-31' }, 'admin-1');
+
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'SUBSCRIPTION_DATES_UPDATED',
+        metadata: {
+          currentPeriodEnd: { from: '2026-12-28T00:00:00.000Z', to: '2027-03-31' },
+        },
+      }),
+    );
+  });
+
+  it('logs SUBSCRIPTION_REACTIVATED specifically when status transitions to ACTIVE', async () => {
+    const existingSub = {
+      id: 'sub-1',
+      status: 'CANCELLED',
+      currentPeriodStart: new Date('2026-06-28'),
+      currentPeriodEnd: new Date('2026-12-28'),
+    };
+    const { service, record } = buildService({
+      organisation: { id: 'org-1', planSlug: 'STARTER', storageLimitGb: 12, subscription: existingSub },
+    });
+
+    await service.updateSubscription('org-1', { status: 'ACTIVE' }, 'admin-1');
+
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ action: 'SUBSCRIPTION_REACTIVATED' }));
+  });
+
+  it('is a no-op (no audit entry) when nothing actually changed', async () => {
+    const existingSub = {
+      id: 'sub-1',
+      status: 'ACTIVE',
+      currentPeriodStart: new Date('2026-06-28'),
+      currentPeriodEnd: new Date('2026-12-28'),
+    };
+    const { service, record } = buildService({
+      organisation: { id: 'org-1', planSlug: 'STARTER', storageLimitGb: 12, subscription: existingSub },
+    });
+
+    await service.updateSubscription('org-1', { status: 'ACTIVE' }, 'admin-1');
+
+    expect(record).not.toHaveBeenCalled();
   });
 });

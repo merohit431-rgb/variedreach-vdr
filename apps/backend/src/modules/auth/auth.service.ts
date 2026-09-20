@@ -18,6 +18,7 @@ import { describeUserAgent, parseUserAgent } from '../../common/utils/device.uti
 import { resolveApproximateLocation } from '../../common/utils/geo-ip.util';
 import { normalizeEmail } from '../../common/utils/email.util';
 import { isMfaRequiredForUser, MANDATORY_MFA_ROLES } from '../../common/constants/mfa.constants';
+import { isSubscriptionLapsed } from '../../common/utils/subscription.util';
 import { LoginDto } from './dto/login.dto';
 import { JwtPayload, AuthenticatedUser } from './types/jwt-payload.interface';
 
@@ -205,15 +206,17 @@ export class AuthService {
     if (user.role !== 'SUPER_ADMIN') {
       const allMemberships = await this.prisma.organisationMembership.findMany({
         where: { userId: user.id, status: 'ACTIVE' },
-        include: { organisation: { select: { name: true, status: true, deletedAt: true } } },
+        include: { organisation: { include: { subscription: true } } },
       });
-      // A suspended/archived org's membership must not appear as a workspace
-      // choice, and must never silently fall through to the "zero
-      // memberships" legacy-column path below (that path exists for the
-      // pre-migration-backfill window, not for "every org this user belongs
-      // to happens to be suspended") -- so partition explicitly rather than
-      // just filtering.
-      const memberships = allMemberships.filter((m) => m.organisation.status === 'ACTIVE' && !m.organisation.deletedAt);
+      // A suspended/archived org's membership -- or one whose subscription
+      // has lapsed -- must not appear as a workspace choice, and must never
+      // silently fall through to the "zero memberships" legacy-column path
+      // below (that path exists for the pre-migration-backfill window, not
+      // for "every org this user belongs to happens to be blocked") -- so
+      // partition explicitly rather than just filtering.
+      const memberships = allMemberships.filter(
+        (m) => m.organisation.status === 'ACTIVE' && !m.organisation.deletedAt && !isSubscriptionLapsed(m.organisation.subscription),
+      );
       if (memberships.length === 0 && allMemberships.length > 0) {
         throw new UnauthorizedException('Your organisation is not currently active. Contact your administrator.');
       }
@@ -702,13 +705,16 @@ export class AuthService {
     if (session.user.role !== 'SUPER_ADMIN' && session.organisationId) {
       const membership = await this.prisma.organisationMembership.findUnique({
         where: { userId_organisationId: { userId: session.user.id, organisationId: session.organisationId } },
-        include: { organisation: true },
+        include: { organisation: { include: { subscription: true } } },
       });
       if (!membership || membership.status !== 'ACTIVE') {
         throw new UnauthorizedException('Session is no longer valid');
       }
       if (!membership.organisation || membership.organisation.deletedAt || membership.organisation.status !== 'ACTIVE') {
         throw new UnauthorizedException('This organisation is not currently active');
+      }
+      if (isSubscriptionLapsed(membership.organisation.subscription)) {
+        throw new UnauthorizedException('This organisation\'s subscription is not active');
       }
       role = membership.role;
       organisationId = membership.organisationId;
@@ -755,13 +761,16 @@ export class AuthService {
 
     const membership = await this.prisma.organisationMembership.findUnique({
       where: { userId_organisationId: { userId: user.id, organisationId } },
-      include: { organisation: true },
+      include: { organisation: { include: { subscription: true } } },
     });
     if (!membership || membership.status !== 'ACTIVE') {
       throw new UnauthorizedException('You are not a member of that organisation');
     }
     if (!membership.organisation || membership.organisation.deletedAt || membership.organisation.status !== 'ACTIVE') {
       throw new UnauthorizedException('This organisation is not currently active');
+    }
+    if (isSubscriptionLapsed(membership.organisation.subscription)) {
+      throw new UnauthorizedException('This organisation\'s subscription is not active');
     }
 
     await this.enforceConcurrentSessionLimit(user.id);
@@ -806,13 +815,16 @@ export class AuthService {
   async switchWorkspace(actor: AuthenticatedUser, organisationId: string, meta: RequestMeta): Promise<{ accessToken: string; refreshToken: string; refreshExpiresAt: Date; user: PublicUser }> {
     const membership = await this.prisma.organisationMembership.findUnique({
       where: { userId_organisationId: { userId: actor.id, organisationId } },
-      include: { organisation: true },
+      include: { organisation: { include: { subscription: true } } },
     });
     if (!membership || membership.status !== 'ACTIVE') {
       throw new UnauthorizedException('You are not a member of that organisation');
     }
     if (!membership.organisation || membership.organisation.deletedAt || membership.organisation.status !== 'ACTIVE') {
       throw new UnauthorizedException('This organisation is not currently active');
+    }
+    if (isSubscriptionLapsed(membership.organisation.subscription)) {
+      throw new UnauthorizedException('This organisation\'s subscription is not active');
     }
 
     const { accessToken, refreshToken, refreshExpiresAt } = await this.issueTokens(

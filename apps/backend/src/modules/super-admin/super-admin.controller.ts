@@ -9,6 +9,7 @@ import { InvoicePdfService } from '../billing/invoice-pdf.service';
 import { UpdateOrgDto } from './dto/update-org.dto';
 import { SetOrgStatusDto } from './dto/set-org-status.dto';
 import { ArchiveOrgDto } from './dto/archive-org.dto';
+import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
 
 @Controller({ path: 'super-admin', version: '1' })
 @Roles(UserRole.SUPER_ADMIN)
@@ -63,6 +64,15 @@ export class SuperAdminController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.service.archiveOrganisation(id, dto.confirmName, user.id);
+  }
+
+  @Patch('organisations/:id/subscription')
+  updateSubscription(
+    @Param('id') id: string,
+    @Body() dto: UpdateSubscriptionDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.service.updateSubscription(id, dto, user.id);
   }
 
   @Get('registrations')

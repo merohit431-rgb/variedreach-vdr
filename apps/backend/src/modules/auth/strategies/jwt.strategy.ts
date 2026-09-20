@@ -4,6 +4,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AuthenticatedUser, JwtPayload } from '../types/jwt-payload.interface';
+import { isSubscriptionLapsed } from '../../../common/utils/subscription.util';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -48,7 +49,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // takes effect on the very next request, same guarantee as before.
     const membership = await this.prisma.organisationMembership.findUnique({
       where: { userId_organisationId: { userId: user.id, organisationId: payload.organisationId } },
-      include: { organisation: true },
+      include: { organisation: { include: { subscription: true } } },
     });
 
     if (!membership || membership.status !== 'ACTIVE') {
@@ -60,6 +61,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // at once rather than needing each one suspended individually.
     if (!membership.organisation || membership.organisation.deletedAt || membership.organisation.status !== 'ACTIVE') {
       throw new UnauthorizedException('This organisation is not currently active');
+    }
+
+    // A lapsed subscription is a separate path to the same effective
+    // lockout as org.status = SUSPENDED -- see isSubscriptionLapsed's own
+    // comment for why an org with no subscription row is never blocked here.
+    if (isSubscriptionLapsed(membership.organisation.subscription)) {
+      throw new UnauthorizedException('This organisation\'s subscription is not active');
     }
 
     return {
