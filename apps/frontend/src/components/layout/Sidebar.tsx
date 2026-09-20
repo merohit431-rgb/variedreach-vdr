@@ -86,6 +86,7 @@ function getAppNavSections(role: UserRole): NavSection[] {
     sections.push({
       label: 'Administration',
       items: [
+        { href: '/team', label: 'Team', icon: Users },
         { href: '/roles', label: 'Roles & Permissions', icon: ShieldCheck },
         { href: '/settings/billing', label: 'Billing', icon: Receipt },
       ],

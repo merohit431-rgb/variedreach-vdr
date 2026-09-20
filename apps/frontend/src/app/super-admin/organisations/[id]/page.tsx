@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Save } from 'lucide-react';
 import { useSuperAdmin } from '@/hooks/use-super-admin';
+import { TeamPanel } from '@/components/team/TeamPanel';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -11,9 +12,6 @@ import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { TableContainer, Table, Thead, Tbody, Tr, Th, Td } from '@/components/ui/Table';
 
-const ROLE_TONE: Record<string, 'brand' | 'neutral' | 'warning'> = {
-  ORG_ADMIN: 'brand', RP_LIQUIDATOR: 'warning',
-};
 const STATUS_TONE: Record<string, 'success' | 'warning' | 'danger' | 'neutral'> = {
   ACTIVE: 'success', PAST_DUE: 'warning', CANCELLED: 'danger', EXPIRED: 'neutral', PENDING_INVITE: 'neutral',
 };
@@ -141,31 +139,8 @@ export default function OrgDetailPage() {
         </Card>
       </div>
 
-      {/* Users */}
-      <Card>
-        <CardHeader><CardTitle>Users ({org.users.length})</CardTitle></CardHeader>
-        <TableContainer className="border-0 shadow-none rounded-none">
-          <Table>
-            <Thead><tr>
-              <Th>Name / Email</Th><Th>Role</Th><Th>Status</Th><Th>Last login</Th><Th>Joined</Th>
-            </tr></Thead>
-            <Tbody>
-              {org.users.map((u: any) => (
-                <Tr key={u.id}>
-                  <Td>
-                    <p className="font-medium text-slate-800">{u.firstName} {u.lastName}</p>
-                    <p className="text-xs text-slate-400">{u.email}</p>
-                  </Td>
-                  <Td><Badge tone={ROLE_TONE[u.role] ?? 'neutral'}>{u.role}</Badge></Td>
-                  <Td><Badge tone={STATUS_TONE[u.status] ?? 'neutral'}>{u.status}</Badge></Td>
-                  <Td className="text-slate-500 whitespace-nowrap">{formatDate(u.lastLoginAt)}</Td>
-                  <Td className="text-slate-500 whitespace-nowrap">{formatDate(u.createdAt)}</Td>
-                </Tr>
-              ))}
-            </Tbody>
-          </Table>
-        </TableContainer>
-      </Card>
+      {/* Team -- membership-scoped (post multi-org), with suspend/reinstate */}
+      <TeamPanel organisationId={params.id as string} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Recent Invoices */}
