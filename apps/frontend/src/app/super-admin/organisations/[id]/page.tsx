@@ -201,6 +201,14 @@ export default function OrgDetailPage() {
   if (!org) return <p className="text-sm text-rose-600">Organisation not found.</p>;
 
   const hasActiveSubscription = org.subscription?.status === 'ACTIVE' && new Date(org.subscription.currentPeriodEnd) > new Date();
+  // org.subscription.status is the raw stored value -- nothing flips it to
+  // EXPIRED when currentPeriodEnd passes (no scheduled job does that), so a
+  // subscription whose period already ended still reads 'ACTIVE' here. The
+  // Status badge below must show the same effective state hasActiveSubscription
+  // already derives, or it contradicts the org list page's own status pill
+  // (which already gets this right) and the backend's isSubscriptionLapsed().
+  const displaySubStatus =
+    org.subscription?.status === 'ACTIVE' && !hasActiveSubscription ? 'EXPIRED' : org.subscription?.status;
 
   return (
     <div className="space-y-6">
@@ -236,7 +244,7 @@ export default function OrgDetailPage() {
           <CardContent className="space-y-3 text-sm">
             {org.subscription ? (
               <>
-                <Row label="Status"><Badge tone={STATUS_TONE[org.subscription.status] ?? 'neutral'}>{org.subscription.status}</Badge></Row>
+                <Row label="Status"><Badge tone={STATUS_TONE[displaySubStatus] ?? 'neutral'}>{displaySubStatus}</Badge></Row>
                 <Row label="Plan">{org.subscription.planSlug}</Row>
                 <Row label="Cycle">{org.subscription.billingCycle}</Row>
                 <Row label="Storage">{org.subscription.storageGb} GB</Row>

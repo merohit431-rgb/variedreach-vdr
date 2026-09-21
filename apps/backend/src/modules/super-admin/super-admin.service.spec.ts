@@ -516,3 +516,124 @@ describe('SuperAdminService.getOrganisationStorageDetail', () => {
     expect(result.breakdown.priorVersions).toEqual({ bytes: '0' });
   });
 });
+
+// Regression coverage for a real bug found on production: nothing ever
+// flips a Subscription's stored status column to EXPIRED when
+// currentPeriodEnd passes (no scheduled job does that), so a raw
+// `status: 'ACTIVE'` filter/count silently keeps counting a lapsed
+// subscription as active forever -- inflating the Super Admin dashboard's
+// MRR/ARR and "active subscriptions" KPI, and showing a stale ACTIVE badge
+// on the Subscriptions list. Same rule as isSubscriptionLapsed() and the
+// Organisations list page's own status pill.
+function buildRevenueService(overrides: {
+  subscriptionFindMany?: jest.Mock;
+  subscriptionCount?: jest.Mock;
+}) {
+  const prisma = {
+    organisation: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
+    user: { count: jest.fn().mockResolvedValue(0) },
+    subscription: {
+      findMany: overrides.subscriptionFindMany ?? jest.fn().mockResolvedValue([]),
+      count: overrides.subscriptionCount ?? jest.fn().mockResolvedValue(0),
+      groupBy: jest.fn().mockResolvedValue([]),
+    },
+    payment: {
+      aggregate: jest.fn().mockResolvedValue({ _sum: { amountPaisa: 0 } }),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    registration: { count: jest.fn().mockResolvedValue(0), findMany: jest.fn().mockResolvedValue([]) },
+  } as unknown as PrismaService;
+  const service = new SuperAdminService(
+    prisma,
+    {} as AuditLogService,
+    {} as IPaymentProvider,
+    {} as RazorpayPaymentProvider,
+  );
+  return { service, prisma };
+}
+
+describe('SuperAdminService -- subscription date-lapse excluded from MRR/active counts', () => {
+  it('getDashboard() queries active subscriptions with a currentPeriodEnd floor, not status alone', async () => {
+    const subscriptionFindMany = jest.fn().mockResolvedValue([]);
+    const { service } = buildRevenueService({ subscriptionFindMany });
+
+    await service.getDashboard();
+
+    expect(subscriptionFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { status: 'ACTIVE', currentPeriodEnd: { gte: expect.any(Date) } },
+      }),
+    );
+  });
+
+  it('getDashboard()\'s activeSubscriptions KPI reflects the date-filtered list, not a raw status groupBy', async () => {
+    const subscriptionFindMany = jest.fn().mockResolvedValue([
+      { planSlug: 'PROFESSIONAL', storageGb: 12, billingCycle: 'MONTHLY' },
+    ]);
+    const { service } = buildRevenueService({ subscriptionFindMany });
+
+    const result = await service.getDashboard();
+
+    expect(result.kpis.activeSubscriptions).toBe(1);
+  });
+
+  it('getRevenue() queries active subscriptions with the same currentPeriodEnd floor', async () => {
+    const subscriptionFindMany = jest.fn().mockResolvedValue([]);
+    const { service } = buildRevenueService({ subscriptionFindMany });
+
+    await service.getRevenue();
+
+    expect(subscriptionFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { status: 'ACTIVE', currentPeriodEnd: { gte: expect.any(Date) } },
+      }),
+    );
+  });
+
+  it('getSubscriptions() relabels a lapsed-but-ACTIVE-status row as EXPIRED in its own response', async () => {
+    const pastDate = new Date('2020-01-01');
+    const subscriptionFindMany = jest
+      .fn()
+      .mockResolvedValue([{ id: 'sub-1', status: 'ACTIVE', currentPeriodEnd: pastDate, organisation: {} }]);
+    const { service } = buildRevenueService({ subscriptionFindMany });
+
+    const result = await service.getSubscriptions(1, 20);
+
+    expect(result.items[0].status).toBe('EXPIRED');
+  });
+
+  it('getSubscriptions()\'s ACTIVE tab excludes lapsed rows and its EXPIRED tab includes them', async () => {
+    const subscriptionCount = jest.fn().mockResolvedValue(0);
+    const { service } = buildRevenueService({ subscriptionCount });
+
+    await service.getSubscriptions(1, 20, 'ACTIVE');
+    expect(subscriptionCount).toHaveBeenCalledWith({
+      where: { status: 'ACTIVE', currentPeriodEnd: { gte: expect.any(Date) } },
+    });
+
+    await service.getSubscriptions(1, 20, 'EXPIRED');
+    expect(subscriptionCount).toHaveBeenCalledWith({
+      where: { OR: [{ status: 'EXPIRED' }, { status: 'ACTIVE', currentPeriodEnd: { lt: expect.any(Date) } }] },
+    });
+  });
+
+  it('getSubscriptions()\'s statusBreakdown folds lapsed-ACTIVE rows into the EXPIRED count', async () => {
+    // 3rd and 6th calls in Promise.all order are the raw EXPIRED count and
+    // the lapsed-ACTIVE count respectively -- see the method's own
+    // Promise.all ordering (data, total, active, pastDue, cancelled,
+    // expired, lapsedActive).
+    const subscriptionCount = jest
+      .fn()
+      .mockResolvedValueOnce(0) // total
+      .mockResolvedValueOnce(5) // active (not lapsed)
+      .mockResolvedValueOnce(1) // pastDue
+      .mockResolvedValueOnce(2) // cancelled
+      .mockResolvedValueOnce(3) // expired (raw status)
+      .mockResolvedValueOnce(4); // lapsed-but-ACTIVE-status
+    const { service } = buildRevenueService({ subscriptionCount });
+
+    const result = await service.getSubscriptions(1, 20);
+
+    expect(result.statusBreakdown).toEqual({ ACTIVE: 5, PAST_DUE: 1, CANCELLED: 2, EXPIRED: 7 });
+  });
+});

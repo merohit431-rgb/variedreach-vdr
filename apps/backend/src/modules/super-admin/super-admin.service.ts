@@ -63,8 +63,13 @@ export class SuperAdminService {
     ] = await Promise.all([
       this.prisma.organisation.count(),
       this.prisma.user.count({ where: { deletedAt: null } }),
+      // status: 'ACTIVE' alone isn't enough -- nothing flips a subscription's
+      // stored status to EXPIRED when currentPeriodEnd passes (no scheduled
+      // job does that), so without the date condition a subscription that
+      // lapsed months ago still counts toward MRR/ARR forever. Same rule as
+      // isSubscriptionLapsed() and the org list page's own status pill.
       this.prisma.subscription.findMany({
-        where: { status: 'ACTIVE' },
+        where: { status: 'ACTIVE', currentPeriodEnd: { gte: now } },
         select: { planSlug: true, storageGb: true, billingCycle: true },
       }),
       this.prisma.organisation.count({ where: { createdAt: { gte: startOfMonth } } }),
@@ -116,7 +121,10 @@ export class SuperAdminService {
         arr: mrr * 12,
         totalRevenue: totalRevenue._sum.amountPaisa ?? 0,
         newOrgsThisMonth,
-        activeSubscriptions: statusMap['ACTIVE'] ?? 0,
+        // The already date-filtered list, not statusMap['ACTIVE'] -- the raw
+        // groupBy's 'ACTIVE' bucket still includes subscriptions whose
+        // currentPeriodEnd has already passed (see the comment above).
+        activeSubscriptions: activeSubscriptions.length,
         cancelledSubscriptions: statusMap['CANCELLED'] ?? 0,
         pastDueSubscriptions: statusMap['PAST_DUE'] ?? 0,
       },
@@ -722,9 +730,26 @@ export class SuperAdminService {
     await this.prisma.payment.update({ where: { id: paymentId }, data: { metadata } });
   }
 
+  // 'ACTIVE' means status is ACTIVE *and* currentPeriodEnd hasn't passed --
+  // same rule as isSubscriptionLapsed(). Nothing ever flips a subscription's
+  // stored status to EXPIRED when its period ends (no scheduled job does
+  // that), so a raw status filter/count silently treats a lapsed
+  // subscription as still active. The ACTIVE bucket excludes those; the
+  // EXPIRED bucket includes them alongside genuinely EXPIRED-status rows.
   async getSubscriptions(page: number, limit: number, status?: string) {
-    const where = status ? { status: status as any } : {};
-    const [data, total, statusGroups] = await Promise.all([
+    const now = new Date();
+    const lapsedActiveWhere = { status: 'ACTIVE' as const, currentPeriodEnd: { lt: now } };
+
+    const where: any =
+      status === 'ACTIVE'
+        ? { status: 'ACTIVE', currentPeriodEnd: { gte: now } }
+        : status === 'EXPIRED'
+          ? { OR: [{ status: 'EXPIRED' }, lapsedActiveWhere] }
+          : status
+            ? { status }
+            : {};
+
+    const [data, total, activeCount, pastDueCount, cancelledCount, expiredCount, lapsedActiveCount] = await Promise.all([
       this.prisma.subscription.findMany({
         where,
         skip: (page - 1) * limit,
@@ -735,13 +760,31 @@ export class SuperAdminService {
         },
       }),
       this.prisma.subscription.count({ where }),
-      this.prisma.subscription.groupBy({ by: ['status'], _count: true }),
+      this.prisma.subscription.count({ where: { status: 'ACTIVE', currentPeriodEnd: { gte: now } } }),
+      this.prisma.subscription.count({ where: { status: 'PAST_DUE' } }),
+      this.prisma.subscription.count({ where: { status: 'CANCELLED' } }),
+      this.prisma.subscription.count({ where: { status: 'EXPIRED' } }),
+      this.prisma.subscription.count({ where: lapsedActiveWhere }),
     ]);
 
-    const statusMap: Record<string, number> = {};
-    for (const s of statusGroups) statusMap[s.status] = s._count;
+    // Correct the individual rows the same way, so a row's own badge never
+    // contradicts the tab it's filed under.
+    const items = data.map((sub) =>
+      sub.status === 'ACTIVE' && sub.currentPeriodEnd < now ? { ...sub, status: 'EXPIRED' as const } : sub,
+    );
 
-    return { items: data, total, page, limit, statusBreakdown: statusMap };
+    return {
+      items,
+      total,
+      page,
+      limit,
+      statusBreakdown: {
+        ACTIVE: activeCount,
+        PAST_DUE: pastDueCount,
+        CANCELLED: cancelledCount,
+        EXPIRED: expiredCount + lapsedActiveCount,
+      },
+    };
   }
 
   async getInvoices(page: number, limit: number) {
@@ -770,8 +813,10 @@ export class SuperAdminService {
         where: { status: 'SUCCESSFUL', paidAt: { gte: twelveMonthsAgo } },
         select: { amountPaisa: true, paidAt: true },
       }),
+      // Same date-lapse gap as getDashboard() -- without currentPeriodEnd,
+      // this silently counts revenue from subscriptions that already lapsed.
       this.prisma.subscription.findMany({
-        where: { status: 'ACTIVE' },
+        where: { status: 'ACTIVE', currentPeriodEnd: { gte: now } },
         select: { planSlug: true, storageGb: true, billingCycle: true },
       }),
       this.prisma.payment.aggregate({
