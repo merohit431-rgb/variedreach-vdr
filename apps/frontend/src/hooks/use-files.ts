@@ -121,6 +121,32 @@ export function useDeleteFile(dataRoomId: string) {
   });
 }
 
+export interface BulkDeleteResult {
+  deletedIds: string[];
+  notFoundIds: string[];
+}
+
+// One real request instead of a client-side loop of single deletes: atomic
+// at the SQL level, one audit-log entry, and a structured result so a
+// partial mismatch (a file someone else already deleted a moment ago)
+// is reported precisely instead of surfacing as one generic error.
+export function useBulkDeleteFiles(dataRoomId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (fileIds: string[]) => {
+      const response = await apiClient.post<{ data: BulkDeleteResult }>(
+        `/data-rooms/${dataRoomId}/files/bulk-delete`,
+        { fileIds },
+      );
+      return response.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['data-rooms', dataRoomId, 'files'] });
+      queryClient.invalidateQueries({ queryKey: ['data-rooms', dataRoomId] });
+    },
+  });
+}
+
 export function useFileVersions(dataRoomId: string, fileId: string | null) {
   return useQuery({
     queryKey: ['data-rooms', dataRoomId, 'files', fileId, 'versions'],

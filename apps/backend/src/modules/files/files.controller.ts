@@ -17,6 +17,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags } from '@nestjs/swagger';
 import { diskStorage } from 'multer';
 import { mkdir } from 'fs/promises';
@@ -31,6 +32,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { sendFileResponse } from '../../common/utils/http-file-response.util';
 import { BulkDownloadDto } from './dto/bulk-download.dto';
+import { BulkDeleteDto } from './dto/bulk-delete.dto';
 import { IsOptional, IsString } from 'class-validator';
 
 class FolderDownloadDto {
@@ -113,6 +115,22 @@ export class FilesController {
     return this.filesService.remove(dataRoomId, fileId, user, req.ip ?? '0.0.0.0');
   }
 
+  // Bulk operations are inherently infrequent in normal use -- a much
+  // tighter cap than single-file routes bounds the highest-impact scripted
+  // abuse case (mass export or mass delete in one request) without
+  // affecting anyone using the product normally.
+  @Throttle({ global: { ttl: 60, limit: 20 } })
+  @Post('bulk-delete')
+  @HttpCode(HttpStatus.OK)
+  bulkDelete(
+    @Param('dataRoomId') dataRoomId: string,
+    @Body() dto: BulkDeleteDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
+  ) {
+    return this.filesService.bulkRemove(dataRoomId, dto.fileIds, user, req.ip ?? '0.0.0.0');
+  }
+
   @Post(':fileId/versions')
   @UseInterceptors(
     FileInterceptor('file', { storage: uploadDiskStorage, limits: { fileSize: MAX_UPLOAD_SIZE_BYTES } }),
@@ -138,6 +156,10 @@ export class FilesController {
     return this.filesService.listVersions(dataRoomId, fileId, user, req.ip ?? '0.0.0.0');
   }
 
+  // Content-viewing routes are hit constantly during normal browsing, so
+  // this stays generous -- it exists to bound scripted mass-scraping, not
+  // to slow down a person clicking through files.
+  @Throttle({ global: { ttl: 60, limit: 120 } })
   @Get(':fileId/preview')
   async preview(
     @Param('dataRoomId') dataRoomId: string,
@@ -156,6 +178,7 @@ export class FilesController {
     sendFileResponse(res, content, 'inline');
   }
 
+  @Throttle({ global: { ttl: 60, limit: 120 } })
   @Get(':fileId/download')
   async download(
     @Param('dataRoomId') dataRoomId: string,
@@ -174,6 +197,7 @@ export class FilesController {
     sendFileResponse(res, content, 'attachment');
   }
 
+  @Throttle({ global: { ttl: 60, limit: 120 } })
   @Get(':fileId/versions/:versionId/download')
   async downloadVersion(
     @Param('dataRoomId') dataRoomId: string,
@@ -194,6 +218,7 @@ export class FilesController {
     sendFileResponse(res, content, 'attachment');
   }
 
+  @Throttle({ global: { ttl: 60, limit: 20 } })
   @Post('bulk-download')
   async bulkDownload(
     @Param('dataRoomId') dataRoomId: string,
@@ -214,6 +239,7 @@ export class FilesController {
     res.send(buffer);
   }
 
+  @Throttle({ global: { ttl: 60, limit: 20 } })
   @Post('folder-download')
   @HttpCode(HttpStatus.OK)
   async folderDownload(

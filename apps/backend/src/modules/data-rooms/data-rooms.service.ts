@@ -93,6 +93,19 @@ export class DataRoomsService {
     return this.prisma.dataRoom.findMany({ where, orderBy: { createdAt: 'desc' } });
   }
 
+  // The only way a deleted room is discoverable at all -- findAll/findOne
+  // both filter deletedAt: null, so without this there'd be no way to even
+  // find the id to pass to restore().
+  async findDeleted(actor: AuthenticatedUser) {
+    if (!ADMIN_ROLES.includes(actor.role)) {
+      throw new ForbiddenException('You do not have permission to view deleted data rooms');
+    }
+    return this.prisma.dataRoom.findMany({
+      where: { organisationId: actor.organisationId, deletedAt: { not: null } },
+      orderBy: { deletedAt: 'desc' },
+    });
+  }
+
   async findOne(id: string, actor: AuthenticatedUser) {
     const dataRoom = await this.prisma.dataRoom.findFirst({
       where: { id, organisationId: actor.organisationId, deletedAt: null },
@@ -200,6 +213,38 @@ export class DataRoomsService {
       resourceType: 'DataRoom',
       resourceId: id,
     });
+  }
+
+  // Deliberately doesn't reuse assertManager() -- it filters deletedAt: null,
+  // which would make a deleted room permanently unreachable through it,
+  // including for the one operation that exists specifically to undo that.
+  async restore(id: string, actor: AuthenticatedUser) {
+    if (!ADMIN_ROLES.includes(actor.role)) {
+      throw new ForbiddenException('You do not have permission to manage this data room');
+    }
+
+    const dataRoom = await this.prisma.dataRoom.findFirst({
+      where: { id, organisationId: actor.organisationId },
+    });
+    if (!dataRoom) {
+      throw new NotFoundException('Data room not found');
+    }
+    if (!dataRoom.deletedAt) {
+      throw new BadRequestException('This data room is not deleted');
+    }
+
+    const restored = await this.prisma.dataRoom.update({ where: { id }, data: { deletedAt: null } });
+
+    await this.auditLogService.record({
+      action: 'DATA_ROOM_UPDATED',
+      dataRoomId: id,
+      userId: actor.id,
+      resourceType: 'DataRoom',
+      resourceId: id,
+      metadata: { restored: true },
+    });
+
+    return restored;
   }
 
   async setArchived(id: string, archived: boolean, actor: AuthenticatedUser) {

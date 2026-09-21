@@ -75,7 +75,23 @@ export class WatermarkService {
     if (IMAGE_EXTENSIONS.includes(normalized)) {
       return this.applyToImage(buffer, text, opacity, diagonal);
     }
-    if (normalized === 'txt' || normalized === 'csv') {
+    // .eml is a plain-text MIME message (RFC 822/2822) -- safe to prepend a
+    // banner exactly like txt/csv. This does mean a watermarked .eml is no
+    // longer strictly re-importable into a mail client (the banner sits
+    // before its From:/To:/Subject: headers), but that's the same trade-off
+    // every other format already makes -- the watermarked copy is provably
+    // different from the pristine original by design.
+    //
+    // .msg is deliberately NOT handled here. It's a binary OLE2 compound
+    // file, not text -- prepending or otherwise touching its bytes without
+    // a real OLE-aware parser would corrupt it, which is worse than an
+    // unwatermarked-but-intact download. Confirmed during the production-
+    // readiness audit as a real, current gap: a .msg file downloads/
+    // previews with no watermark at all. Properly fixing it needs a
+    // dedicated .msg parsing library (e.g. to extract and re-embed a
+    // watermark note, or convert to .eml/PDF first) -- a real dependency
+    // decision, not something to add silently as a side effect of this fix.
+    if (normalized === 'txt' || normalized === 'csv' || normalized === 'eml') {
       return this.applyToText(buffer, text);
     }
 

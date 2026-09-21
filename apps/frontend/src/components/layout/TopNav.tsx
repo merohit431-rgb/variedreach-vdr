@@ -125,7 +125,7 @@ function WorkspaceSearch({ roomId }: { roomId: string }) {
         type="search"
         value={search}
         onChange={(e) => handleChange(e.target.value)}
-        placeholder="Search files, folders or members…"
+        placeholder="Search files by name…"
         className="w-full rounded-lg border border-app-border bg-app-s2 py-2 pl-9 pr-12 text-sm text-app-text placeholder:text-app-t4 focus:border-app-primary focus:outline-none focus:ring-2 focus:ring-app-primary/20"
       />
       <kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded border border-app-border bg-app-s3 px-1.5 py-0.5 text-[10px] font-semibold text-app-t4">

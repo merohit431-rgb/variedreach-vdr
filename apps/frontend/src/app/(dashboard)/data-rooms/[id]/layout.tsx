@@ -14,6 +14,9 @@ import {
   FileUp,
   UserPlus,
   History,
+  Pencil,
+  Check,
+  X,
 } from 'lucide-react';
 import {
   useDataRoom,
@@ -21,6 +24,7 @@ import {
   useDataRoomStats,
   useSetDataRoomArchived,
   useDeleteDataRoom,
+  useUpdateDataRoom,
 } from '@/hooks/use-data-rooms';
 import { useAuditLogs } from '@/hooks/use-audit-logs';
 import {
@@ -262,10 +266,27 @@ export default function DataRoomLayout({ children }: { children: React.ReactNode
   const { data: stats } = useDataRoomStats(id);
   const setArchived = useSetDataRoomArchived(id);
   const deleteDataRoom = useDeleteDataRoom();
+  const updateDataRoom = useUpdateDataRoom(id);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editName, setEditName] = useState('');
 
   const canManage = Boolean(access?.canManageRoom);
+
+  async function handleRename() {
+    const trimmed = editName.trim();
+    if (!trimmed || trimmed === dataRoom?.name) {
+      setIsEditingName(false);
+      return;
+    }
+    try {
+      await updateDataRoom.mutateAsync({ name: trimmed });
+      setIsEditingName(false);
+    } catch {
+      setError('Failed to rename data room. Please try again.');
+    }
+  }
 
   if (isLoading || !dataRoom) {
     return <WorkspaceSkeleton />;
@@ -292,9 +313,53 @@ export default function DataRoomLayout({ children }: { children: React.ReactNode
         {/* Workspace header */}
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="truncate text-2xl font-bold tracking-tight text-app-text">
-              {dataRoom.name}
-            </h1>
+            {isEditingName ? (
+              <div className="flex items-center gap-1.5">
+                <input
+                  autoFocus
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleRename();
+                    if (e.key === 'Escape') setIsEditingName(false);
+                  }}
+                  className="min-w-0 flex-1 rounded-lg border border-app-border2 bg-app-s2 px-2 py-1 text-2xl font-bold tracking-tight text-app-text focus:border-app-primary focus:outline-none"
+                />
+                <button
+                  onClick={handleRename}
+                  disabled={updateDataRoom.isPending}
+                  className="flex-shrink-0 rounded-lg p-1.5 text-emerald-400 hover:bg-app-s2 disabled:opacity-50"
+                  aria-label="Save name"
+                >
+                  <Check className="h-4 w-4" aria-hidden="true" />
+                </button>
+                <button
+                  onClick={() => setIsEditingName(false)}
+                  className="flex-shrink-0 rounded-lg p-1.5 text-app-t3 hover:bg-app-s2"
+                  aria-label="Cancel"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            ) : (
+              <div className="group flex items-center gap-1.5">
+                <h1 className="truncate text-2xl font-bold tracking-tight text-app-text">
+                  {dataRoom.name}
+                </h1>
+                {canManage && (
+                  <button
+                    onClick={() => {
+                      setEditName(dataRoom.name);
+                      setIsEditingName(true);
+                    }}
+                    className="flex-shrink-0 rounded-lg p-1 text-app-t4 opacity-0 transition-opacity hover:bg-app-s2 hover:text-app-t2 group-hover:opacity-100"
+                    aria-label="Rename data room"
+                  >
+                    <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+            )}
             <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
               <span className={cn('rounded-md px-2 py-0.5 text-[11px] font-bold', typePill)}>
                 {DATA_ROOM_TYPE_LABELS[dataRoom.type as DataRoomType] ?? dataRoom.type}

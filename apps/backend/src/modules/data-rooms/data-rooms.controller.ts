@@ -39,6 +39,14 @@ export class DataRoomsController {
     return this.dataRoomsService.findAll(user);
   }
 
+  // Must come before @Get(':id') -- otherwise Nest would try to load a data
+  // room whose id is literally the string "deleted".
+  @Roles(...MANAGER_ROLES)
+  @Get('deleted')
+  findDeleted(@CurrentUser() user: AuthenticatedUser) {
+    return this.dataRoomsService.findDeleted(user);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.dataRoomsService.findOne(id, user);
@@ -79,6 +87,12 @@ export class DataRoomsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.dataRoomsService.remove(id, user);
+  }
+
+  @Roles(...MANAGER_ROLES)
+  @Post(':id/restore')
+  restore(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.dataRoomsService.restore(id, user);
   }
 
   @Roles(...MANAGER_ROLES)

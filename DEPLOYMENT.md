@@ -65,13 +65,23 @@ cd apps/backend
 docker compose -f ../../docker-compose.yml -f ../../docker-compose.prod.yml exec backend sh -c \
   "cd apps/backend && npx prisma db push"
 docker compose -f ../../docker-compose.yml -f ../../docker-compose.prod.yml exec backend sh -c \
+  "cd apps/backend && npm run prisma:triggers"
+docker compose -f ../../docker-compose.yml -f ../../docker-compose.prod.yml exec backend sh -c \
   "cd apps/backend && npx prisma db seed"
 ```
 
 (The `cd apps/backend` inside the exec is required — the container's WORKDIR is `/app`, but the
 Prisma schema lives at `apps/backend/prisma/`. Use `db push`, not `migrate deploy` — there is no
 `prisma/migrations` directory in this repo at all, so `migrate deploy` runs as a silent no-op and
-leaves the database schema-less. The schema has always been synced with `db push`.)
+leaves the database schema-less. The schema has always been synced with `db push`.
+
+**`prisma:triggers` is not optional** — `db push` only syncs what's representable in
+`schema.prisma`, and the append-only triggers on `audit_logs`/`watermarks`/`file_versions` (see
+`prisma/sql/append_only_triggers.sql`) aren't. Skipping this step leaves those tables mutable at
+the database level with no error or warning — confirmed a real, standing gap during the September
+2026 production-readiness audit. The script is idempotent (`CREATE OR REPLACE FUNCTION` +
+`DROP TRIGGER IF EXISTS` before each `CREATE TRIGGER`), so re-running it here even when nothing
+changed is always safe.)
 
 ## 4. SSL (Let's Encrypt)
 
@@ -281,7 +291,12 @@ even when only one app changed. If the Prisma schema changed:
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend sh -c \
   "cd apps/backend && npx prisma db push"
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend sh -c \
+  "cd apps/backend && npm run prisma:triggers"
 ```
+
+`prisma:triggers` after every `db push` — not just the first one — per §3's note: it's idempotent
+and `db push` never applies it on its own.
 
 As of this version, all changes land on production through the staging promotion flow — see
 [STAGING.md](STAGING.md) — rather than `git pull`+rebuild directly against `main` on the VPS. See

@@ -10,6 +10,7 @@ import {
   useFiles,
   useUpdateFile,
   useDeleteFile,
+  useBulkDeleteFiles,
   downloadFile,
   bulkDownloadFiles,
   FileRecord,
@@ -154,6 +155,7 @@ export function FileBrowser({
   const { data: files, isLoading } = useFiles(dataRoomId, { folderId, search });
   const updateFile = useUpdateFile(dataRoomId);
   const deleteFile = useDeleteFile(dataRoomId);
+  const bulkDeleteFiles = useBulkDeleteFiles(dataRoomId);
   const createFolder = useCreateFolder(dataRoomId);
   const isMobile = useMediaQuery('(max-width: 640px)');
   const nameMaxLength = isMobile ? MOBILE_NAME_MAX_LENGTH : DESKTOP_NAME_MAX_LENGTH;
@@ -369,8 +371,12 @@ export function FileBrowser({
     setError(null);
     const idsToDelete = Array.from(selectedIds);
     try {
-      for (const id of idsToDelete) {
-        await deleteFile.mutateAsync(id);
+      // One request, not a loop of single deletes -- see useBulkDeleteFiles.
+      const result = await bulkDeleteFiles.mutateAsync(idsToDelete);
+      if (result.notFoundIds.length > 0) {
+        setError(
+          `Deleted ${result.deletedIds.length} of ${idsToDelete.length} file${idsToDelete.length === 1 ? '' : 's'} — ${result.notFoundIds.length} were already removed or not found.`,
+        );
       }
       clearSelection();
       if (detailsFile && idsToDelete.includes(detailsFile.id)) setDetailsFile(null);
@@ -652,8 +658,17 @@ export function FileBrowser({
             </div>
           ) : (
             /* List view */
-            <div className="overflow-hidden rounded-xl border border-app-border bg-app-s1 shadow-dark-soft">
-              <table className="w-full table-fixed text-left text-sm">
+            <div className="overflow-x-auto rounded-xl border border-app-border bg-app-s1 shadow-dark-soft">
+              {/* table-fixed with an unconstrained Name column let Size (w-24)
+                  and Modified (w-40) -- neither hidden below sm, unlike
+                  Type/Uploaded-by/Version -- eat the fixed budget on a phone
+                  screen, squeezing Name to near-zero width until its text
+                  visually collided with the neighboring columns. min-w-0 on
+                  the table (Tailwind default is min-w-auto) plus a real
+                  min-width on Name gives it a hard floor; overflow-x-auto on
+                  the wrapper above lets the table scroll horizontally past
+                  that floor instead of crushing it. */}
+              <table className="w-full min-w-[640px] table-fixed text-left text-sm">
                 <thead className="border-b border-app-border bg-app-s2/60 text-xs">
                   <tr>
                     {canDownload && (
@@ -667,7 +682,7 @@ export function FileBrowser({
                       </th>
                     )}
                     <th
-                      className="cursor-pointer select-none px-4 py-3 font-semibold uppercase tracking-wide text-app-t3 hover:text-app-t2"
+                      className="min-w-[180px] cursor-pointer select-none px-4 py-3 font-semibold uppercase tracking-wide text-app-t3 hover:text-app-t2"
                       onClick={() => handleSortHeader('name')}
                     >
                       Name
@@ -725,7 +740,7 @@ export function FileBrowser({
                             />
                           </td>
                         )}
-                        <td className="px-4 py-3">
+                        <td className="min-w-[180px] px-4 py-3">
                           <div className="flex items-center gap-2.5">
                             <FileIcon className="h-4 w-4 flex-shrink-0 text-app-t3" aria-hidden="true" />
                             <Tooltip label={file.name} side="top">

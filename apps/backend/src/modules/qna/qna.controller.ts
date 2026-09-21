@@ -12,6 +12,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { QnaService } from './qna.service';
 import { AskQuestionDto } from './dto/ask-question.dto';
@@ -35,6 +36,9 @@ export class QnaController {
     return this.qnaService.list(dataRoomId, user, search, req.ip ?? '0.0.0.0');
   }
 
+  // Spam/abuse prevention -- an ordinary user asks a handful of questions
+  // per session, not dozens per minute.
+  @Throttle({ global: { ttl: 60, limit: 20 } })
   @Post()
   ask(
     @Param('dataRoomId') dataRoomId: string,
@@ -56,6 +60,7 @@ export class QnaController {
     return this.qnaService.updateStatus(dataRoomId, questionId, dto.status, user, req.ip ?? '0.0.0.0');
   }
 
+  @Throttle({ global: { ttl: 60, limit: 20 } })
   @Post(':questionId/answers')
   answer(
     @Param('dataRoomId') dataRoomId: string,

@@ -20,6 +20,7 @@ export interface DataRoom {
   endDate: string | null;
   storageUsedBytes: string;
   createdAt: string;
+  deletedAt?: string | null;
 }
 
 export interface CreateDataRoomInput {
@@ -36,6 +37,36 @@ export function useDataRooms() {
     queryFn: async () => {
       const response = await apiClient.get<{ data: DataRoom[] }>('/data-rooms');
       return response.data.data;
+    },
+  });
+}
+
+// findAll/findOne both filter deletedAt: null, so this is the only way a
+// deleted room is discoverable at all -- without it there's no id to pass
+// to useRestoreDataRoom. Manager-only on the backend (@Roles), so a 403
+// here for a non-manager is expected, not a bug -- callers should only
+// mount this for canManage-equivalent users.
+export function useDeletedDataRooms(enabled: boolean) {
+  return useQuery({
+    queryKey: ['data-rooms', 'deleted'],
+    queryFn: async () => {
+      const response = await apiClient.get<{ data: DataRoom[] }>('/data-rooms/deleted');
+      return response.data.data;
+    },
+    enabled,
+  });
+}
+
+export function useRestoreDataRoom() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiClient.post<{ data: DataRoom }>(`/data-rooms/${id}/restore`);
+      return response.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['data-rooms'] });
+      queryClient.invalidateQueries({ queryKey: ['data-rooms', 'deleted'] });
     },
   });
 }

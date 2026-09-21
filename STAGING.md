@@ -82,6 +82,9 @@ docker compose -p variedreach-vdr-staging \
 
 # 5. Schema + seed data
 docker exec vdr_staging_backend npx prisma db push --schema=apps/backend/prisma/schema.prisma
+# Not optional: db push doesn't apply the append-only triggers on audit_logs/
+# watermarks/file_versions (they aren't representable in schema.prisma). Idempotent, safe to re-run.
+docker exec -w /app/apps/backend vdr_staging_backend npm run prisma:triggers
 docker exec -w /app/apps/backend vdr_staging_backend npx prisma db seed
 
 # 6. Connect production's Nginx to the edge network (live, zero downtime)
@@ -126,6 +129,7 @@ docker compose -p variedreach-vdr-staging \
   -f docker-compose.yml -f docker-compose.staging.yml up -d --build
 # if the Prisma schema changed:
 docker exec vdr_staging_backend npx prisma db push --schema=apps/backend/prisma/schema.prisma
+docker exec -w /app/apps/backend vdr_staging_backend npm run prisma:triggers
 ```
 
 This only touches staging's own containers — production is completely unaffected by anything in
@@ -149,6 +153,8 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 # if the Prisma schema changed:
 docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend sh -c \
   "cd apps/backend && npx prisma db push"
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec backend sh -c \
+  "cd apps/backend && npm run prisma:triggers"
 ```
 
 `development` keeps going after this — it doesn't get reset or deleted. The next round of work

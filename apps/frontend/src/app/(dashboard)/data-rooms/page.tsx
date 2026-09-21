@@ -6,6 +6,7 @@ import { useDataRooms } from '@/hooks/use-data-rooms';
 import { useAuthStore } from '@/store/auth-store';
 import { EXTERNAL_ROLES } from '@variedreach-vdr/shared';
 import { DataRoomList } from '@/components/data-rooms/DataRoomList';
+import { DeletedDataRooms } from '@/components/data-rooms/DeletedDataRooms';
 
 export default function DataRoomsPage() {
   const { user } = useAuthStore();
@@ -37,6 +38,7 @@ export default function DataRoomsPage() {
         )}
       </div>
       <DataRoomList />
+      {!isExternal && <DeletedDataRooms />}
     </div>
   );
 }

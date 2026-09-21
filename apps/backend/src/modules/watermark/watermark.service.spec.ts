@@ -55,6 +55,25 @@ describe('WatermarkService', () => {
     const result = await service.apply(buffer, 'docx', elements);
     expect(result).toBe(buffer);
   });
+
+  // .eml is plain-text MIME, so it's watermarked the same way as txt/csv.
+  it('stamps a readable header onto .eml files, same as txt', async () => {
+    const buffer = Buffer.from('From: a@x.com\r\nTo: b@x.com\r\nSubject: Hi\r\n\r\nBody text.', 'utf-8');
+    const watermarked = await service.apply(buffer, 'eml', elements);
+    const text = watermarked.toString('utf-8');
+    expect(text).toContain('Jane Doe');
+    expect(text).toContain('Body text.');
+  });
+
+  // .msg is a binary OLE2 file, not text -- confirmed a deliberate,
+  // documented non-fix (see apply()'s own comment): touching its bytes
+  // without a real parser would corrupt it, so it must pass through
+  // byte-for-byte unchanged rather than get "watermarked" into garbage.
+  it('leaves .msg files byte-for-byte unchanged rather than corrupting the binary format', async () => {
+    const buffer = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0x00, 0x01, 0x02, 0x03]);
+    const result = await service.apply(buffer, 'msg', elements);
+    expect(result).toBe(buffer);
+  });
 });
 
 // Regression coverage for the "configured but never enforced" bug: a data

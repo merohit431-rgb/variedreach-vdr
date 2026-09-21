@@ -43,8 +43,9 @@ export default function RolesPage() {
       <div>
         <h1 className="text-xl font-bold text-app-text">Roles & Permissions</h1>
         <p className="mt-0.5 text-sm text-app-t3">
-          What each role can do across every data room. Per-room overrides are set under a data
-          room&apos;s Members tab.
+          What each role can do across every data room. A member&apos;s role for one specific data
+          room can be changed from that room&apos;s Members tab — this table is what each role
+          then allows.
         </p>
       </div>
 

@@ -261,6 +261,53 @@ export class FilesService {
     await this.checkStorageThreshold(dataRoomId);
   }
 
+  // Real bulk delete -- not a client-side loop of single deletes. The row
+  // update is one UPDATE...WHERE id IN (...) statement (atomic at the SQL
+  // level: either all matching rows flip or the statement fails and none
+  // do), storage is decremented once by the combined total instead of once
+  // per file, and this produces exactly one audit-log entry for the whole
+  // operation instead of N. Requested ids that don't resolve to a real,
+  // non-deleted file in this room are reported back in notFoundIds rather
+  // than failing the whole request or being silently ignored.
+  async bulkRemove(dataRoomId: string, fileIds: string[], actor: AuthenticatedUser, clientIp?: string) {
+    await this.dataRoomAccess.assertContentDeleter(dataRoomId, actor, clientIp);
+
+    const files = await this.prisma.file.findMany({
+      where: { id: { in: fileIds }, dataRoomId, deletedAt: null },
+    });
+
+    if (files.length === 0) {
+      throw new NotFoundException('No valid files found for the requested IDs');
+    }
+
+    const foundIds = files.map((f) => f.id);
+    const totalBytes = files.reduce((sum, f) => sum + f.sizeBytes, 0n);
+
+    await this.prisma.file.updateMany({
+      where: { id: { in: foundIds } },
+      data: { deletedAt: new Date() },
+    });
+    await this.prisma.dataRoom.update({
+      where: { id: dataRoomId },
+      data: { storageUsedBytes: { decrement: totalBytes } },
+    });
+
+    await this.auditLogService.record({
+      action: 'FILE_DELETED',
+      dataRoomId,
+      userId: actor.id,
+      resourceType: 'File',
+      metadata: { bulkDelete: true, count: foundIds.length, names: files.map((f) => f.name) },
+    });
+
+    await this.checkStorageThreshold(dataRoomId);
+
+    return {
+      deletedIds: foundIds,
+      notFoundIds: fileIds.filter((id) => !foundIds.includes(id)),
+    };
+  }
+
   async addVersion(
     dataRoomId: string,
     fileId: string,

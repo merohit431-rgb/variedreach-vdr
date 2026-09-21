@@ -200,10 +200,21 @@ export class QnaService {
     });
     if (!ans) throw new NotFoundException('Answer not found');
 
-    return this.prisma.answer.update({
+    const updated = await this.prisma.answer.update({
       where: { id: answerId },
       data: { answer: answerText },
     });
+
+    await this.auditLogService.record({
+      action: 'QUESTION_ANSWER_EDITED',
+      dataRoomId,
+      userId: actor.id,
+      resourceType: 'Question',
+      resourceId: questionId,
+      metadata: { answerId },
+    });
+
+    return updated;
   }
 
   async deleteQuestion(dataRoomId: string, questionId: string, actor: AuthenticatedUser, clientIp?: string) {
@@ -222,6 +233,15 @@ export class QnaService {
     await this.prisma.question.update({
       where: { id: questionId },
       data: { deletedAt: new Date() },
+    });
+
+    await this.auditLogService.record({
+      action: 'QUESTION_DELETED',
+      dataRoomId,
+      userId: actor.id,
+      resourceType: 'Question',
+      resourceId: questionId,
+      metadata: { question: q.question },
     });
   }
 }

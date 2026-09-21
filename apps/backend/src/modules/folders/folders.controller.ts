@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Req } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { FoldersService } from './folders.service';
 import { CreateFolderDto } from './dto/create-folder.dto';
@@ -39,6 +40,9 @@ export class FoldersController {
     return this.foldersService.update(dataRoomId, folderId, dto, user, req.ip ?? '0.0.0.0');
   }
 
+  // Duplicates an entire subtree's current file versions in one call --
+  // same bulk-operation risk profile as files' bulk-download/bulk-delete.
+  @Throttle({ global: { ttl: 60, limit: 20 } })
   @Post(':folderId/copy')
   copy(
     @Param('dataRoomId') dataRoomId: string,
