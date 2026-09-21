@@ -405,10 +405,11 @@ export class SuperAdminService {
 
     const changes: Record<string, { from: unknown; to: unknown }> = {};
     if (existing) {
-      for (const key of ['currentPeriodStart', 'currentPeriodEnd', 'status'] as const) {
+      for (const key of ['currentPeriodStart', 'currentPeriodEnd', 'status', 'billingCycle'] as const) {
         const incoming = dto[key];
         if (incoming === undefined) continue;
-        const fromVal = key === 'status' ? existing[key] : existing[key].toISOString();
+        const existingVal = existing[key];
+        const fromVal = existingVal instanceof Date ? existingVal.toISOString() : existingVal;
         if (incoming !== fromVal) changes[key] = { from: fromVal, to: incoming };
       }
     }
@@ -427,7 +428,7 @@ export class SuperAdminService {
       create: {
         organisationId,
         planSlug: org.planSlug ?? 'CUSTOM',
-        billingCycle: 'YEARLY',
+        billingCycle: dto.billingCycle ?? 'YEARLY',
         storageGb: org.storageLimitGb,
         status: dto.status ?? 'ACTIVE',
         currentPeriodStart: new Date(dto.currentPeriodStart ?? existing?.currentPeriodStart ?? new Date()),
@@ -437,6 +438,7 @@ export class SuperAdminService {
         ...(dto.currentPeriodStart && { currentPeriodStart: new Date(dto.currentPeriodStart) }),
         ...(dto.currentPeriodEnd && { currentPeriodEnd: new Date(dto.currentPeriodEnd) }),
         ...(dto.status && { status: dto.status }),
+        ...(dto.billingCycle && { billingCycle: dto.billingCycle }),
       },
     });
 
@@ -450,7 +452,12 @@ export class SuperAdminService {
         resourceId: subscription.id,
         metadata: (existing
           ? changes
-          : { created: true, currentPeriodStart: dto.currentPeriodStart, currentPeriodEnd: dto.currentPeriodEnd }) as Prisma.InputJsonValue,
+          : {
+              created: true,
+              currentPeriodStart: dto.currentPeriodStart,
+              currentPeriodEnd: dto.currentPeriodEnd,
+              billingCycle: subscription.billingCycle,
+            }) as Prisma.InputJsonValue,
       });
     }
 

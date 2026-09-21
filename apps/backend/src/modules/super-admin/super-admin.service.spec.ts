@@ -304,6 +304,75 @@ describe('SuperAdminService.updateSubscription', () => {
     );
   });
 
+  // Real ARCK production scenario: a manually-dated 6-month term is neither
+  // MONTHLY nor YEARLY pricing, but the schema only supports those two --
+  // create() used to hardcode 'YEARLY' unconditionally, mislabeling any
+  // non-annual manually-set period for revenue/MRR purposes. billingCycle is
+  // now a real, independently-settable DTO field instead.
+  it('honors an explicit billingCycle instead of hardcoding YEARLY for a new subscription', async () => {
+    const upsert = jest.fn().mockResolvedValue({ id: 'sub-new', billingCycle: 'MONTHLY' });
+    const { service } = buildService({
+      organisation: { id: 'org-1', planSlug: 'PROFESSIONAL', storageLimitGb: 12, subscription: null },
+      subscriptionUpsert: upsert,
+    });
+
+    await service.updateSubscription(
+      'org-1',
+      { currentPeriodStart: '2026-06-28', currentPeriodEnd: '2026-12-28', status: 'ACTIVE', billingCycle: 'MONTHLY' },
+      'admin-1',
+    );
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ billingCycle: 'MONTHLY' }),
+      }),
+    );
+  });
+
+  it('defaults to YEARLY when billingCycle is not specified (unchanged prior behavior)', async () => {
+    const upsert = jest.fn().mockResolvedValue({ id: 'sub-new', billingCycle: 'YEARLY' });
+    const { service } = buildService({
+      organisation: { id: 'org-1', planSlug: null, storageLimitGb: 12, subscription: null },
+      subscriptionUpsert: upsert,
+    });
+
+    await service.updateSubscription(
+      'org-1',
+      { currentPeriodStart: '2026-06-28', currentPeriodEnd: '2026-12-28' },
+      'admin-1',
+    );
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ create: expect.objectContaining({ billingCycle: 'YEARLY' }) }),
+    );
+  });
+
+  it('updates billingCycle on an existing subscription and logs the diff', async () => {
+    const existingSub = {
+      id: 'sub-1',
+      status: 'ACTIVE',
+      billingCycle: 'YEARLY',
+      currentPeriodStart: new Date('2026-06-28'),
+      currentPeriodEnd: new Date('2026-12-28'),
+    };
+    const upsert = jest.fn().mockResolvedValue({ ...existingSub, billingCycle: 'MONTHLY' });
+    const { service, record } = buildService({
+      organisation: { id: 'org-1', planSlug: 'PROFESSIONAL', storageLimitGb: 12, subscription: existingSub },
+      subscriptionUpsert: upsert,
+    });
+
+    await service.updateSubscription('org-1', { billingCycle: 'MONTHLY' }, 'admin-1');
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ update: expect.objectContaining({ billingCycle: 'MONTHLY' }) }),
+    );
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: { billingCycle: { from: 'YEARLY', to: 'MONTHLY' } },
+      }),
+    );
+  });
+
   it('extends an existing subscription and logs the old/new end date', async () => {
     const existingSub = {
       id: 'sub-1',

@@ -1,6 +1,7 @@
 import { IsDateString, IsIn, IsOptional } from 'class-validator';
 
 const ASSIGNABLE_STATUSES = ['ACTIVE', 'PAST_DUE', 'CANCELLED', 'EXPIRED'] as const;
+const ASSIGNABLE_BILLING_CYCLES = ['MONTHLY', 'YEARLY'] as const;
 
 // All fields optional and independently settable -- "extend", "early-expire"
 // and "reactivate" from the product's point of view are all just this one
@@ -17,4 +18,8 @@ export class UpdateSubscriptionDto {
   @IsOptional()
   @IsIn(ASSIGNABLE_STATUSES)
   status?: (typeof ASSIGNABLE_STATUSES)[number];
+
+  @IsOptional()
+  @IsIn(ASSIGNABLE_BILLING_CYCLES)
+  billingCycle?: (typeof ASSIGNABLE_BILLING_CYCLES)[number];
 }
