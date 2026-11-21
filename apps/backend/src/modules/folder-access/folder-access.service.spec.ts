@@ -20,20 +20,32 @@ const FOLDERS = [
   { id: 'C2', parentId: 'C' },
 ];
 
-function buildService(opts: { folderAccessRestricted: boolean; grants?: { folderId: string; userId: string }[] }) {
+type Grant = { folderId: string; userId?: string | null; groupId?: string | null };
+
+function buildService(opts: {
+  folderAccessRestricted: boolean;
+  grants?: Grant[];
+  myGroupIds?: string[]; // groups the acting USER is an active member of
+}) {
   const dataRoomFindUnique = jest.fn().mockResolvedValue({ folderAccessRestricted: opts.folderAccessRestricted });
   const folderFindMany = jest.fn().mockResolvedValue(FOLDERS);
-  const grantFindMany = jest.fn().mockResolvedValue(opts.grants ?? []);
+  const grantFindMany = jest.fn().mockResolvedValue(
+    (opts.grants ?? []).map((g) => ({ folderId: g.folderId, userId: g.userId ?? null, groupId: g.groupId ?? null })),
+  );
+  const groupMemberFindMany = jest
+    .fn()
+    .mockResolvedValue((opts.myGroupIds ?? []).map((groupId) => ({ groupId })));
   const record = jest.fn().mockResolvedValue({});
 
   const prisma = {
     dataRoom: { findUnique: dataRoomFindUnique },
     folder: { findMany: folderFindMany },
     folderAccessGrant: { findMany: grantFindMany },
+    groupMember: { findMany: groupMemberFindMany },
   } as unknown as PrismaService;
 
   const service = new FolderAccessService(prisma, { record } as unknown as AuditLogService);
-  return { service, record, grantFindMany };
+  return { service, record, grantFindMany, groupMemberFindMany };
 }
 
 const USER = { id: 'user-1', organisationId: 'org-1', role: 'PRA' } as AuthenticatedUser;
@@ -233,6 +245,120 @@ describe('FolderAccessService.assertReachable', () => {
       }),
     ).resolves.toBeUndefined();
     expect(record).not.toHaveBeenCalled();
+  });
+});
+
+describe('FolderAccessService.buildResolver -- group-based grants (Phase 3A.1)', () => {
+  it('a group grant reaches a member of that group, exactly like a direct user grant would', async () => {
+    const { service } = buildService({
+      folderAccessRestricted: true,
+      grants: [{ folderId: 'C', groupId: 'legal-team' }],
+      myGroupIds: ['legal-team'],
+    });
+    const resolver = await service.buildResolver('room-1', USER, 'PRA' as never);
+
+    expect(resolver.canReach('C')).toBe(true);
+    expect(resolver.canReach('C1')).toBe(true); // inherits, same as a user grant would
+  });
+
+  it('a group grant does NOT reach a user who is not a member of that group', async () => {
+    const { service } = buildService({
+      folderAccessRestricted: true,
+      grants: [{ folderId: 'C', groupId: 'legal-team' }],
+      myGroupIds: [], // user-1 is not in legal-team
+    });
+    const resolver = await service.buildResolver('room-1', USER, 'PRA' as never);
+
+    expect(resolver.canReach('C')).toBe(false);
+  });
+
+  it('group membership and a direct user grant on the SAME folder both independently grant access (no conflict)', async () => {
+    const { service } = buildService({
+      folderAccessRestricted: true,
+      grants: [
+        { folderId: 'C', userId: 'user-1' },
+        { folderId: 'C', groupId: 'legal-team' },
+      ],
+      myGroupIds: ['legal-team'],
+    });
+    const resolver = await service.buildResolver('room-1', USER, 'PRA' as never);
+
+    expect(resolver.canReach('C')).toBe(true);
+  });
+
+  // The nearest-grant-boundary rule applies identically regardless of
+  // whether the closer boundary's grant list is user-type or group-type --
+  // a more specific boundary that does not include this user (via either
+  // mechanism) still overrides a broader parent grant.
+  it('a closer group-grant boundary excluding this user overrides a broader parent user-grant', async () => {
+    const { service } = buildService({
+      folderAccessRestricted: true,
+      grants: [
+        { folderId: 'D', userId: 'user-1' }, // parent: user-1 directly granted
+        { folderId: 'D1', groupId: 'finance-team' }, // child boundary: a DIFFERENT group
+      ],
+      myGroupIds: ['legal-team'], // user-1 is not in finance-team
+    });
+    const resolver = await service.buildResolver('room-1', USER, 'PRA' as never);
+
+    expect(resolver.canReach('D')).toBe(true);
+    expect(resolver.canReach('D1')).toBe(false);
+  });
+
+  it('a closer group-grant boundary that DOES include this user overrides a parent with no grant at all', async () => {
+    const { service } = buildService({
+      folderAccessRestricted: true,
+      grants: [{ folderId: 'D1', groupId: 'legal-team' }],
+      myGroupIds: ['legal-team'],
+    });
+    const resolver = await service.buildResolver('room-1', USER, 'PRA' as never);
+
+    expect(resolver.canReach('D1')).toBe(true);
+    expect(resolver.canReach('D')).toBe(false); // the parent itself has no boundary and no grant
+  });
+
+  it('removing the user from the group (no longer in myGroupIds) loses access on the next resolver build -- no stale cache', async () => {
+    const before = await buildService({
+      folderAccessRestricted: true,
+      grants: [{ folderId: 'C', groupId: 'legal-team' }],
+      myGroupIds: ['legal-team'],
+    }).service.buildResolver('room-1', USER, 'PRA' as never);
+    expect(before.canReach('C')).toBe(true);
+
+    // groupMember.findMany's own WHERE clause already excludes removed
+    // memberships and deactivated/other-org groups -- simulated here by a
+    // fresh build where the membership query simply returns nothing.
+    const after = await buildService({
+      folderAccessRestricted: true,
+      grants: [{ folderId: 'C', groupId: 'legal-team' }],
+      myGroupIds: [],
+    }).service.buildResolver('room-1', USER, 'PRA' as never);
+    expect(after.canReach('C')).toBe(false);
+  });
+
+  it('queries group membership scoped to removedAt:null, the active group, and the actor\'s own org', async () => {
+    // buildResolver's own groupMember.findMany call filters to
+    // removedAt:null AND group.isActive:true AND group.organisationId ===
+    // actor.organisationId -- this test documents that the resolver relies
+    // entirely on that query's own WHERE clause and applies no further
+    // filtering of its own (a deactivated group, a removed membership, or a
+    // cross-org group can never reach the resolver's input sets at all).
+    const { service, groupMemberFindMany } = buildService({
+      folderAccessRestricted: true,
+      grants: [{ folderId: 'C', groupId: 'legal-team' }],
+      myGroupIds: ['legal-team'],
+    });
+    await service.buildResolver('room-1', USER, 'PRA' as never);
+
+    expect(groupMemberFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          userId: 'user-1',
+          removedAt: null,
+          group: { organisationId: 'org-1', isActive: true },
+        }),
+      }),
+    );
   });
 });
 

@@ -9,6 +9,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { extractErrorMessage } from '@/lib/error-message';
 import { cn } from '@/lib/cn';
+import { GroupsPanel } from './GroupsPanel';
 
 const STATUS_CONFIG: Record<string, { label: string; classes: string }> = {
   ACTIVE: { label: 'Active', classes: 'bg-emerald-500/10 text-emerald-400 ring-emerald-500/30' },
@@ -188,6 +189,8 @@ export function TeamPanel({ organisationId }: { organisationId: string }) {
           </table>
         </div>
       </div>
+
+      <GroupsPanel organisationId={organisationId} />
     </div>
   );
 }

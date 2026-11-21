@@ -12,4 +12,13 @@ export class AskQuestionDto {
   @IsOptional()
   @IsBoolean()
   isPrivate?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Folder this question concerns. Omit for a room-general question. When folder access is ' +
+      'restricted, you must already be able to reach this folder yourself.',
+  })
+  @IsOptional()
+  @IsString()
+  folderId?: string;
 }

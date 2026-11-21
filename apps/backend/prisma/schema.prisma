@@ -97,6 +97,10 @@ enum AuditAction {
   FOLDER_ACCESS_REVOKED
   FOLDER_ACCESS_DENIED
   DATA_ROOM_FOLDER_RESTRICTION_TOGGLED
+  GROUP_CREATED
+  GROUP_UPDATED
+  GROUP_MEMBER_ADDED
+  GROUP_MEMBER_REMOVED
   DATA_ROOM_TEMPLATE_APPLIED
   DOWNLOAD_ORIGINAL_PERMISSION_CHANGED
   MFA_ENABLED
@@ -183,6 +187,7 @@ model Organisation {
   payments      Payment[]
   invoices      Invoice[]
   memberships   OrganisationMembership[]
+  groups        Group[]
 
   @@map("organisations")
 }
@@ -255,6 +260,7 @@ model User {
   organisationMemberships OrganisationMembership[]
   dataRoomMemberships DataRoomMember[]
   folderAccessGrants  FolderAccessGrant[]
+  groupMemberships    GroupMember[]
   sessions            Session[]
   emailOtpChallenges  EmailOtpChallenge[]
   trustedDevices      TrustedDevice[]
@@ -495,22 +501,79 @@ model DataRoom {
 // download), exactly as it does everywhere else today. DOWNLOAD_ORIGINAL in
 // particular is never implied by a folder grant -- it stays the fully
 // separate DataRoomMember.canDownloadOriginal check it already was.
+// Phase 3A.1: userId and groupId are both nullable -- exactly one is set per
+// row, enforced in FolderPermissionsService, never both. Postgres treats
+// each NULL as distinct for uniqueness, so the two @@unique constraints
+// below independently enforce "one row per (folder,user)" and "one row per
+// (folder,group)" without interfering with each other -- no schema need for
+// a separate GroupFolderAccessGrant table duplicating this same shape.
 model FolderAccessGrant {
   id         String    @id @default(uuid())
   folderId   String
-  userId     String
+  userId     String?
+  groupId    String?
   grantedBy  String
   grantedAt  DateTime  @default(now())
   revokedAt  DateTime?
   revokedBy  String?
 
   folder Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group  Group? @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@unique([folderId, userId])
+  @@unique([folderId, groupId])
   @@index([folderId])
   @@index([userId])
+  @@index([groupId])
   @@map("folder_access_grants")
+}
+
+// Organisation-scoped group of users, grantable on folders exactly like an
+// individual user (FolderAccessGrant.groupId) -- the nearest-grant-boundary
+// resolver treats a group grant identically to a user grant; see
+// FolderAccessService's buildResolver() for exactly where group membership
+// is folded into the same boundary/reachable-set computation, with zero
+// change to the walk algorithm itself.
+model Group {
+  id             String    @id @default(uuid())
+  organisationId String
+  name           String
+  // Deactivating (not deleting) a group immediately removes every member's
+  // group-derived access on the next request -- nothing to separately
+  // revoke per folder, same reasoning as DataRoomMember.removedAt.
+  isActive       Boolean   @default(true)
+  createdBy      String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organisation Organisation        @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  members      GroupMember[]
+  folderGrants FolderAccessGrant[]
+
+  @@unique([organisationId, name])
+  @@index([organisationId])
+  @@map("groups")
+}
+
+// One row per (group, user) forever, toggled via removedAt -- same
+// soft-state convention as DataRoomMember.removedAt and
+// FolderAccessGrant.revokedAt, not multiple historical rows.
+model GroupMember {
+  id        String    @id @default(uuid())
+  groupId   String
+  userId    String
+  addedBy   String
+  addedAt   DateTime  @default(now())
+  removedAt DateTime?
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+  @@map("group_members")
 }
 
 // Junction: a user's membership + optional role override within one data room.
@@ -570,6 +633,7 @@ model Folder {
   children Folder[] @relation("FolderTree")
   files    File[]
   accessGrants FolderAccessGrant[]
+  questions    Question[]
 
   @@index([dataRoomId, parentId])
   @@index([dataRoomId, path])
@@ -978,16 +1042,27 @@ model Question {
   status     QuestionStatus @default(PENDING)
   // Private questions are only visible to the asker + data room managers
   isPrivate  Boolean        @default(false)
+  // Phase 3A.1: optional tag naming which folder this question concerns.
+  // Null means a room-general question, not about any specific restricted
+  // content -- same treatment as a root-level file with no folder: visible
+  // per the existing room-membership/isPrivate rule alone, never gated by
+  // folder-ACL. A non-null folderId additionally requires the viewer to be
+  // able to reach that folder (see QnaService's folder-access check) --
+  // every existing (pre-this-phase) question has folderId: null and is
+  // therefore completely unaffected by this column's addition.
+  folderId   String?
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
   deletedAt  DateTime?
 
   dataRoom DataRoom @relation(fields: [dataRoomId], references: [id], onDelete: Cascade)
   asker    User     @relation("QuestionAsker", fields: [askedBy], references: [id])
+  folder   Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
   answers  Answer[]
 
   @@index([dataRoomId, status])
   @@index([dataRoomId, askedBy])
+  @@index([folderId])
   @@map("questions")
 }
 

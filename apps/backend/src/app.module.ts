@@ -40,6 +40,7 @@ import { BusinessProfileModule } from './modules/business-profile/business-profi
 import { BillingModule } from './modules/billing/billing.module';
 import { CouponModule } from './modules/coupon/coupon.module';
 import { OrgMembersModule } from './modules/org-members/org-members.module';
+import { GroupsModule } from './modules/groups/groups.module';
 
 @Module({
   imports: [
@@ -90,6 +91,7 @@ import { OrgMembersModule } from './modules/org-members/org-members.module';
     BillingModule,
     CouponModule,
     OrgMembersModule,
+    GroupsModule,
   ],
   controllers: [AppController],
   providers: [

@@ -46,7 +46,14 @@ export class QnaController {
     @CurrentUser() user: AuthenticatedUser,
     @Req() req: Request,
   ) {
-    return this.qnaService.ask(dataRoomId, dto.question, dto.isPrivate ?? false, user, req.ip ?? '0.0.0.0');
+    return this.qnaService.ask(
+      dataRoomId,
+      dto.question,
+      dto.isPrivate ?? false,
+      dto.folderId ?? null,
+      user,
+      req.ip ?? '0.0.0.0',
+    );
   }
 
   @Patch(':questionId/status')

@@ -1,13 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 
-export interface FolderAccessGrant {
-  userId: string;
-  name: string;
-  email: string;
-  grantedAt: string;
-  grantedBy: string;
-}
+export type FolderAccessGrant =
+  | { type: 'user'; userId: string; name: string; email: string; grantedAt: string; grantedBy: string }
+  | { type: 'group'; groupId: string; name: string; grantedAt: string; grantedBy: string };
 
 export type FolderAccessSource =
   | { type: 'own' }
@@ -37,8 +33,8 @@ export function useFolderAccess(dataRoomId: string, folderId: string | null) {
 export function useGrantFolderAccess(dataRoomId: string, folderId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (userId: string) => {
-      await apiClient.post(`/data-rooms/${dataRoomId}/folders/${folderId}/access`, { userId });
+    mutationFn: async (grantee: { userId: string } | { groupId: string }) => {
+      await apiClient.post(`/data-rooms/${dataRoomId}/folders/${folderId}/access`, grantee);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['data-rooms', dataRoomId, 'folders', folderId, 'access'] });
@@ -50,8 +46,12 @@ export function useGrantFolderAccess(dataRoomId: string, folderId: string) {
 export function useRevokeFolderAccess(dataRoomId: string, folderId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (userId: string) => {
-      await apiClient.delete(`/data-rooms/${dataRoomId}/folders/${folderId}/access/${userId}`);
+    mutationFn: async (grantee: { userId: string } | { groupId: string }) => {
+      const path =
+        'userId' in grantee
+          ? `/data-rooms/${dataRoomId}/folders/${folderId}/access/users/${grantee.userId}`
+          : `/data-rooms/${dataRoomId}/folders/${folderId}/access/groups/${grantee.groupId}`;
+      await apiClient.delete(path);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['data-rooms', dataRoomId, 'folders', folderId, 'access'] });
