@@ -21,6 +21,15 @@ export class CreateDataRoomDto {
   @IsBoolean()
   applyTemplate?: boolean;
 
+  // Opt-in, not a default for any type including IPO -- an administrator
+  // deliberately turns this on for a room they're about to organise into
+  // access-scoped folders. Omitted/false means today's unrestricted
+  // room-level behaviour, unchanged.
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  folderAccessRestricted?: boolean;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

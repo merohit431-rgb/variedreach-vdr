@@ -28,6 +28,7 @@ export function CreateDataRoomForm() {
   const [caseNumber, setCaseNumber] = useState('');
   const [applyTemplate, setApplyTemplate] = useState(true);
   const [showPreview, setShowPreview] = useState(false);
+  const [folderAccessRestricted, setFolderAccessRestricted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { data: template, isLoading: isTemplateLoading } = useDataRoomTemplate(type);
@@ -48,6 +49,7 @@ export function CreateDataRoomForm() {
         name,
         type,
         applyTemplate: template ? applyTemplate : false,
+        folderAccessRestricted,
         caseNumber: caseNumber || undefined,
       });
       router.push(`/data-rooms/${dataRoom.id}`);
@@ -142,6 +144,22 @@ export function CreateDataRoomForm() {
           </div>
         )
       )}
+
+      <label className="flex items-start gap-2 rounded-md border border-app-border2 p-3">
+        <input
+          type="checkbox"
+          checked={folderAccessRestricted}
+          onChange={(e) => setFolderAccessRestricted(e.target.checked)}
+          className="mt-0.5"
+        />
+        <span className="text-sm text-app-t2">
+          Restrict access per folder
+          <span className="block text-xs text-app-t3">
+            Only members explicitly granted a folder can see or open it. Off by default — room
+            managers can turn this on later from Settings if they skip it now.
+          </span>
+        </span>
+      </label>
 
       <div>
         <label htmlFor="caseNumber" className="block text-sm font-medium text-app-t2">

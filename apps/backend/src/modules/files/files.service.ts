@@ -13,6 +13,7 @@ import { DATA_ROOM_MANAGER_ROLES, EXTERNAL_ROLES } from '../../common/constants/
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { DataRoomAccessService } from '../data-room-access/data-room-access.service';
+import { FolderAccessService } from '../folder-access/folder-access.service';
 import { FoldersService } from '../folders/folders.service';
 import { WatermarkService, WatermarkConfig } from '../watermark/watermark.service';
 import { OfficeConversionService } from '../office-conversion/office-conversion.service';
@@ -38,6 +39,7 @@ export class FilesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly dataRoomAccess: DataRoomAccessService,
+    private readonly folderAccess: FolderAccessService,
     private readonly foldersService: FoldersService,
     private readonly auditLogService: AuditLogService,
     private readonly watermarkService: WatermarkService,
@@ -49,16 +51,59 @@ export class FilesService {
   ) {}
 
   async list(dataRoomId: string, actor: AuthenticatedUser, query: ListFilesQueryDto, clientIp?: string) {
-    await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
+    const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
+    const resolver = await this.folderAccess.buildResolver(dataRoomId, actor, effectiveRole);
+
+    if (query.search) {
+      // Search spans the whole room by name, ignoring folderId entirely --
+      // without this, a restricted member could discover a file's existence
+      // (and name) in a folder they can't otherwise reach, just by guessing
+      // or iterating search terms. Scoped BEFORE the query runs, not
+      // filtered after, so a restricted-folder match never gets fetched in
+      // the first place.
+      if (!resolver.unrestricted) {
+        const reachable = [...resolver.reachableFolderIds()];
+        return this.prisma.file.findMany({
+          where: {
+            dataRoomId,
+            deletedAt: null,
+            name: { contains: query.search, mode: 'insensitive' },
+            OR: [{ folderId: null }, { folderId: { in: reachable } }],
+          },
+          include: {
+            currentVersion: true,
+            uploader: { select: { id: true, firstName: true, lastName: true } },
+          },
+          orderBy: { name: 'asc' },
+        });
+      }
+
+      return this.prisma.file.findMany({
+        where: { dataRoomId, deletedAt: null, name: { contains: query.search, mode: 'insensitive' } },
+        include: {
+          currentVersion: true,
+          uploader: { select: { id: true, firstName: true, lastName: true } },
+        },
+        orderBy: { name: 'asc' },
+      });
+    }
+
+    // Direct request for one specific folder's contents (or the room root,
+    // folderId omitted) -- a single, known target, so an unreachable folder
+    // gets the same "Folder not found" a nonexistent one would, not a
+    // silently empty list.
+    if (query.folderId) {
+      await this.folderAccess.assertReachable(resolver, query.folderId, 'Folder not found', {
+        dataRoomId,
+        actor,
+        resourceType: 'Folder',
+        resourceId: query.folderId,
+        ipAddress: clientIp,
+      });
+    }
 
     return this.prisma.file.findMany({
-      where: {
-        dataRoomId,
-        deletedAt: null,
-        ...(query.search
-          ? { name: { contains: query.search, mode: 'insensitive' } }
-          : { folderId: query.folderId ?? null }),
-      },
+      where: { dataRoomId, deletedAt: null, folderId: query.folderId ?? null },
       include: {
         currentVersion: true,
         uploader: { select: { id: true, firstName: true, lastName: true } },
@@ -75,7 +120,7 @@ export class FilesService {
     actor: AuthenticatedUser,
     clientIp?: string,
   ): Promise<File[]> {
-    await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
+    const { effectiveRole } = await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
 
     if (!multerFiles || multerFiles.length === 0) {
       throw new BadRequestException('No files were uploaded');
@@ -83,6 +128,14 @@ export class FilesService {
 
     if (folderId) {
       await this.assertFolderExists(dataRoomId, folderId);
+      const resolver = await this.folderAccess.buildResolver(dataRoomId, actor, effectiveRole);
+      await this.folderAccess.assertReachable(resolver, folderId, 'Folder not found', {
+        dataRoomId,
+        actor,
+        resourceType: 'Folder',
+        resourceId: folderId,
+        ipAddress: clientIp,
+      });
     }
 
     // Pre-flight: verify the batch would not exceed the ORGANISATION storage
@@ -212,12 +265,27 @@ export class FilesService {
   }
 
   async update(dataRoomId: string, fileId: string, dto: UpdateFileDto, actor: AuthenticatedUser, clientIp?: string) {
-    await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
+    const { effectiveRole } = await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
     const file = await this.getFileOrThrow(dataRoomId, fileId);
+    const resolver = await this.folderAccess.buildResolver(dataRoomId, actor, effectiveRole);
+    await this.folderAccess.assertReachable(resolver, file.folderId, 'File not found', {
+      dataRoomId,
+      actor,
+      resourceType: 'File',
+      resourceId: file.id,
+      ipAddress: clientIp,
+    });
 
     const moving = dto.folderId !== undefined && dto.folderId !== file.folderId;
     if (moving && dto.folderId) {
       await this.assertFolderExists(dataRoomId, dto.folderId);
+      await this.folderAccess.assertReachable(resolver, dto.folderId, 'Folder not found', {
+        dataRoomId,
+        actor,
+        resourceType: 'Folder',
+        resourceId: dto.folderId,
+        ipAddress: clientIp,
+      });
     }
 
     const updated = await this.prisma.file.update({
@@ -241,8 +309,16 @@ export class FilesService {
   }
 
   async remove(dataRoomId: string, fileId: string, actor: AuthenticatedUser, clientIp?: string) {
-    await this.dataRoomAccess.assertContentDeleter(dataRoomId, actor, clientIp);
+    const { effectiveRole } = await this.dataRoomAccess.assertContentDeleter(dataRoomId, actor, clientIp);
     const file = await this.getFileOrThrow(dataRoomId, fileId);
+    const resolver = await this.folderAccess.buildResolver(dataRoomId, actor, effectiveRole);
+    await this.folderAccess.assertReachable(resolver, file.folderId, 'File not found', {
+      dataRoomId,
+      actor,
+      resourceType: 'File',
+      resourceId: file.id,
+      ipAddress: clientIp,
+    });
 
     await this.prisma.file.update({ where: { id: file.id }, data: { deletedAt: new Date() } });
     await this.prisma.dataRoom.update({
@@ -271,11 +347,18 @@ export class FilesService {
   // non-deleted file in this room are reported back in notFoundIds rather
   // than failing the whole request or being silently ignored.
   async bulkRemove(dataRoomId: string, fileIds: string[], actor: AuthenticatedUser, clientIp?: string) {
-    await this.dataRoomAccess.assertContentDeleter(dataRoomId, actor, clientIp);
+    const { effectiveRole } = await this.dataRoomAccess.assertContentDeleter(dataRoomId, actor, clientIp);
 
-    const files = await this.prisma.file.findMany({
+    const allMatches = await this.prisma.file.findMany({
       where: { id: { in: fileIds }, dataRoomId, deletedAt: null },
     });
+
+    // Unreachable files are folded into the same notFoundIds bucket as
+    // genuinely nonexistent ones, never reported separately -- a bulk
+    // operation is exactly the "silently drop, don't error the whole batch"
+    // case the hidden-folder requirement calls for, same as bulk-download.
+    const resolver = await this.folderAccess.buildResolver(dataRoomId, actor, effectiveRole);
+    const files = resolver.unrestricted ? allMatches : allMatches.filter((f) => resolver.canReach(f.folderId));
 
     if (files.length === 0) {
       throw new NotFoundException('No valid files found for the requested IDs');
@@ -317,8 +400,16 @@ export class FilesService {
     actor: AuthenticatedUser,
     clientIp?: string,
   ) {
-    await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
+    const { effectiveRole } = await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
     const file = await this.getFileOrThrow(dataRoomId, fileId);
+    const resolver = await this.folderAccess.buildResolver(dataRoomId, actor, effectiveRole);
+    await this.folderAccess.assertReachable(resolver, file.folderId, 'File not found', {
+      dataRoomId,
+      actor,
+      resourceType: 'File',
+      resourceId: file.id,
+      ipAddress: clientIp,
+    });
 
     if (file.isLocked) {
       throw new BadRequestException('File is locked and cannot accept a new version');
@@ -408,8 +499,16 @@ export class FilesService {
   }
 
   async listVersions(dataRoomId: string, fileId: string, actor: AuthenticatedUser, clientIp?: string) {
-    await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
-    await this.getFileOrThrow(dataRoomId, fileId);
+    const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
+    const file = await this.getFileOrThrow(dataRoomId, fileId);
+    const resolver = await this.folderAccess.buildResolver(dataRoomId, actor, effectiveRole);
+    await this.folderAccess.assertReachable(resolver, file.folderId, 'File not found', {
+      dataRoomId,
+      actor,
+      resourceType: 'File',
+      resourceId: file.id,
+      ipAddress: clientIp,
+    });
 
     return this.prisma.fileVersion.findMany({ where: { fileId }, orderBy: { versionNumber: 'desc' } });
   }
@@ -422,11 +521,20 @@ export class FilesService {
     action: 'FILE_VIEWED' | 'FILE_DOWNLOADED',
     versionId?: string,
   ): Promise<WatermarkedContent> {
-    const { dataRoom } =
+    const { dataRoom, effectiveRole } =
       action === 'FILE_DOWNLOADED'
         ? await this.dataRoomAccess.assertCanDownload(dataRoomId, actor, context.ipAddress)
         : await this.dataRoomAccess.getAccess(dataRoomId, actor, context.ipAddress);
     const file = await this.getFileOrThrow(dataRoomId, fileId);
+    const resolver = await this.folderAccess.buildResolver(dataRoomId, actor, effectiveRole);
+    await this.folderAccess.assertReachable(resolver, file.folderId, 'File not found', {
+      dataRoomId,
+      actor,
+      resourceType: 'File',
+      resourceId: file.id,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
 
     const version = versionId
       ? await this.prisma.fileVersion.findFirst({ where: { id: versionId, fileId: file.id } })
@@ -500,8 +608,19 @@ export class FilesService {
     let resolvedVersionId: string | undefined;
 
     try {
-      await this.dataRoomAccess.assertCanDownloadOriginal(dataRoomId, actor, context.ipAddress);
+      const { effectiveRole } = await this.dataRoomAccess.assertCanDownloadOriginal(dataRoomId, actor, context.ipAddress);
       file = await this.getFileOrThrow(dataRoomId, fileId);
+
+      // Folder-ACL is fully separate from DOWNLOAD_ORIGINAL -- both checks
+      // must pass. A folder grant never implies original-download rights,
+      // and canDownloadOriginal never implies folder reach; this reuses the
+      // exact same ORIGINAL_FILE_DOWNLOAD_DENIED audit path as a permission
+      // denial, with "File not found" as the reason when it's folder-ACL
+      // specifically that said no.
+      const resolver = await this.folderAccess.buildResolver(dataRoomId, actor, effectiveRole);
+      if (!resolver.unrestricted && !resolver.canReach(file.folderId)) {
+        throw new NotFoundException('File not found');
+      }
 
       const version = versionId
         ? await this.prisma.fileVersion.findFirst({ where: { id: versionId, fileId: file.id } })
@@ -575,12 +694,19 @@ export class FilesService {
     actor: AuthenticatedUser,
     context: { ipAddress: string; userAgent?: string },
   ): Promise<{ buffer: Buffer; filename: string }> {
-    const { dataRoom } = await this.dataRoomAccess.assertCanDownload(dataRoomId, actor, context.ipAddress);
+    const { dataRoom, effectiveRole } = await this.dataRoomAccess.assertCanDownload(dataRoomId, actor, context.ipAddress);
 
-    const files = await this.prisma.file.findMany({
+    const allMatches = await this.prisma.file.findMany({
       where: { id: { in: fileIds }, dataRoomId, deletedAt: null },
       include: { currentVersion: true },
     });
+
+    // Silently drop unreachable files from the batch rather than erroring
+    // the whole request or reporting which ones were skipped -- either of
+    // those would itself confirm something exists in a folder the caller
+    // can't reach.
+    const resolver = await this.folderAccess.buildResolver(dataRoomId, actor, effectiveRole);
+    const files = resolver.unrestricted ? allMatches : allMatches.filter((f) => resolver.canReach(f.folderId));
 
     if (files.length === 0) {
       throw new NotFoundException('No valid files found for the requested IDs');
@@ -653,7 +779,21 @@ export class FilesService {
     actor: AuthenticatedUser,
     context: { ipAddress: string; userAgent?: string },
   ): Promise<{ buffer: Buffer; filename: string }> {
-    const { dataRoom } = await this.dataRoomAccess.assertCanDownload(dataRoomId, actor, context.ipAddress);
+    const { dataRoom, effectiveRole } = await this.dataRoomAccess.assertCanDownload(dataRoomId, actor, context.ipAddress);
+    const resolver = await this.folderAccess.buildResolver(dataRoomId, actor, effectiveRole);
+
+    // The explicit target is a single, known request -- 404 like any other
+    // direct folder access, not a silent empty zip.
+    if (folderId) {
+      await this.folderAccess.assertReachable(resolver, folderId, 'Folder not found', {
+        dataRoomId,
+        actor,
+        resourceType: 'Folder',
+        resourceId: folderId,
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+      });
+    }
 
     // Recursively collect all folder IDs in the subtree
     const collectFolderIds = async (rootId: string | null): Promise<(string | null)[]> => {
@@ -668,7 +808,14 @@ export class FilesService {
       return ids;
     };
 
-    const folderIds = await collectFolderIds(folderId);
+    const allSubtreeFolderIds = await collectFolderIds(folderId);
+    // Within the subtree, a deeper folder can still be excluded by its own,
+    // more specific grant boundary (same semantics as every other
+    // inheritance check) -- silently skip those files rather than erroring
+    // the whole zip, same bulk-operation convention as bulkDownload.
+    const folderIds = resolver.unrestricted
+      ? allSubtreeFolderIds
+      : allSubtreeFolderIds.filter((id) => resolver.canReach(id));
     const nonNullFolderIds = folderIds.filter((id): id is string => id !== null);
     const includesRoot = folderIds.includes(null);
 

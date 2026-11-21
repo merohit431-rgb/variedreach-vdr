@@ -93,6 +93,10 @@ enum AuditAction {
   BULK_DOWNLOADED
   ORIGINAL_FILE_DOWNLOADED
   ORIGINAL_FILE_DOWNLOAD_DENIED
+  FOLDER_ACCESS_GRANTED
+  FOLDER_ACCESS_REVOKED
+  FOLDER_ACCESS_DENIED
+  DATA_ROOM_FOLDER_RESTRICTION_TOGGLED
   DATA_ROOM_TEMPLATE_APPLIED
   DOWNLOAD_ORIGINAL_PERMISSION_CHANGED
   MFA_ENABLED
@@ -250,6 +254,7 @@ model User {
   organisation        Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   organisationMemberships OrganisationMembership[]
   dataRoomMemberships DataRoomMember[]
+  folderAccessGrants  FolderAccessGrant[]
   sessions            Session[]
   emailOtpChallenges  EmailOtpChallenge[]
   trustedDevices      TrustedDevice[]
@@ -441,6 +446,14 @@ model DataRoom {
   // NDA Gate — members must accept NDA before viewing content
   ndaEnabled        Boolean        @default(false)
   ndaText           String?        @db.Text
+  // Folder-level access control (Phase 3A). Defaults false for every
+  // existing and new room -- when false, room membership continues to mean
+  // "full access to every folder" exactly as before this feature existed;
+  // FolderAccessService.resolve() short-circuits on this flag without
+  // touching FolderAccessGrant at all. Only a room manager can turn this on
+  // (see DataRoomsService.setFolderAccessRestricted()), and nothing in this
+  // codebase ever sets it to true automatically.
+  folderAccessRestricted Boolean   @default(false)
   createdBy         String
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
@@ -458,6 +471,46 @@ model DataRoom {
 
   @@index([organisationId, deletedAt])
   @@map("data_rooms")
+}
+
+// Phase 3A: one explicit folder-access grant for one user on one folder.
+// Resolved with nearest-grant-boundary inheritance (see FolderAccessService)
+// -- NOT "nearest ancestor where this user has a grant": the walk stops at
+// the nearest ancestor that has ANY live grant row at all (a "grant
+// boundary"), and that folder's own grant list is then authoritative for
+// every descendant that doesn't have an even-closer boundary of its own.
+// A user absent from the nearest boundary's grant list has NO access, even
+// if a more distant ancestor would have granted them one -- this is how
+// "explicit restriction on one branch" is expressed without a separate deny
+// concept (see the Phase 3A completion report's worked examples).
+//
+// One row per (folderId, userId) forever, toggled via revokedAt -- same
+// soft-state convention as DataRoomMember.removedAt, not multiple historical
+// rows. Re-granting after a revoke updates this same row; the full grant/
+// revoke history lives in AuditLog, not here.
+//
+// Deliberately carries no permission-level field: a grant means "this user
+// can reach this folder" -- once reachable, the user's EXISTING room-level
+// effectiveRole governs what they can do there (view/upload/delete/
+// download), exactly as it does everywhere else today. DOWNLOAD_ORIGINAL in
+// particular is never implied by a folder grant -- it stays the fully
+// separate DataRoomMember.canDownloadOriginal check it already was.
+model FolderAccessGrant {
+  id         String    @id @default(uuid())
+  folderId   String
+  userId     String
+  grantedBy  String
+  grantedAt  DateTime  @default(now())
+  revokedAt  DateTime?
+  revokedBy  String?
+
+  folder Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([folderId, userId])
+  @@index([folderId])
+  @@index([userId])
+  @@map("folder_access_grants")
 }
 
 // Junction: a user's membership + optional role override within one data room.
@@ -516,6 +569,7 @@ model Folder {
   parent   Folder?  @relation("FolderTree", fields: [parentId], references: [id])
   children Folder[] @relation("FolderTree")
   files    File[]
+  accessGrants FolderAccessGrant[]
 
   @@index([dataRoomId, parentId])
   @@index([dataRoomId, path])

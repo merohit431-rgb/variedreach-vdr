@@ -9,6 +9,12 @@ export interface FolderNode {
   path: string;
   depth: number;
   sortOrder: number;
+  // Always true for an unrestricted room. In a folder-access-restricted
+  // room, false means this folder is shown ONLY as a name-only ancestor on
+  // the path to a folder the user can actually reach -- not a real
+  // destination. The UI must not let the user navigate into it, list its
+  // other contents, or treat it as anything beyond a breadcrumb label.
+  reachable: boolean;
 }
 
 export function useFolders(dataRoomId: string) {

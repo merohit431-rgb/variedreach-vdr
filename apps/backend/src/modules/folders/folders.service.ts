@@ -3,6 +3,7 @@ import { Folder } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { DataRoomAccessService } from '../data-room-access/data-room-access.service';
+import { FolderAccessService } from '../folder-access/folder-access.service';
 import { IStorageService, STORAGE_SERVICE } from '../storage/storage.interface';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { CreateFolderDto } from './dto/create-folder.dto';
@@ -14,23 +15,62 @@ export class FoldersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly dataRoomAccess: DataRoomAccessService,
+    private readonly folderAccess: FolderAccessService,
     private readonly auditLogService: AuditLogService,
     @Inject(STORAGE_SERVICE) private readonly storage: IStorageService,
   ) {}
 
+  // Returns every folder the caller can see: folders they can actually reach,
+  // plus the name-only ancestors on the path down to those (so breadcrumbs
+  // and the tree sidebar render correctly) -- never an ancestor's OTHER
+  // children, never a folder that isn't on that path. Each row carries
+  // `reachable` so the frontend can render an ancestor-only node as an
+  // unopenable placeholder rather than a real destination. Unrestricted
+  // rooms (every room that existed before this feature, unconditionally)
+  // get the exact same unfiltered list as always.
   async findTree(dataRoomId: string, actor: AuthenticatedUser, clientIp?: string) {
-    await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
+    const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
 
-    return this.prisma.folder.findMany({
+    const folders = await this.prisma.folder.findMany({
       where: { dataRoomId, deletedAt: null },
       orderBy: [{ depth: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
     });
+
+    const resolver = await this.folderAccess.buildResolver(dataRoomId, actor, effectiveRole);
+    if (resolver.unrestricted) {
+      return folders.map((f) => ({ ...f, reachable: true }));
+    }
+
+    const reachableIds = resolver.reachableFolderIds();
+    const parentOf = new Map(folders.map((f) => [f.id, f.parentId]));
+    const visibleIds = new Set(reachableIds);
+    for (const id of reachableIds) {
+      let current = parentOf.get(id);
+      while (current && !visibleIds.has(current)) {
+        visibleIds.add(current);
+        current = parentOf.get(current);
+      }
+    }
+
+    return folders.filter((f) => visibleIds.has(f.id)).map((f) => ({ ...f, reachable: reachableIds.has(f.id) }));
   }
 
   async create(dataRoomId: string, dto: CreateFolderDto, actor: AuthenticatedUser, clientIp?: string) {
-    await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
+    const { effectiveRole } = await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
 
     const parent = dto.parentId ? await this.getFolderOrThrow(dataRoomId, dto.parentId) : null;
+
+    if (parent) {
+      const resolver = await this.folderAccess.buildResolver(dataRoomId, actor, effectiveRole);
+      await this.folderAccess.assertReachable(resolver, parent.id, 'Folder not found', {
+        dataRoomId,
+        actor,
+        resourceType: 'Folder',
+        resourceId: parent.id,
+        ipAddress: clientIp,
+      });
+    }
+
     const siblingCount = await this.prisma.folder.count({
       where: { dataRoomId, parentId: parent?.id ?? null, deletedAt: null },
     });
@@ -60,9 +100,18 @@ export class FoldersService {
   }
 
   async update(dataRoomId: string, folderId: string, dto: UpdateFolderDto, actor: AuthenticatedUser, clientIp?: string) {
-    await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
+    const { effectiveRole } = await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
 
     const folder = await this.getFolderOrThrow(dataRoomId, folderId);
+    const resolver = await this.folderAccess.buildResolver(dataRoomId, actor, effectiveRole);
+    await this.folderAccess.assertReachable(resolver, folder.id, 'Folder not found', {
+      dataRoomId,
+      actor,
+      resourceType: 'Folder',
+      resourceId: folder.id,
+      ipAddress: clientIp,
+    });
+
     const renaming = dto.name !== undefined && dto.name !== folder.name;
     const moving = dto.parentId !== undefined && dto.parentId !== folder.parentId;
 
@@ -71,8 +120,17 @@ export class FoldersService {
     if (moving) {
       newParent = dto.parentId ? await this.getFolderOrThrow(dataRoomId, dto.parentId) : null;
 
-      if (newParent && (await this.isDescendant(dataRoomId, folder.id, newParent.id))) {
-        throw new BadRequestException('Cannot move a folder into its own subtree');
+      if (newParent) {
+        await this.folderAccess.assertReachable(resolver, newParent.id, 'Folder not found', {
+          dataRoomId,
+          actor,
+          resourceType: 'Folder',
+          resourceId: newParent.id,
+          ipAddress: clientIp,
+        });
+        if (await this.isDescendant(dataRoomId, folder.id, newParent.id)) {
+          throw new BadRequestException('Cannot move a folder into its own subtree');
+        }
       }
     } else if (folder.parentId) {
       newParent = await this.prisma.folder.findUnique({ where: { id: folder.parentId } });
@@ -109,9 +167,17 @@ export class FoldersService {
   }
 
   async remove(dataRoomId: string, folderId: string, actor: AuthenticatedUser, clientIp?: string) {
-    await this.dataRoomAccess.assertContentDeleter(dataRoomId, actor, clientIp);
+    const { effectiveRole } = await this.dataRoomAccess.assertContentDeleter(dataRoomId, actor, clientIp);
 
     const folder = await this.getFolderOrThrow(dataRoomId, folderId);
+    const resolver = await this.folderAccess.buildResolver(dataRoomId, actor, effectiveRole);
+    await this.folderAccess.assertReachable(resolver, folder.id, 'Folder not found', {
+      dataRoomId,
+      actor,
+      resourceType: 'Folder',
+      resourceId: folder.id,
+      ipAddress: clientIp,
+    });
 
     const [childCount, fileCount] = await Promise.all([
       this.prisma.folder.count({ where: { parentId: folder.id, deletedAt: null } }),
@@ -148,10 +214,28 @@ export class FoldersService {
     actor: AuthenticatedUser,
     clientIp?: string,
   ): Promise<Folder> {
-    await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
+    const { effectiveRole } = await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
 
     const source = await this.getFolderOrThrow(dataRoomId, folderId);
     const targetParent = dto.targetParentId ? await this.getFolderOrThrow(dataRoomId, dto.targetParentId) : null;
+
+    const resolver = await this.folderAccess.buildResolver(dataRoomId, actor, effectiveRole);
+    await this.folderAccess.assertReachable(resolver, source.id, 'Folder not found', {
+      dataRoomId,
+      actor,
+      resourceType: 'Folder',
+      resourceId: source.id,
+      ipAddress: clientIp,
+    });
+    if (targetParent) {
+      await this.folderAccess.assertReachable(resolver, targetParent.id, 'Folder not found', {
+        dataRoomId,
+        actor,
+        resourceType: 'Folder',
+        resourceId: targetParent.id,
+        ipAddress: clientIp,
+      });
+    }
 
     const siblings = await this.prisma.folder.findMany({
       where: { dataRoomId, parentId: targetParent?.id ?? null, deletedAt: null },

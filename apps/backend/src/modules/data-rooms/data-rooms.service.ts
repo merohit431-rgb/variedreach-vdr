@@ -12,6 +12,7 @@ import { MailService } from '../mail/mail.service';
 import { AuthService } from '../auth/auth.service';
 import { FoldersService } from '../folders/folders.service';
 import { DataRoomAccessService } from '../data-room-access/data-room-access.service';
+import { FolderAccessService } from '../folder-access/folder-access.service';
 import { generateOpaqueToken } from '../../common/utils/crypto.util';
 import { normalizeEmail } from '../../common/utils/email.util';
 import { getOrgStorageUsage } from '../../common/org-storage.util';
@@ -38,10 +39,15 @@ export class DataRoomsService {
     private readonly authService: AuthService,
     private readonly foldersService: FoldersService,
     private readonly dataRoomAccess: DataRoomAccessService,
+    private readonly folderAccess: FolderAccessService,
   ) {}
 
   async getMyAccess(dataRoomId: string, actor: AuthenticatedUser, clientIp?: string) {
-    const { effectiveRole, canDownloadOriginal } = await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
+    const { dataRoom, effectiveRole, canDownloadOriginal } = await this.dataRoomAccess.getAccess(
+      dataRoomId,
+      actor,
+      clientIp,
+    );
 
     return {
       effectiveRole,
@@ -50,6 +56,9 @@ export class DataRoomsService {
       canDeleteContent: CONTENT_DELETE_ROLES.includes(effectiveRole),
       canDownload: !NO_DOWNLOAD_ROLES.includes(effectiveRole),
       canDownloadOriginal,
+      // Lets the frontend know whether to render folder-access UI at all --
+      // false for every room that existed before this feature, unconditionally.
+      folderAccessRestricted: dataRoom.folderAccessRestricted,
     };
   }
 
@@ -95,11 +104,26 @@ export class DataRoomsService {
         startDate: dto.startDate ? new Date(dto.startDate) : undefined,
         endDate: dto.endDate ? new Date(dto.endDate) : undefined,
         createdBy: actor.id,
+        // Opt-in only -- omitted/false for every type, IPO included, keeps
+        // today's unrestricted room-level behaviour. Never defaulted to true
+        // automatically for any type.
+        folderAccessRestricted: dto.folderAccessRestricted ?? false,
         members: {
           create: { userId: actor.id, joinedAt: new Date() },
         },
       },
     });
+
+    if (dto.folderAccessRestricted) {
+      await this.auditLogService.record({
+        action: 'DATA_ROOM_FOLDER_RESTRICTION_TOGGLED',
+        dataRoomId: dataRoom.id,
+        userId: actor.id,
+        resourceType: 'DataRoom',
+        resourceId: dataRoom.id,
+        metadata: { from: false, to: true, atCreation: true },
+      });
+    }
 
     // Database-backed template lookup -- replaces the earlier hardcoded
     // `if (type === 'CIRP')` branch. Any DataRoomType can have a template
@@ -317,6 +341,32 @@ export class DataRoomsService {
     });
 
     return dataRoom;
+  }
+
+  // The backward-compatibility switch at the center of Phase 3A: flipping
+  // this to true is the ONLY way folder-level restriction ever takes effect
+  // on a room, and nothing in this codebase ever flips it automatically --
+  // manager-tier only, and its own dedicated audit action given how
+  // significant a security boundary it is.
+  async setFolderAccessRestricted(id: string, restricted: boolean, actor: AuthenticatedUser) {
+    const dataRoom = await this.assertManager(id, actor);
+    if (dataRoom.folderAccessRestricted === restricted) return dataRoom;
+
+    const updated = await this.prisma.dataRoom.update({
+      where: { id },
+      data: { folderAccessRestricted: restricted },
+    });
+
+    await this.auditLogService.record({
+      action: 'DATA_ROOM_FOLDER_RESTRICTION_TOGGLED',
+      dataRoomId: id,
+      userId: actor.id,
+      resourceType: 'DataRoom',
+      resourceId: id,
+      metadata: { from: dataRoom.folderAccessRestricted, to: restricted },
+    });
+
+    return updated;
   }
 
   async listMembers(dataRoomId: string, actor: AuthenticatedUser) {
@@ -660,14 +710,14 @@ export class DataRoomsService {
   async getStats(dataRoomId: string, actor: AuthenticatedUser, clientIp?: string) {
     const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
     const isManager = ADMIN_ROLES.includes(effectiveRole);
+    const resolver = await this.folderAccess.buildResolver(dataRoomId, actor, effectiveRole);
 
-    const [orgStorage, documents, members, lastActivity, folderGroups] = await Promise.all([
+    const [orgStorage, members, lastActivity, folderGroups] = await Promise.all([
       // Storage shown in the room header/panel is ORGANISATION-wide -- the same
       // single source of truth the dashboard uses (Organisation.storageLimitGb +
       // total bytes across every room in the org). The per-room
       // DataRoom.storageLimitGb column is legacy and deliberately never surfaced.
       getOrgStorageUsage(this.prisma, actor.organisationId),
-      this.prisma.file.count({ where: { dataRoomId, deletedAt: null } }),
       this.prisma.dataRoomMember.count({ where: { dataRoomId, removedAt: null } }),
       this.prisma.auditLog.findFirst({
         where: { dataRoomId },
@@ -681,8 +731,16 @@ export class DataRoomsService {
       }),
     ]);
 
+    // Folder counts (and the derived total) are filtered to the caller's
+    // reachable folders -- otherwise "47 documents" in the room header for
+    // someone who can only ever find 3 of them is itself a disclosure that
+    // 44 more exist somewhere restricted, per the folder-ACL requirement
+    // that counts/statistics never leak what a plain 403 wouldn't.
     const folderCounts: Record<string, number> = {};
+    let documents = 0;
     for (const group of folderGroups) {
+      if (!resolver.unrestricted && !resolver.canReach(group.folderId)) continue;
+      documents += group._count._all;
       if (group.folderId) folderCounts[group.folderId] = group._count._all;
     }
 

@@ -20,6 +20,7 @@ import { RegistrationModule } from './modules/registration/registration.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { DataRoomsModule } from './modules/data-rooms/data-rooms.module';
 import { DataRoomAccessModule } from './modules/data-room-access/data-room-access.module';
+import { FolderAccessModule } from './modules/folder-access/folder-access.module';
 import { FoldersModule } from './modules/folders/folders.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { WatermarkModule } from './modules/watermark/watermark.module';
@@ -67,6 +68,7 @@ import { OrgMembersModule } from './modules/org-members/org-members.module';
     AuthModule,
     RegistrationModule,
     DataRoomAccessModule,
+    FolderAccessModule,
     StorageModule,
     WatermarkModule,
     OfficeConversionModule,

@@ -9,6 +9,7 @@ export interface DataRoomAccess {
   canDeleteContent: boolean;
   canDownload: boolean;
   canDownloadOriginal: boolean;
+  folderAccessRestricted: boolean;
 }
 
 export interface DataRoom {
@@ -22,12 +23,18 @@ export interface DataRoom {
   storageUsedBytes: string;
   createdAt: string;
   deletedAt?: string | null;
+  folderAccessRestricted?: boolean;
 }
 
 export interface CreateDataRoomInput {
   name: string;
   type: DataRoomType;
   applyTemplate?: boolean;
+  // Opt-in only -- omitted/false preserves today's unrestricted room-level
+  // access for every type, IPO included. An administrator deliberately
+  // turns this on for a room they're about to organise into access-scoped
+  // folders.
+  folderAccessRestricted?: boolean;
   caseNumber?: string;
   startDate?: string;
   endDate?: string;
@@ -225,6 +232,26 @@ export function useUpdateSecuritySettings(id: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['data-rooms', id] });
       queryClient.invalidateQueries({ queryKey: ['data-rooms', id, 'nda'] });
+    },
+  });
+}
+
+// Deliberately its own endpoint/hook, not part of SecuritySettings above --
+// a distinct, significant security boundary with its own dedicated audit
+// action, not a routine setting to bundle into one save click.
+export function useSetFolderAccessRestricted(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const response = await apiClient.patch<{ data: DataRoom }>(`/data-rooms/${id}/folder-access-restricted`, {
+        enabled,
+      });
+      return response.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['data-rooms', id] });
+      queryClient.invalidateQueries({ queryKey: ['data-rooms', id, 'access'] });
+      queryClient.invalidateQueries({ queryKey: ['data-rooms', id, 'folders'] });
     },
   });
 }

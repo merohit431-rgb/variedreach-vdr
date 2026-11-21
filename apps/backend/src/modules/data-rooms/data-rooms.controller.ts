@@ -20,6 +20,7 @@ import { UpdateSecuritySettingsDto } from './dto/update-security-settings.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { SetMemberDownloadOriginalDto } from './dto/set-member-download-original.dto';
+import { SetFolderAccessRestrictedDto } from './dto/set-folder-access-restricted.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
@@ -114,6 +115,16 @@ export class DataRoomsController {
   @Post(':id/unarchive')
   unarchive(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.dataRoomsService.setArchived(id, false, user);
+  }
+
+  @Roles(...MANAGER_ROLES)
+  @Patch(':id/folder-access-restricted')
+  setFolderAccessRestricted(
+    @Param('id') id: string,
+    @Body() dto: SetFolderAccessRestrictedDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.dataRoomsService.setFolderAccessRestricted(id, dto.enabled, user);
   }
 
   @Roles(...MANAGER_ROLES)

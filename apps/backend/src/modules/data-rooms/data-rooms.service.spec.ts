@@ -7,9 +7,22 @@ import type { MailService } from '../mail/mail.service';
 import type { AuthService } from '../auth/auth.service';
 import type { FoldersService } from '../folders/folders.service';
 import type { DataRoomAccessService } from '../data-room-access/data-room-access.service';
+import type { FolderAccessService } from '../folder-access/folder-access.service';
 import type { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import type { InviteMemberDto } from './dto/invite-member.dto';
 import type { CreateDataRoomDto } from './dto/create-data-room.dto';
+
+// Every test in this file predates folder-ACL and exercises room-level
+// behaviour only -- a resolver that's always unrestricted keeps all of them
+// exactly as they were. Folder-ACL-specific resolution has its own
+// dedicated tests in folder-access.service.spec.ts.
+const UNRESTRICTED_FOLDER_ACCESS = {
+  buildResolver: jest.fn().mockResolvedValue({
+    unrestricted: true,
+    canReach: () => true,
+    reachableFolderIds: () => new Set<string>(),
+  }),
+} as unknown as FolderAccessService;
 
 describe('DataRoomsService email normalization', () => {
   it('inviteMember() normalizes a mixed-case, padded email before looking up the invitee', async () => {
@@ -32,6 +45,7 @@ describe('DataRoomsService email normalization', () => {
       {} as AuthService,
       {} as FoldersService,
       {} as DataRoomAccessService,
+      UNRESTRICTED_FOLDER_ACCESS,
     );
 
     const actor = { id: 'actor-1', organisationId: 'org-1', role: 'ORG_ADMIN' } as AuthenticatedUser;
@@ -69,6 +83,7 @@ function buildRestoreService(overrides: {
     {} as AuthService,
     {} as FoldersService,
     {} as DataRoomAccessService,
+    UNRESTRICTED_FOLDER_ACCESS,
   );
   return { service, prisma, record, update };
 }
@@ -129,6 +144,7 @@ function buildTemplateService(template: unknown) {
     {} as AuthService,
     {} as FoldersService,
     {} as DataRoomAccessService,
+    UNRESTRICTED_FOLDER_ACCESS,
   );
   return { service, findUnique };
 }
@@ -192,6 +208,7 @@ function buildCreateService(template: unknown) {
     {} as AuthService,
     { seedFromTemplate } as unknown as FoldersService,
     {} as DataRoomAccessService,
+    UNRESTRICTED_FOLDER_ACCESS,
   );
 
   return { service, seedFromTemplate, record, templateFindUnique };
@@ -267,6 +284,7 @@ function buildDownloadOriginalService(overrides: { dataRoom?: unknown; member?: 
     {} as AuthService,
     {} as FoldersService,
     {} as DataRoomAccessService,
+    UNRESTRICTED_FOLDER_ACCESS,
   );
 
   return { service, memberFindUnique, update, record };
@@ -332,5 +350,173 @@ describe('DataRoomsService.setMemberDownloadOriginal', () => {
         metadata: { from: false, to: true },
       }),
     );
+  });
+});
+
+function buildFolderRestrictionService(dataRoom: unknown) {
+  const update = jest.fn().mockResolvedValue({ ...(dataRoom as object), folderAccessRestricted: true });
+  const record = jest.fn().mockResolvedValue({});
+  const prisma = {
+    dataRoom: { findFirst: jest.fn().mockResolvedValue(dataRoom), update },
+  } as unknown as PrismaService;
+
+  const service = new DataRoomsService(
+    prisma,
+    {} as ConfigService,
+    { record } as unknown as AuditLogService,
+    {} as MailService,
+    {} as AuthService,
+    {} as FoldersService,
+    {} as DataRoomAccessService,
+    UNRESTRICTED_FOLDER_ACCESS,
+  );
+  return { service, update, record };
+}
+
+// The backward-compatibility switch at the center of Phase 3A -- this is
+// the ONLY code path that can ever turn folder-level restriction on.
+describe('DataRoomsService.setFolderAccessRestricted', () => {
+  it('rejects a non-manager before touching the room', async () => {
+    const { service } = buildFolderRestrictionService({ id: 'room-1', folderAccessRestricted: false });
+    const actor = { id: 'u1', organisationId: 'org-1', role: 'PRA' } as AuthenticatedUser;
+
+    await expect(service.setFolderAccessRestricted('room-1', true, actor)).rejects.toThrow(
+      'You do not have permission',
+    );
+  });
+
+  it('is a no-op (no update, no audit) when the flag already matches', async () => {
+    const { service, update, record } = buildFolderRestrictionService({
+      id: 'room-1',
+      folderAccessRestricted: true,
+    });
+    const actor = { id: 'u1', organisationId: 'org-1', role: 'ORG_ADMIN' } as AuthenticatedUser;
+
+    await service.setFolderAccessRestricted('room-1', true, actor);
+
+    expect(update).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it('flips the flag and audit-logs DATA_ROOM_FOLDER_RESTRICTION_TOGGLED with from/to', async () => {
+    const { service, update, record } = buildFolderRestrictionService({
+      id: 'room-1',
+      folderAccessRestricted: false,
+    });
+    const actor = { id: 'u1', organisationId: 'org-1', role: 'ORG_ADMIN' } as AuthenticatedUser;
+
+    await service.setFolderAccessRestricted('room-1', true, actor);
+
+    expect(update).toHaveBeenCalledWith({ where: { id: 'room-1' }, data: { folderAccessRestricted: true } });
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'DATA_ROOM_FOLDER_RESTRICTION_TOGGLED',
+        metadata: { from: false, to: true },
+      }),
+    );
+  });
+});
+
+describe('DataRoomsService.create -- folderAccessRestricted opt-in', () => {
+  it('defaults to false and audits nothing extra when omitted', async () => {
+    const dataRoomCreate = jest.fn().mockResolvedValue({ id: 'room-1' });
+    const record = jest.fn().mockResolvedValue({});
+    const prisma = {
+      dataRoom: { create: dataRoomCreate },
+      dataRoomTemplate: { findUnique: jest.fn().mockResolvedValue(null) },
+    } as unknown as PrismaService;
+
+    const service = new DataRoomsService(
+      prisma,
+      {} as ConfigService,
+      { record } as unknown as AuditLogService,
+      {} as MailService,
+      {} as AuthService,
+      { seedFromTemplate: jest.fn() } as unknown as FoldersService,
+      {} as DataRoomAccessService,
+      UNRESTRICTED_FOLDER_ACCESS,
+    );
+    const actor = { id: 'actor-1', organisationId: 'org-1', role: 'ORG_ADMIN' } as AuthenticatedUser;
+
+    await service.create({ name: 'Room A', type: 'IPO' } as CreateDataRoomDto, actor);
+
+    expect(dataRoomCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ folderAccessRestricted: false }) }),
+    );
+    expect(record).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'DATA_ROOM_FOLDER_RESTRICTION_TOGGLED' }),
+    );
+  });
+
+  it('honors an explicit true and audits DATA_ROOM_FOLDER_RESTRICTION_TOGGLED at creation', async () => {
+    const dataRoomCreate = jest.fn().mockResolvedValue({ id: 'room-1' });
+    const record = jest.fn().mockResolvedValue({});
+    const prisma = {
+      dataRoom: { create: dataRoomCreate },
+      dataRoomTemplate: { findUnique: jest.fn().mockResolvedValue(null) },
+    } as unknown as PrismaService;
+
+    const service = new DataRoomsService(
+      prisma,
+      {} as ConfigService,
+      { record } as unknown as AuditLogService,
+      {} as MailService,
+      {} as AuthService,
+      { seedFromTemplate: jest.fn() } as unknown as FoldersService,
+      {} as DataRoomAccessService,
+      UNRESTRICTED_FOLDER_ACCESS,
+    );
+    const actor = { id: 'actor-1', organisationId: 'org-1', role: 'ORG_ADMIN' } as AuthenticatedUser;
+
+    await service.create({ name: 'Room A', type: 'IPO', folderAccessRestricted: true } as CreateDataRoomDto, actor);
+
+    expect(dataRoomCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ folderAccessRestricted: true }) }),
+    );
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'DATA_ROOM_FOLDER_RESTRICTION_TOGGLED',
+        metadata: { from: false, to: true, atCreation: true },
+      }),
+    );
+  });
+});
+
+describe('DataRoomsService.getStats -- folder counts filtered to reachable folders', () => {
+  it('returns only reachable folders\' counts, and a documents total excluding unreachable ones', async () => {
+    const getAccess = jest.fn().mockResolvedValue({ effectiveRole: 'PRA' });
+    const buildResolver = jest.fn().mockResolvedValue({
+      unrestricted: false,
+      canReach: (id: string | null) => id === 'folder-reachable',
+    });
+    const prisma = {
+      dataRoomMember: { count: jest.fn().mockResolvedValue(3) },
+      auditLog: { findFirst: jest.fn().mockResolvedValue(null) },
+      file: {
+        groupBy: jest.fn().mockResolvedValue([
+          { folderId: 'folder-reachable', _count: { _all: 5 } },
+          { folderId: 'folder-hidden', _count: { _all: 12 } },
+        ]),
+      },
+      organisation: { findUnique: jest.fn().mockResolvedValue({ storageLimitGb: 10 }) },
+      dataRoom: { aggregate: jest.fn().mockResolvedValue({ _sum: { storageUsedBytes: 0n } }) },
+    } as unknown as PrismaService;
+
+    const service = new DataRoomsService(
+      prisma,
+      {} as ConfigService,
+      {} as AuditLogService,
+      {} as MailService,
+      {} as AuthService,
+      {} as FoldersService,
+      { getAccess } as unknown as DataRoomAccessService,
+      { buildResolver } as unknown as FolderAccessService,
+    );
+    const actor = { id: 'u1', organisationId: 'org-1', role: 'PRA' } as AuthenticatedUser;
+
+    const stats = await service.getStats('room-1', actor);
+
+    expect(stats.folderCounts).toEqual({ 'folder-reachable': 5 });
+    expect(stats.documents).toBe(5);
   });
 });

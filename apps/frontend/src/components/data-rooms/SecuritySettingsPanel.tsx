@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Globe, FileText, Stamp } from 'lucide-react';
-import { useDataRoom, useUpdateSecuritySettings } from '@/hooks/use-data-rooms';
+import { Globe, FileText, Stamp, FolderLock } from 'lucide-react';
+import { useDataRoom, useUpdateSecuritySettings, useSetFolderAccessRestricted } from '@/hooks/use-data-rooms';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { extractErrorMessage } from '@/lib/error-message';
@@ -16,6 +16,7 @@ interface ExtendedDataRoom {
   watermarkTemplate?: string;
   watermarkOpacity?: number;
   watermarkPosition?: string;
+  folderAccessRestricted?: boolean;
 }
 
 const WATERMARK_TOKENS = ['{{name}}', '{{email}}', '{{date}}', '{{time}}', '{{ip}}'];
@@ -24,6 +25,8 @@ export function SecuritySettingsPanel({ dataRoomId }: { dataRoomId: string }) {
   const { data: dataRoom } = useDataRoom(dataRoomId);
   const room = dataRoom as unknown as ExtendedDataRoom | undefined;
   const updateSecurity = useUpdateSecuritySettings(dataRoomId);
+  const setFolderAccessRestricted = useSetFolderAccessRestricted(dataRoomId);
+  const [folderAccessError, setFolderAccessError] = useState<string | null>(null);
 
   const [ipEnabled, setIpEnabled] = useState(false);
   const [ipsText, setIpsText] = useState('');
@@ -76,6 +79,56 @@ export function SecuritySettingsPanel({ dataRoomId }: { dataRoomId: string }) {
     <div className="space-y-6 pt-4">
       {error && <Alert tone="danger">{error}</Alert>}
       {saved && <Alert tone="success">Security settings saved.</Alert>}
+      {folderAccessError && <Alert tone="danger">{folderAccessError}</Alert>}
+
+      {/* Folder-Level Access Control -- a standalone, immediate-effect
+          toggle with its own dedicated audit trail, not bundled with the
+          settings below. Defaults off for every room; see the folder tree's
+          own "Manage access" action for granting/revoking per folder once
+          this is on. */}
+      <div className="rounded-lg border border-app-border bg-app-s1 p-5">
+        <div className="flex items-start gap-3">
+          <FolderLock className="mt-0.5 h-5 w-5 text-app-t3 flex-shrink-0" />
+          <div className="flex-1">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-app-text">Folder-Level Access Control</h3>
+                <p className="mt-0.5 text-xs text-app-t3">
+                  Restrict each folder to only the users explicitly granted access. A member sees
+                  nothing about a folder they can&apos;t reach — not its name, not its contents.
+                  Room managers always see everything.
+                </p>
+              </div>
+              <label className="flex cursor-pointer items-center gap-2">
+                <span className="text-xs text-app-t3">
+                  {room?.folderAccessRestricted ? 'Enabled' : 'Disabled'}
+                </span>
+                <div
+                  onClick={() => {
+                    setFolderAccessError(null);
+                    setFolderAccessRestricted.mutate(!room?.folderAccessRestricted, {
+                      onError: (err) => setFolderAccessError(extractErrorMessage(err)),
+                    });
+                  }}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${room?.folderAccessRestricted ? 'bg-app-primary' : 'bg-app-s3'}`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-app-s1 shadow transition-transform ${room?.folderAccessRestricted ? 'translate-x-4' : 'translate-x-0.5'}`}
+                  />
+                </div>
+              </label>
+            </div>
+            {room?.folderAccessRestricted && (
+              <p className="mt-3 rounded-md bg-app-s2 p-3 text-xs text-app-t3">
+                Open a folder in the sidebar and use its menu to grant or revoke access for
+                specific members. A folder with no grant of its own inherits from the nearest
+                ancestor folder that has one; with none anywhere above it, only room managers can
+                reach it.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* IP Allowlisting */}
       <div className="rounded-lg border border-app-border bg-app-s1 p-5">

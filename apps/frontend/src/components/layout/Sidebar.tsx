@@ -33,6 +33,7 @@ import { Logo } from '@/components/brand/Logo';
 import { Avatar } from '@/components/ui/Avatar';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
+import { FolderAccessModal } from '@/components/data-rooms/FolderAccessModal';
 import { useAuthStore } from '@/store/auth-store';
 import { useWorkspaceStore } from '@/store/workspace-store';
 import { useDataRoomAccess, useDataRoomStats, type DataRoomAccess } from '@/hooks/use-data-rooms';
@@ -215,6 +216,7 @@ function FolderRow({
   canUpload,
   canDelete,
   canDownload,
+  canManageAccess,
   actions,
 }: {
   folder: FolderNode;
@@ -228,17 +230,55 @@ function FolderRow({
   canUpload: boolean;
   canDelete: boolean;
   canDownload: boolean;
+  canManageAccess: boolean;
   actions: {
     onDownload: () => void;
     onCreateSubfolder: () => void;
     onRename: () => void;
     onDuplicate: () => void;
     onDelete: () => void;
+    onManageAccess: () => void;
     onDropFolder: (folderId: string) => void;
     onDropFile: (fileId: string) => void;
   };
 }) {
   const [isDragOver, setIsDragOver] = useState(false);
+
+  // An ancestor-only node (folder-access-restricted room, shown solely so
+  // its reachable descendant has a breadcrumb to sit under) is not a real
+  // destination -- no opening it, no actions on it, no drag-and-drop target.
+  // The backend enforces this regardless; this only keeps the UI from
+  // offering an action that would just 404.
+  if (!folder.reachable) {
+    return (
+      <div
+        className="flex items-center gap-1 rounded-lg pr-1 opacity-50"
+        style={{ paddingLeft: `${depth * 14}px` }}
+        title="You don't have access to this folder"
+      >
+        <button
+          onClick={hasChildren ? onToggle : undefined}
+          aria-label={hasChildren ? (isExpanded ? 'Collapse folder' : 'Expand folder') : undefined}
+          className="flex h-7 w-5 flex-shrink-0 items-center justify-center text-app-t4"
+          tabIndex={hasChildren ? 0 : -1}
+        >
+          {hasChildren ? (
+            isExpanded ? (
+              <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            )
+          ) : (
+            <span className="h-3.5 w-3.5" />
+          )}
+        </button>
+        <div className="flex min-w-0 flex-1 cursor-not-allowed items-center gap-2 py-1.5 text-left text-[13px] text-app-t4">
+          <FolderLock className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+          <span className="truncate">{folder.name}</span>
+        </div>
+      </div>
+    );
+  }
 
   const menuItems: ActionMenuItem[] = [];
   if (canDownload) {
@@ -253,6 +293,9 @@ function FolderRow({
   }
   if (canDelete) {
     menuItems.push({ key: 'delete', label: 'Delete', icon: Trash2, danger: true, onClick: actions.onDelete });
+  }
+  if (canManageAccess) {
+    menuItems.push({ key: 'manage-access', label: 'Manage access', icon: FolderLock, onClick: actions.onManageAccess });
   }
 
   return (
@@ -351,6 +394,8 @@ function RoomFolderSection({ roomId, onNavigate }: { roomId: string; onNavigate:
   const canUpload = Boolean(access?.canUploadContent);
   const canDelete = Boolean(access?.canDeleteContent);
   const canDownload = Boolean(access?.canDownload);
+  const canManageAccess = Boolean(access?.canManageRoom) && Boolean(access?.folderAccessRestricted);
+  const [manageAccessFolder, setManageAccessFolder] = useState<{ id: string; name: string } | null>(null);
 
   const childrenOf = useMemo(() => {
     const map = new Map<string | null, FolderNode[]>();
@@ -446,6 +491,10 @@ function RoomFolderSection({ roomId, onNavigate }: { roomId: string; onNavigate:
     downloadFolder(roomId, folder.id, `${folder.name}.zip`);
   }
 
+  function handleManageAccess(folder: FolderNode) {
+    setManageAccessFolder({ id: folder.id, name: folder.name });
+  }
+
   function handleDropFolder(targetId: string, draggedFolderId: string) {
     updateFolder.mutate({ folderId: draggedFolderId, parentId: targetId });
   }
@@ -479,12 +528,14 @@ function RoomFolderSection({ roomId, onNavigate }: { roomId: string; onNavigate:
                 canUpload={canUpload}
                 canDelete={canDelete}
                 canDownload={canDownload}
+                canManageAccess={canManageAccess}
                 actions={{
                   onDownload: () => handleDownloadFolder(folder),
                   onCreateSubfolder: () => handleCreateSubfolder(folder.id),
                   onRename: () => handleRenameFolder(folder),
                   onDuplicate: () => handleDuplicateFolder(folder),
                   onDelete: () => handleDeleteFolder(folder),
+                  onManageAccess: () => handleManageAccess(folder),
                   onDropFolder: (draggedFolderId) => handleDropFolder(folder.id, draggedFolderId),
                   onDropFile: (fileId) => handleDropFile(folder.id, fileId),
                 }}
@@ -572,6 +623,15 @@ function RoomFolderSection({ roomId, onNavigate }: { roomId: string; onNavigate:
       </div>
 
       {renderTree(null, 0)}
+
+      {manageAccessFolder && (
+        <FolderAccessModal
+          dataRoomId={roomId}
+          folderId={manageAccessFolder.id}
+          folderName={manageAccessFolder.name}
+          onClose={() => setManageAccessFolder(null)}
+        />
+      )}
     </div>
   );
 }

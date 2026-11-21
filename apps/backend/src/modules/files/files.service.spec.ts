@@ -3,6 +3,7 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { FilesService } from './files.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { DataRoomAccessService } from '../data-room-access/data-room-access.service';
+import type { FolderAccessService } from '../folder-access/folder-access.service';
 import type { FoldersService } from '../folders/folders.service';
 import type { AuditLogService } from '../audit/audit-log.service';
 import type { WatermarkService } from '../watermark/watermark.service';
@@ -27,10 +28,22 @@ const FILE = {
 const ORIGINAL_BUFFER = Buffer.from('the exact original bytes, never watermarked');
 const REAL_CHECKSUM = createHash('sha256').update(ORIGINAL_BUFFER).digest('hex');
 
+// Every test in this file predates folder-ACL -- an always-unrestricted
+// resolver keeps them exercising exactly what they did before. Folder-ACL
+// interaction with getOriginalContent has its own dedicated tests below.
+const UNRESTRICTED_FOLDER_ACCESS = {
+  buildResolver: jest.fn().mockResolvedValue({
+    unrestricted: true,
+    canReach: () => true,
+    reachableFolderIds: () => new Set<string>(),
+  }),
+} as unknown as FolderAccessService;
+
 function buildService(opts: {
   version?: unknown;
   storedChecksum?: string;
   assertCanDownloadOriginal?: jest.Mock;
+  folderAccess?: FolderAccessService;
 }) {
   // 'version' in opts (not ?? ) -- null is a deliberate test value here
   // (no retrievable version), and ?? would treat it as "unset" and fall
@@ -46,7 +59,8 @@ function buildService(opts: {
         };
 
   const assertCanDownloadOriginal =
-    opts.assertCanDownloadOriginal ?? jest.fn().mockResolvedValue({ dataRoom: { id: 'room-1' } });
+    opts.assertCanDownloadOriginal ??
+    jest.fn().mockResolvedValue({ dataRoom: { id: 'room-1' }, effectiveRole: 'PRA' });
   const fileFindFirst = jest.fn().mockResolvedValue(FILE);
   const versionFindUnique = jest.fn().mockResolvedValue(version);
   const storageRead = jest.fn().mockResolvedValue(ORIGINAL_BUFFER);
@@ -62,6 +76,7 @@ function buildService(opts: {
   const service = new FilesService(
     prisma,
     { assertCanDownloadOriginal } as unknown as DataRoomAccessService,
+    opts.folderAccess ?? UNRESTRICTED_FOLDER_ACCESS,
     {} as FoldersService,
     { record } as unknown as AuditLogService,
     { apply: watermarkApply, buildElements: watermarkBuildElements } as unknown as WatermarkService,
@@ -233,5 +248,43 @@ describe('FilesService.getOriginalContent denial auditing', () => {
     record.mockRejectedValueOnce(new Error('audit db blip'));
 
     await expect(service.getOriginalContent('room-1', 'file-1', ACTOR, CONTEXT)).rejects.toThrow('nope');
+  });
+});
+
+// Folder-ACL and DOWNLOAD_ORIGINAL are fully separate checks -- both must
+// pass. These tests hold canDownloadOriginal fixed (granted) and vary only
+// folder reachability, proving neither check can substitute for the other.
+describe('FilesService.getOriginalContent -- folder-ACL is a separate, additional gate', () => {
+  it('blocks with "File not found" when DOWNLOAD_ORIGINAL is granted but the file\'s folder is unreachable', async () => {
+    const restrictedFolderAccess = {
+      buildResolver: jest.fn().mockResolvedValue({ unrestricted: false, canReach: () => false }),
+    } as unknown as FolderAccessService;
+    const { service, record } = buildService({ folderAccess: restrictedFolderAccess });
+
+    await expect(service.getOriginalContent('room-1', 'file-1', ACTOR, CONTEXT)).rejects.toThrow('File not found');
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'ORIGINAL_FILE_DOWNLOAD_DENIED', metadata: expect.objectContaining({ reason: 'File not found' }) }),
+    );
+  });
+
+  it('succeeds when DOWNLOAD_ORIGINAL is granted AND the folder is reachable', async () => {
+    const permissiveFolderAccess = {
+      buildResolver: jest.fn().mockResolvedValue({ unrestricted: false, canReach: () => true }),
+    } as unknown as FolderAccessService;
+    const { service } = buildService({ folderAccess: permissiveFolderAccess });
+
+    const result = await service.getOriginalContent('room-1', 'file-1', ACTOR, CONTEXT);
+    expect(result.buffer).toBe(ORIGINAL_BUFFER);
+  });
+
+  it('short-circuits to success for an unrestricted room, matching every existing room\'s unchanged behaviour', async () => {
+    const canReach = jest.fn().mockReturnValue(false); // deliberately wrong if ever consulted
+    const buildResolver = jest.fn().mockResolvedValue({ unrestricted: true, canReach });
+    const { service } = buildService({ folderAccess: { buildResolver } as unknown as FolderAccessService });
+
+    const result = await service.getOriginalContent('room-1', 'file-1', ACTOR, CONTEXT);
+
+    expect(result.buffer).toBe(ORIGINAL_BUFFER);
+    expect(canReach).not.toHaveBeenCalled(); // unrestricted short-circuits before canReach() is ever reached
   });
 });
