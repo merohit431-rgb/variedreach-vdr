@@ -21,10 +21,19 @@ const MAX_UPLOAD_SIZE = 2 * GB;
 export const FILE_TYPE_RULES: FileTypeRule[] = [
   { category: 'Documents', extensions: ['pdf'], maxSizeBytes: MAX_UPLOAD_SIZE },
   { category: 'Documents', extensions: ['doc', 'docx', 'odt'], maxSizeBytes: MAX_UPLOAD_SIZE },
-  { category: 'Spreadsheets', extensions: ['xls', 'xlsx', 'csv', 'ods'], maxSizeBytes: MAX_UPLOAD_SIZE },
+  // xlsm: same ZIP-based OOXML container as xlsx (magic-bytes.util.ts treats
+  // them identically) -- macros are inert data to every part of this
+  // pipeline (storage, conversion, watermarking never execute file content),
+  // and the platform already accepts VBA-capable legacy binaries (doc/xls/
+  // ppt) with no macro/malware scanning at all, so this isn't a new risk
+  // category. See the Phase 2 remediation report for the full assessment.
+  { category: 'Spreadsheets', extensions: ['xls', 'xlsx', 'xlsm', 'csv', 'ods'], maxSizeBytes: MAX_UPLOAD_SIZE },
   { category: 'Presentations', extensions: ['ppt', 'pptx', 'odp'], maxSizeBytes: MAX_UPLOAD_SIZE },
   { category: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'tiff', 'webp'], maxSizeBytes: MAX_UPLOAD_SIZE },
-  { category: 'Others', extensions: ['txt'], maxSizeBytes: MAX_UPLOAD_SIZE },
+  // xml/json: plain structured text, no binary signature, same low-risk
+  // profile as txt/csv (no macros, nothing ever parses or executes them) --
+  // added for IPO financial-data exports.
+  { category: 'Others', extensions: ['txt', 'xml', 'json'], maxSizeBytes: MAX_UPLOAD_SIZE },
   { category: 'Others', extensions: ['msg', 'eml'], maxSizeBytes: MAX_UPLOAD_SIZE },
 ];
 
@@ -44,6 +53,7 @@ export const OFFICE_CONVERTIBLE_EXTENSIONS = [
   'odt',
   'xls',
   'xlsx',
+  'xlsm',
   'ods',
   'ppt',
   'pptx',

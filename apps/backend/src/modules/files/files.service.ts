@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
 import { rm, open } from 'fs/promises';
@@ -492,44 +492,81 @@ export class FilesService {
     context: { ipAddress: string; userAgent?: string },
     versionId?: string,
   ): Promise<WatermarkedContent> {
-    await this.dataRoomAccess.assertCanDownloadOriginal(dataRoomId, actor, context.ipAddress);
-    const file = await this.getFileOrThrow(dataRoomId, fileId);
+    // file/resolvedVersionId are filled in as far as the call gets before a
+    // denial, so the ORIGINAL_FILE_DOWNLOAD_DENIED row below can carry
+    // whatever context was actually resolved (just the fileId param for a
+    // permission denial; name/folderId too for a found-file-bad-version case).
+    let file: File | undefined;
+    let resolvedVersionId: string | undefined;
 
-    const version = versionId
-      ? await this.prisma.fileVersion.findFirst({ where: { id: versionId, fileId: file.id } })
-      : await this.prisma.fileVersion.findUnique({ where: { id: file.currentVersionId ?? undefined } });
+    try {
+      await this.dataRoomAccess.assertCanDownloadOriginal(dataRoomId, actor, context.ipAddress);
+      file = await this.getFileOrThrow(dataRoomId, fileId);
 
-    if (!version) {
-      throw new NotFoundException('This file has no content to retrieve');
+      const version = versionId
+        ? await this.prisma.fileVersion.findFirst({ where: { id: versionId, fileId: file.id } })
+        : await this.prisma.fileVersion.findUnique({ where: { id: file.currentVersionId ?? undefined } });
+
+      if (!version) {
+        throw new NotFoundException('This file has no content to retrieve');
+      }
+      resolvedVersionId = version.id;
+
+      const originalBuffer = await this.storage.read(version.storagePath);
+      const actualChecksum = createHash('sha256').update(originalBuffer).digest('hex');
+      const checksumMatches = actualChecksum === version.checksum;
+
+      await this.auditLogService.record({
+        action: 'ORIGINAL_FILE_DOWNLOADED',
+        dataRoomId,
+        userId: actor.id,
+        resourceType: 'File',
+        resourceId: file.id,
+        metadata: {
+          name: file.name,
+          folderId: file.folderId,
+          versionId: version.id,
+          versionNumber: version.versionNumber,
+          checksumVerified: checksumMatches,
+          ...(checksumMatches ? {} : { expectedChecksum: version.checksum, actualChecksum }),
+        },
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+      });
+
+      return {
+        buffer: originalBuffer,
+        filename: file.name,
+        mimeType: file.mimeType,
+      };
+    } catch (err) {
+      // Best-effort: a denial is audited on every rejection path (permission,
+      // NDA, IP allowlist, missing file, missing version) with no way for a
+      // direct API call to skip it, since this lives in the service method
+      // itself rather than the controller. Swallows its OWN failure (e.g. a
+      // fileId/dataRoomId so malformed it can't satisfy the audit log's FK)
+      // rather than letting a logging problem replace the real error below.
+      await this.auditLogService
+        .record({
+          action: 'ORIGINAL_FILE_DOWNLOAD_DENIED',
+          dataRoomId,
+          userId: actor.id,
+          resourceType: 'File',
+          resourceId: file?.id ?? fileId,
+          metadata: {
+            outcome: 'DENIED',
+            reason: err instanceof Error ? err.message : 'Unknown error',
+            httpStatus: err instanceof NotFoundException ? 404 : err instanceof ForbiddenException ? 403 : 500,
+            ...(file ? { name: file.name, folderId: file.folderId } : {}),
+            versionId: resolvedVersionId ?? versionId ?? null,
+          },
+          ipAddress: context.ipAddress,
+          userAgent: context.userAgent,
+        })
+        .catch(() => undefined);
+
+      throw err;
     }
-
-    const originalBuffer = await this.storage.read(version.storagePath);
-    const actualChecksum = createHash('sha256').update(originalBuffer).digest('hex');
-    const checksumMatches = actualChecksum === version.checksum;
-
-    await this.auditLogService.record({
-      action: 'ORIGINAL_FILE_DOWNLOADED',
-      dataRoomId,
-      userId: actor.id,
-      resourceType: 'File',
-      resourceId: file.id,
-      metadata: {
-        name: file.name,
-        folderId: file.folderId,
-        versionId: version.id,
-        versionNumber: version.versionNumber,
-        checksumVerified: checksumMatches,
-        ...(checksumMatches ? {} : { expectedChecksum: version.checksum, actualChecksum }),
-      },
-      ipAddress: context.ipAddress,
-      userAgent: context.userAgent,
-    });
-
-    return {
-      buffer: originalBuffer,
-      filename: file.name,
-      mimeType: file.mimeType,
-    };
   }
 
   async bulkDownload(

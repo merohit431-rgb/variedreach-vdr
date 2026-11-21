@@ -144,3 +144,94 @@ describe('FilesService.getOriginalContent', () => {
     );
   });
 });
+
+// Every rejection path records an ORIGINAL_FILE_DOWNLOAD_DENIED row -- this
+// lives inside the service method itself (not the controller), so there is
+// no way to reach a denial by calling the API without it being audited.
+describe('FilesService.getOriginalContent denial auditing', () => {
+  it('audits a missing-permission denial with the real reason and no file context (file never looked up)', async () => {
+    const assertCanDownloadOriginal = jest
+      .fn()
+      .mockRejectedValue(new ForbiddenException('You do not have permission to download the original, unwatermarked file'));
+    const { service, record, fileFindFirst } = buildService({ assertCanDownloadOriginal });
+
+    await expect(service.getOriginalContent('room-1', 'file-1', ACTOR, CONTEXT)).rejects.toThrow(ForbiddenException);
+
+    expect(fileFindFirst).not.toHaveBeenCalled();
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'ORIGINAL_FILE_DOWNLOAD_DENIED',
+        dataRoomId: 'room-1',
+        userId: 'user-1',
+        resourceType: 'File',
+        resourceId: 'file-1',
+        metadata: expect.objectContaining({
+          outcome: 'DENIED',
+          httpStatus: 403,
+          reason: 'You do not have permission to download the original, unwatermarked file',
+        }),
+        ipAddress: '127.0.0.1',
+      }),
+    );
+  });
+
+  it('audits a revoked-permission denial the same way as a never-granted one (same gate, same message)', async () => {
+    const assertCanDownloadOriginal = jest
+      .fn()
+      .mockRejectedValue(new ForbiddenException('You do not have permission to download the original, unwatermarked file'));
+    const { service, record } = buildService({ assertCanDownloadOriginal });
+
+    await expect(service.getOriginalContent('room-1', 'file-1', ACTOR, CONTEXT)).rejects.toThrow(ForbiddenException);
+
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'ORIGINAL_FILE_DOWNLOAD_DENIED', metadata: expect.objectContaining({ httpStatus: 403 }) }),
+    );
+  });
+
+  it('audits an unauthorized-membership denial with its own distinct reason', async () => {
+    const assertCanDownloadOriginal = jest
+      .fn()
+      .mockRejectedValue(new ForbiddenException('You do not have access to this data room'));
+    const { service, record } = buildService({ assertCanDownloadOriginal });
+
+    await expect(service.getOriginalContent('room-1', 'file-1', ACTOR, CONTEXT)).rejects.toThrow(ForbiddenException);
+
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ reason: 'You do not have access to this data room' }),
+      }),
+    );
+  });
+
+  it('audits an invalid-file denial with httpStatus 404 and the fileId param as resourceId', async () => {
+    const { service, record, fileFindFirst } = buildService({});
+    fileFindFirst.mockResolvedValueOnce(null);
+
+    await expect(service.getOriginalContent('room-1', 'missing-file', ACTOR, CONTEXT)).rejects.toThrow('File not found');
+
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resourceId: 'missing-file',
+        metadata: expect.objectContaining({ httpStatus: 404, reason: 'File not found' }),
+      }),
+    );
+  });
+
+  it('does not record a denial on a successful download', async () => {
+    const { service, record } = buildService({});
+
+    await service.getOriginalContent('room-1', 'file-1', ACTOR, CONTEXT);
+
+    expect(record).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'ORIGINAL_FILE_DOWNLOAD_DENIED' }));
+  });
+
+  it('a failure to WRITE the denial record never masks the real error', async () => {
+    const assertCanDownloadOriginal = jest.fn().mockRejectedValue(new ForbiddenException('nope'));
+    const { service, record } = buildService({ assertCanDownloadOriginal });
+    // The denial-logging call itself fails -- the original ForbiddenException
+    // must still be what the caller sees, not an error from the audit write.
+    record.mockRejectedValueOnce(new Error('audit db blip'));
+
+    await expect(service.getOriginalContent('room-1', 'file-1', ACTOR, CONTEXT)).rejects.toThrow('nope');
+  });
+});

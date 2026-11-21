@@ -21,7 +21,43 @@ export class DataRoomAccessService {
   // Loads the data room (scoped to the actor's org) and the actor's effective
   // role within it, or throws. Returns null role for org-wide admins who
   // aren't an explicit member — callers should treat that as "full access".
+  // This is the full content-access gate (adds the NDA check on top of
+  // assertMembership()) -- every content/room endpoint routes through here
+  // via assertContentManager/assertContentDeleter/assertCanDownload/
+  // assertCanDownloadOriginal/assertRoomManager. The NDA acceptance flow
+  // itself must NOT use this method -- see assertMembership()'s comment.
   async getAccess(dataRoomId: string, actor: AuthenticatedUser, clientIp?: string) {
+    const access = await this.assertMembership(dataRoomId, actor, clientIp);
+
+    // NDA gate. Manager-tier roles are the room's own internal staff, not
+    // external reviewers under confidentiality obligations, so they bypass it.
+    if (access.dataRoom.ndaEnabled && !DATA_ROOM_MANAGER_ROLES.includes(access.effectiveRole)) {
+      const acceptance = await this.prisma.ndaAcceptance.findUnique({
+        where: { dataRoomId_userId: { dataRoomId, userId: actor.id } },
+      });
+
+      if (!acceptance) {
+        throw new ForbiddenException(
+          'You must accept the confidentiality agreement before accessing this data room',
+        );
+      }
+    }
+
+    return access;
+  }
+
+  // Resolves data-room membership, the IP allowlist and the actor's effective
+  // role -- everything getAccess() does EXCEPT the NDA gate. Split out so the
+  // NDA acceptance flow itself (NdaService.getStatus/accept) can resolve "is
+  // this actor even a member of this room" without going through the NDA
+  // check it exists to satisfy. getAccess() calling itself from there was a
+  // real, shipped bug: no member could ever accept a room's NDA, because the
+  // accept endpoint required the NDA to already be accepted. Every other
+  // caller (actual content access) should keep using getAccess() or one of
+  // its assert* wrappers below -- this method intentionally does not gate on
+  // NDA at all, so it must never be used to authorize reading file/folder
+  // content.
+  async assertMembership(dataRoomId: string, actor: AuthenticatedUser, clientIp?: string) {
     const dataRoom = await this.prisma.dataRoom.findFirst({
       where: { id: dataRoomId, organisationId: actor.organisationId, deletedAt: null },
     });
@@ -66,25 +102,6 @@ export class DataRoomAccessService {
 
       effectiveRole = membership.roleOverride ?? actor.role;
       canDownloadOriginal = membership.canDownloadOriginal;
-    }
-
-    // NDA gate. This is the actual enforcement point -- every content/room
-    // endpoint routes through here via assertContentManager/
-    // assertContentDeleter/assertCanDownload/assertRoomManager, not just the
-    // one Files page that renders <NdaGateModal>. Manager-tier roles are the
-    // room's own internal staff, not external reviewers under confidentiality
-    // obligations, so they bypass it -- mirrors NdaService's own BYPASS_ROLES
-    // rather than re-deriving a second definition of the same set.
-    if (dataRoom.ndaEnabled && !DATA_ROOM_MANAGER_ROLES.includes(effectiveRole)) {
-      const acceptance = await this.prisma.ndaAcceptance.findUnique({
-        where: { dataRoomId_userId: { dataRoomId, userId: actor.id } },
-      });
-
-      if (!acceptance) {
-        throw new ForbiddenException(
-          'You must accept the confidentiality agreement before accessing this data room',
-        );
-      }
     }
 
     return { dataRoom, effectiveRole, isMember: true, canDownloadOriginal };

@@ -98,3 +98,80 @@ describe('DataRoomAccessService.assertCanDownloadOriginal', () => {
     expect(access.canDownloadOriginal).toBe(true);
   });
 });
+
+function buildNdaScenarioService(opts: { membership: unknown; acceptance?: unknown }) {
+  const room = { ...ROOM, ndaEnabled: true, ndaText: null };
+  const dataRoomFindFirst = jest.fn().mockResolvedValue(room);
+  const memberFindUnique = jest.fn().mockResolvedValue(opts.membership);
+  const ndaAcceptanceFindUnique = jest.fn().mockResolvedValue(opts.acceptance ?? null);
+
+  const prisma = {
+    dataRoom: { findFirst: dataRoomFindFirst },
+    dataRoomMember: { findUnique: memberFindUnique },
+    ndaAcceptance: { findUnique: ndaAcceptanceFindUnique },
+  } as unknown as PrismaService;
+
+  return { service: new DataRoomAccessService(prisma) };
+}
+
+// Regression coverage for the fix: assertMembership() must resolve for
+// exactly the scenario that previously made NdaService.getStatus()/accept()
+// circularly unreachable (NDA enabled, actor is a non-manager member, no
+// acceptance yet) -- while getAccess(), the method every actual content
+// endpoint still uses, must keep throwing for that same scenario. If these
+// two ever started agreeing, either the NDA gate silently stopped being
+// enforced for real content access, or the original bug came back.
+describe('DataRoomAccessService.assertMembership vs getAccess (NDA circular-lockout fix)', () => {
+  const NON_MANAGER_MEMBER = { roleOverride: null, canDownloadOriginal: false, removedAt: null };
+
+  it('assertMembership() resolves for an unaccepted-NDA non-manager member (does not throw)', async () => {
+    const { service } = buildNdaScenarioService({ membership: NON_MANAGER_MEMBER, acceptance: null });
+    const actor = { id: 'u1', organisationId: 'org-1', role: 'PRA' } as AuthenticatedUser;
+
+    const access = await service.assertMembership('room-1', actor);
+
+    expect(access.effectiveRole).toBe('PRA');
+    expect(access.dataRoom.ndaEnabled).toBe(true);
+  });
+
+  it('getAccess() still throws the NDA message for that exact same scenario -- content access stays gated', async () => {
+    const { service } = buildNdaScenarioService({ membership: NON_MANAGER_MEMBER, acceptance: null });
+    const actor = { id: 'u1', organisationId: 'org-1', role: 'PRA' } as AuthenticatedUser;
+
+    await expect(service.getAccess('room-1', actor)).rejects.toThrow(
+      'You must accept the confidentiality agreement before accessing this data room',
+    );
+  });
+
+  it('getAccess() succeeds once an acceptance row exists, for the same membership', async () => {
+    const { service } = buildNdaScenarioService({
+      membership: NON_MANAGER_MEMBER,
+      acceptance: { id: 'acc-1' },
+    });
+    const actor = { id: 'u1', organisationId: 'org-1', role: 'PRA' } as AuthenticatedUser;
+
+    const access = await service.getAccess('room-1', actor);
+
+    expect(access.effectiveRole).toBe('PRA');
+  });
+
+  it('assertMembership() still rejects a removed/revoked membership (not bypassed by the fix)', async () => {
+    const { service } = buildNdaScenarioService({
+      membership: { ...NON_MANAGER_MEMBER, removedAt: new Date() },
+    });
+    const actor = { id: 'u1', organisationId: 'org-1', role: 'PRA' } as AuthenticatedUser;
+
+    await expect(service.assertMembership('room-1', actor)).rejects.toThrow(
+      'You do not have access to this data room',
+    );
+  });
+
+  it('assertMembership() still rejects a non-member entirely', async () => {
+    const { service } = buildNdaScenarioService({ membership: null });
+    const actor = { id: 'u1', organisationId: 'org-1', role: 'PRA' } as AuthenticatedUser;
+
+    await expect(service.assertMembership('room-1', actor)).rejects.toThrow(
+      'You do not have access to this data room',
+    );
+  });
+});

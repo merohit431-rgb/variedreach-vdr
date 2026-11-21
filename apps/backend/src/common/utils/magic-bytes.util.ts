@@ -17,8 +17,8 @@ interface Signature {
 const SIGNATURES: Signature[] = [
   // PDF
   { bytes: [0x25, 0x50, 0x44, 0x46], offset: 0, extensions: ['pdf'] },
-  // ZIP-based Office (DOCX, XLSX, PPTX, ODT, ODS, ODP)
-  { bytes: [0x50, 0x4b, 0x03, 0x04], offset: 0, extensions: ['docx', 'xlsx', 'pptx', 'odt', 'ods', 'odp'] },
+  // ZIP-based Office (DOCX, XLSX, XLSM, PPTX, ODT, ODS, ODP)
+  { bytes: [0x50, 0x4b, 0x03, 0x04], offset: 0, extensions: ['docx', 'xlsx', 'xlsm', 'pptx', 'odt', 'ods', 'odp'] },
   // OLE2 Compound Document (legacy DOC, XLS, PPT)
   {
     bytes: [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1],
@@ -40,7 +40,7 @@ const SIGNATURES: Signature[] = [
 ];
 
 // Text-based formats have no binary signature; extension whitelist is the sole gate.
-const TEXT_EXTENSIONS = new Set(['txt', 'csv', 'eml', 'msg']);
+const TEXT_EXTENSIONS = new Set(['txt', 'csv', 'eml', 'msg', 'xml', 'json']);
 
 function matchesAt(buffer: Buffer, signature: number[], offset: number): boolean {
   if (buffer.length < offset + signature.length) return false;

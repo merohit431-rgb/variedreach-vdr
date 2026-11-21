@@ -20,7 +20,7 @@ export const FILE_TYPE_RULES: FileTypeRule[] = [
   { category: 'Documents', extensions: ['doc', 'docx', 'odt'], maxSizeBytes: MAX_UPLOAD_SIZE, previewable: true },
   {
     category: 'Spreadsheets',
-    extensions: ['xls', 'xlsx', 'ods'],
+    extensions: ['xls', 'xlsx', 'xlsm', 'ods'],
     maxSizeBytes: MAX_UPLOAD_SIZE,
     previewable: true,
   },
@@ -37,7 +37,7 @@ export const FILE_TYPE_RULES: FileTypeRule[] = [
     maxSizeBytes: MAX_UPLOAD_SIZE,
     previewable: true,
   },
-  { category: 'Others', extensions: ['txt'], maxSizeBytes: MAX_UPLOAD_SIZE, previewable: true },
+  { category: 'Others', extensions: ['txt', 'xml', 'json'], maxSizeBytes: MAX_UPLOAD_SIZE, previewable: true },
   { category: 'Others', extensions: ['msg', 'eml'], maxSizeBytes: MAX_UPLOAD_SIZE, previewable: false },
 ];
 
@@ -52,6 +52,7 @@ export const OFFICE_CONVERTIBLE_EXTENSIONS = [
   'odt',
   'xls',
   'xlsx',
+  'xlsm',
   'ods',
   'ppt',
   'pptx',
