@@ -11,6 +11,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import type { DataRoomType } from '@prisma/client';
 import type { Request } from 'express';
 import { DataRoomsService } from './data-rooms.service';
 import { CreateDataRoomDto } from './dto/create-data-room.dto';
@@ -18,6 +19,7 @@ import { UpdateDataRoomDto } from './dto/update-data-room.dto';
 import { UpdateSecuritySettingsDto } from './dto/update-security-settings.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { SetMemberDownloadOriginalDto } from './dto/set-member-download-original.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
@@ -45,6 +47,13 @@ export class DataRoomsController {
   @Get('deleted')
   findDeleted(@CurrentUser() user: AuthenticatedUser) {
     return this.dataRoomsService.findDeleted(user);
+  }
+
+  // Two path segments, so this can never collide with @Get(':id')'s one --
+  // no ordering requirement the way 'deleted' above has.
+  @Get('templates/:type')
+  getTemplate(@Param('type') type: DataRoomType) {
+    return this.dataRoomsService.getTemplate(type);
   }
 
   @Get(':id')
@@ -132,6 +141,17 @@ export class DataRoomsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.dataRoomsService.updateMemberRole(id, userId, dto.role, user);
+  }
+
+  @Roles(...MANAGER_ROLES)
+  @Patch(':id/members/:userId/download-original')
+  setMemberDownloadOriginal(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @Body() dto: SetMemberDownloadOriginalDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.dataRoomsService.setMemberDownloadOriginal(id, userId, dto.enabled, user);
   }
 
   @Roles(...MANAGER_ROLES)

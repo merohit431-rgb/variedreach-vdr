@@ -36,6 +36,7 @@ export default function DataRoomFilesPage() {
   const canUpload = Boolean(access?.canUploadContent);
   const canDelete = Boolean(access?.canDeleteContent);
   const canDownload = Boolean(access?.canDownload);
+  const canDownloadOriginal = Boolean(access?.canDownloadOriginal);
 
   const ancestorChain = getAncestorChain(folders ?? [], selectedFolderId);
   const breadcrumbItems = collapseBreadcrumbItems([
@@ -58,6 +59,7 @@ export default function DataRoomFilesPage() {
         canUpload={canUpload}
         canDelete={canDelete}
         canDownload={canDownload}
+        canDownloadOriginal={canDownloadOriginal}
       />
     </>
   );

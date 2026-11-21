@@ -8,6 +8,7 @@ import {
   useRemoveMember,
   useResetMemberPassword,
   useResendInvite,
+  useSetMemberDownloadOriginal,
   type Member,
 } from '@/hooks/use-members';
 import { USER_ROLES, ROLE_LABELS, type UserRole } from '@variedreach-vdr/shared';
@@ -50,6 +51,7 @@ export function MembersPanel({ dataRoomId, canManage }: { dataRoomId: string; ca
   const removeMember = useRemoveMember(dataRoomId);
   const resetPassword = useResetMemberPassword(dataRoomId);
   const resendInvite = useResendInvite(dataRoomId);
+  const setDownloadOriginal = useSetMemberDownloadOriginal(dataRoomId);
 
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [profileMember, setProfileMember] = useState<Member | null>(null);
@@ -149,6 +151,11 @@ export function MembersPanel({ dataRoomId, canManage }: { dataRoomId: string; ca
                 <th className="px-4 py-3 font-semibold uppercase tracking-wide text-app-t3">
                   Status
                 </th>
+                {canManage && (
+                  <th className="px-4 py-3 font-semibold uppercase tracking-wide text-app-t3" title="Download the exact original file, unwatermarked">
+                    Original download
+                  </th>
+                )}
                 {canManage && <th className="px-4 py-3" />}
               </tr>
             </thead>
@@ -228,6 +235,34 @@ export function MembersPanel({ dataRoomId, canManage }: { dataRoomId: string; ca
                         </span>
                       </td>
 
+                      {/* Original-download permission -- deliberately off by
+                          default for every member, never derived from role */}
+                      {canManage && (
+                        <td className="px-4 py-3">
+                          <label className="flex cursor-pointer items-center gap-2">
+                            <div
+                              onClick={() =>
+                                setDownloadOriginal.mutate({
+                                  userId: member.userId,
+                                  enabled: !member.canDownloadOriginal,
+                                })
+                              }
+                              className={cn(
+                                'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
+                                member.canDownloadOriginal ? 'bg-app-primary' : 'bg-app-s3',
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  'inline-block h-4 w-4 transform rounded-full bg-app-s1 shadow transition-transform',
+                                  member.canDownloadOriginal ? 'translate-x-4' : 'translate-x-0.5',
+                                )}
+                              />
+                            </div>
+                          </label>
+                        </td>
+                      )}
+
                       {/* Actions */}
                       {canManage && (
                         <td className="px-4 py-3">
@@ -267,7 +302,7 @@ export function MembersPanel({ dataRoomId, canManage }: { dataRoomId: string; ca
                 })
               ) : (
                 <tr>
-                  <td colSpan={canManage ? 4 : 3} className="px-4 py-10 text-center">
+                  <td colSpan={canManage ? 5 : 3} className="px-4 py-10 text-center">
                     <p className="text-sm text-app-t3">No members yet.</p>
                     {canManage && (
                       <p className="mt-1 text-xs text-app-t3">

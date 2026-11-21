@@ -202,6 +202,22 @@ export async function downloadFile(dataRoomId: string, fileId: string, filename:
   URL.revokeObjectURL(url);
 }
 
+// Option B: the exact original, unwatermarked binary -- gated server-side by
+// the dedicated DOWNLOAD_ORIGINAL permission, not by canDownload. filename
+// is the file's own stored name (no "(preview).pdf" renaming the way the
+// watermarked download does for Office files, since this is never converted).
+export async function downloadOriginalFile(dataRoomId: string, fileId: string, filename: string) {
+  const blob = await fetchFileBlob(`/data-rooms/${dataRoomId}/files/${fileId}/download-original`);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export async function bulkDownloadFiles(dataRoomId: string, fileIds: string[], filename: string) {
   const response = await apiClient.post<Blob>(
     `/data-rooms/${dataRoomId}/files/bulk-download`,

@@ -1,10 +1,24 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCreateDataRoom } from '@/hooks/use-data-rooms';
+import { ChevronDown, ChevronRight, FolderTree } from 'lucide-react';
+import { useCreateDataRoom, useDataRoomTemplate, type DataRoomTemplateFolderNode } from '@/hooks/use-data-rooms';
 import { DATA_ROOM_TYPES, DATA_ROOM_TYPE_LABELS, type DataRoomType } from '@variedreach-vdr/shared';
 import { extractErrorMessage } from '@/lib/error-message';
+
+function TemplateFolderTree({ nodes, depth = 0 }: { nodes: DataRoomTemplateFolderNode[]; depth?: number }) {
+  return (
+    <ul className={depth === 0 ? 'space-y-0.5' : 'ml-4 space-y-0.5 border-l border-app-border pl-2'}>
+      {nodes.map((node) => (
+        <li key={node.name}>
+          <span className="text-xs text-app-t2">{node.name}</span>
+          {node.children.length > 0 && <TemplateFolderTree nodes={node.children} depth={depth + 1} />}
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export function CreateDataRoomForm() {
   const router = useRouter();
@@ -12,7 +26,18 @@ export function CreateDataRoomForm() {
   const [name, setName] = useState('');
   const [type, setType] = useState<DataRoomType>('CIRP');
   const [caseNumber, setCaseNumber] = useState('');
+  const [applyTemplate, setApplyTemplate] = useState(true);
+  const [showPreview, setShowPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { data: template, isLoading: isTemplateLoading } = useDataRoomTemplate(type);
+
+  // Re-default to "apply template" whenever the type changes, rather than
+  // carrying a choice made for a different template's folder structure.
+  useEffect(() => {
+    setApplyTemplate(true);
+    setShowPreview(false);
+  }, [type]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -22,6 +47,7 @@ export function CreateDataRoomForm() {
       const dataRoom = await createDataRoom.mutateAsync({
         name,
         type,
+        applyTemplate: template ? applyTemplate : false,
         caseNumber: caseNumber || undefined,
       });
       router.push(`/data-rooms/${dataRoom.id}`);
@@ -69,12 +95,53 @@ export function CreateDataRoomForm() {
             </option>
           ))}
         </select>
-        {type === 'CIRP' && (
-          <p className="mt-1 text-xs text-app-t3">
-            A standard CIRP folder structure will be created automatically.
-          </p>
-        )}
       </div>
+
+      {isTemplateLoading ? (
+        <p className="text-xs text-app-t3">Checking for a folder template…</p>
+      ) : (
+        template && (
+          <div className="rounded-md border border-app-border2 p-3">
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                checked={applyTemplate}
+                onChange={(e) => setApplyTemplate(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span className="text-sm text-app-t2">
+                Apply standard folder template
+                <span className="block text-xs text-app-t3">
+                  Creates {template.folderCount} folder{template.folderCount === 1 ? '' : 's'} from the{' '}
+                  {template.name} template.
+                </span>
+              </span>
+            </label>
+
+            {applyTemplate && (
+              <button
+                type="button"
+                onClick={() => setShowPreview((prev) => !prev)}
+                className="mt-2 flex items-center gap-1 text-xs font-medium text-app-primary"
+              >
+                {showPreview ? (
+                  <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                )}
+                <FolderTree className="h-3.5 w-3.5" aria-hidden="true" />
+                {showPreview ? 'Hide' : 'Preview'} folder structure
+              </button>
+            )}
+
+            {applyTemplate && showPreview && (
+              <div className="mt-2 max-h-48 overflow-y-auto rounded-md bg-app-s2 p-2">
+                <TemplateFolderTree nodes={template.folders} />
+              </div>
+            )}
+          </div>
+        )
+      )}
 
       <div>
         <label htmlFor="caseNumber" className="block text-sm font-medium text-app-t2">

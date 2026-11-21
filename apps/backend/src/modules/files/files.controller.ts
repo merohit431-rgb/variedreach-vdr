@@ -218,6 +218,28 @@ export class FilesController {
     sendFileResponse(res, content, 'attachment');
   }
 
+  // Option B from the two-download model: exact original bytes, no
+  // watermark, no Office->PDF conversion. Same tighter rate-limit tier as
+  // the other high-sensitivity bulk routes -- a routine single download
+  // through Option A is far more frequent than a deliberate original pull.
+  @Throttle({ global: { ttl: 60, limit: 20 } })
+  @Get(':fileId/download-original')
+  async downloadOriginal(
+    @Param('dataRoomId') dataRoomId: string,
+    @Param('fileId') fileId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const content = await this.filesService.getOriginalContent(
+      dataRoomId,
+      fileId,
+      user,
+      { ipAddress: req.ip ?? '0.0.0.0', userAgent: req.headers['user-agent'] },
+    );
+    sendFileResponse(res, content, 'attachment');
+  }
+
   @Throttle({ global: { ttl: 60, limit: 20 } })
   @Post('bulk-download')
   async bulkDownload(

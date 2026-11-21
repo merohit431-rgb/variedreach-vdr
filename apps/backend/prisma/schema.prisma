@@ -43,6 +43,7 @@ enum DataRoomType {
   CIRP
   LIQUIDATION
   MA_DUE_DILIGENCE
+  IPO
   OTHER
 }
 
@@ -90,6 +91,9 @@ enum AuditAction {
   QUESTION_ANSWER_EDITED
   QUESTION_DELETED
   BULK_DOWNLOADED
+  ORIGINAL_FILE_DOWNLOADED
+  DATA_ROOM_TEMPLATE_APPLIED
+  DOWNLOAD_ORIGINAL_PERMISSION_CHANGED
   MFA_ENABLED
   MFA_DISABLED
   STORAGE_UPGRADE_REQUESTED
@@ -470,6 +474,14 @@ model DataRoomMember {
   invitedAt    DateTime  @default(now())
   joinedAt     DateTime?
   removedAt    DateTime?
+  // Explicit, per-member opt-in to bypass watermarking entirely and receive
+  // the exact original uploaded binary -- deliberately NOT derived from role
+  // or room-manager tier, and defaults false for every existing and new
+  // member, so shipping this never silently grants it to anyone. A room
+  // manager turns it on per member; SUPER_ADMIN bypasses this check the same
+  // way it bypasses IP-allowlist/NDA elsewhere, everyone else (including
+  // ORG_ADMIN) needs this flag set explicitly on their own membership row.
+  canDownloadOriginal Boolean @default(false)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -507,6 +519,44 @@ model Folder {
   @@index([dataRoomId, parentId])
   @@index([dataRoomId, path])
   @@map("folders")
+}
+
+// Database-backed folder template -- replaces the earlier hardcoded CIRP
+// array. One row per DataRoomType that gets an auto-seeded structure;
+// DataRoomsService.create() looks this up by type rather than branching on
+// a hardcoded type check. Deactivating a template (isActive: false) stops
+// it being offered for new rooms without deleting the historical record of
+// what rooms created under it were actually seeded with.
+model DataRoomTemplate {
+  id          String       @id @default(uuid())
+  dataRoomType DataRoomType @unique
+  name        String
+  description String?
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  folders DataRoomTemplateFolder[]
+
+  @@map("data_room_templates")
+}
+
+// One node in a template's folder tree. Self-referential, same shape as
+// Folder itself, so seeding is a straightforward recursive copy rather than
+// a format conversion.
+model DataRoomTemplateFolder {
+  id         String  @id @default(uuid())
+  templateId String
+  parentId   String?
+  name       String
+  sortOrder  Int     @default(0)
+
+  template DataRoomTemplate        @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  parent   DataRoomTemplateFolder? @relation("TemplateFolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children DataRoomTemplateFolder[] @relation("TemplateFolderTree")
+
+  @@index([templateId, parentId])
+  @@map("data_room_template_folders")
 }
 
 // File metadata. Binary content lives in storage (local disk for V1.0,

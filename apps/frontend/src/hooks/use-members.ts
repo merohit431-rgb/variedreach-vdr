@@ -6,6 +6,7 @@ export interface Member {
   userId: string;
   dataRoomId: string;
   roleOverride: UserRole | null;
+  canDownloadOriginal: boolean;
   clientOrganisation: string | null;
   notes: string | null;
   invitedAt: string;
@@ -77,6 +78,18 @@ export function useUpdateMemberRole(dataRoomId: string) {
   return useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: UserRole }) => {
       await apiClient.patch(`/data-rooms/${dataRoomId}/members/${userId}`, { role });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['data-rooms', dataRoomId, 'members'] });
+    },
+  });
+}
+
+export function useSetMemberDownloadOriginal(dataRoomId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ userId, enabled }: { userId: string; enabled: boolean }) => {
+      await apiClient.patch(`/data-rooms/${dataRoomId}/members/${userId}/download-original`, { enabled });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['data-rooms', dataRoomId, 'members'] });

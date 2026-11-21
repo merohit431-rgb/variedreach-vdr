@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, DragEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { FolderOpen, Upload, FolderPlus, Grid3X3, List, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, Cloud, Download, History, PenLine, Trash2, Eye } from 'lucide-react';
+import { FolderOpen, Upload, FolderPlus, Grid3X3, List, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, Cloud, Download, FileCheck, History, PenLine, Trash2, Eye } from 'lucide-react';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Avatar } from '@/components/ui/Avatar';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
@@ -12,6 +12,7 @@ import {
   useDeleteFile,
   useBulkDeleteFiles,
   downloadFile,
+  downloadOriginalFile,
   bulkDownloadFiles,
   FileRecord,
 } from '@/hooks/use-files';
@@ -144,6 +145,7 @@ export function FileBrowser({
   canUpload,
   canDelete,
   canDownload,
+  canDownloadOriginal,
 }: {
   dataRoomId: string;
   folderId: string | null;
@@ -151,6 +153,7 @@ export function FileBrowser({
   canUpload: boolean;
   canDelete: boolean;
   canDownload: boolean;
+  canDownloadOriginal: boolean;
 }) {
   const { data: files, isLoading } = useFiles(dataRoomId, { folderId, search });
   const updateFile = useUpdateFile(dataRoomId);
@@ -288,6 +291,14 @@ export function FileBrowser({
         icon: Download,
         onClick: () =>
           downloadFile(dataRoomId, file.id, getPreviewFilename(file.name, file.extension)),
+      });
+    }
+    if (canDownloadOriginal) {
+      items.push({
+        key: 'download-original',
+        label: 'Download Original',
+        icon: FileCheck,
+        onClick: () => downloadOriginalFile(dataRoomId, file.id, file.name),
       });
     }
     items.push({ key: 'history', label: 'Version history', icon: History, onClick: () => setVersionsFile(file) });

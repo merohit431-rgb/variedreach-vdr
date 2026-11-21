@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, UserRole } from '@prisma/client';
+import { DataRoomType, Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { MailService } from '../mail/mail.service';
@@ -41,7 +41,7 @@ export class DataRoomsService {
   ) {}
 
   async getMyAccess(dataRoomId: string, actor: AuthenticatedUser, clientIp?: string) {
-    const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
+    const { effectiveRole, canDownloadOriginal } = await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
 
     return {
       effectiveRole,
@@ -49,6 +49,39 @@ export class DataRoomsService {
       canUploadContent: CONTENT_MANAGER_ROLES.includes(effectiveRole),
       canDeleteContent: CONTENT_DELETE_ROLES.includes(effectiveRole),
       canDownload: !NO_DOWNLOAD_ROLES.includes(effectiveRole),
+      canDownloadOriginal,
+    };
+  }
+
+  // Preview a template's folder tree before/while creating a room -- the
+  // frontend's "apply standard folder template" toggle reads this to decide
+  // whether to show itself at all (no row for this type = nothing to offer)
+  // and what it would actually create.
+  async getTemplate(dataRoomType: DataRoomType) {
+    const template = await this.prisma.dataRoomTemplate.findUnique({
+      where: { dataRoomType },
+      include: { folders: { orderBy: { sortOrder: 'asc' } } },
+    });
+
+    if (!template || !template.isActive) {
+      return null;
+    }
+
+    const byParent = new Map<string | null, typeof template.folders>();
+    for (const f of template.folders) {
+      const key = f.parentId;
+      if (!byParent.has(key)) byParent.set(key, []);
+      byParent.get(key)!.push(f);
+    }
+    const buildTree = (parentId: string | null): unknown[] =>
+      (byParent.get(parentId) ?? []).map((f) => ({ name: f.name, children: buildTree(f.id) }));
+
+    return {
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      folderCount: template.folders.length,
+      folders: buildTree(null),
     };
   }
 
@@ -68,8 +101,27 @@ export class DataRoomsService {
       },
     });
 
-    if (dataRoom.type === 'CIRP') {
-      await this.foldersService.seedCirpTemplate(dataRoom.id, actor.id);
+    // Database-backed template lookup -- replaces the earlier hardcoded
+    // `if (type === 'CIRP')` branch. Any DataRoomType can have a template
+    // row; CIRP's and IPO's are both just data now, not special-cased code.
+    // applyTemplate defaults to true (undefined !== false) so every existing
+    // caller that creates a CIRP room without knowing this field exists
+    // keeps getting the same auto-seed behaviour as before.
+    if (dto.applyTemplate !== false) {
+      const template = await this.prisma.dataRoomTemplate.findUnique({
+        where: { dataRoomType: dto.type },
+      });
+      if (template && template.isActive) {
+        await this.foldersService.seedFromTemplate(dataRoom.id, template.id, actor.id);
+        await this.auditLogService.record({
+          action: 'DATA_ROOM_TEMPLATE_APPLIED',
+          dataRoomId: dataRoom.id,
+          userId: actor.id,
+          resourceType: 'DataRoom',
+          resourceId: dataRoom.id,
+          metadata: { templateId: template.id, templateName: template.name },
+        });
+      }
     }
 
     await this.auditLogService.record({
@@ -516,6 +568,41 @@ export class DataRoomsService {
       resourceType: 'User',
       resourceId: userId,
       metadata: { newRole: role },
+    });
+
+    return updated;
+  }
+
+  // The dedicated DOWNLOAD_ORIGINAL permission -- deliberately its own
+  // endpoint rather than a field on updateMemberRole, since it's a distinct,
+  // explicitly-opt-in grant, not a consequence of what role someone holds.
+  // Defaults to false for every member row (new or existing) created before
+  // this shipped -- nothing here or in member creation turns it on by itself.
+  async setMemberDownloadOriginal(dataRoomId: string, userId: string, enabled: boolean, actor: AuthenticatedUser) {
+    await this.assertManager(dataRoomId, actor);
+
+    const member = await this.prisma.dataRoomMember.findUnique({
+      where: { dataRoomId_userId: { dataRoomId, userId } },
+    });
+    if (!member || member.removedAt) {
+      throw new NotFoundException('Member not found in this data room');
+    }
+    if (member.canDownloadOriginal === enabled) {
+      return member;
+    }
+
+    const updated = await this.prisma.dataRoomMember.update({
+      where: { dataRoomId_userId: { dataRoomId, userId } },
+      data: { canDownloadOriginal: enabled },
+    });
+
+    await this.auditLogService.record({
+      action: 'DOWNLOAD_ORIGINAL_PERMISSION_CHANGED',
+      dataRoomId,
+      userId: actor.id,
+      resourceType: 'User',
+      resourceId: userId,
+      metadata: { from: member.canDownloadOriginal, to: enabled },
     });
 
     return updated;

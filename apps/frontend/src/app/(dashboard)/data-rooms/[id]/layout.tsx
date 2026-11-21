@@ -49,6 +49,7 @@ const TYPE_PILL: Record<DataRoomType, string> = {
   CIRP: 'bg-blue-500/15 text-blue-300',
   LIQUIDATION: 'bg-orange-500/15 text-orange-300',
   MA_DUE_DILIGENCE: 'bg-violet-500/15 text-violet-300',
+  IPO: 'bg-emerald-500/15 text-emerald-300',
   OTHER: 'bg-app-s2 text-app-t3',
 };
 

@@ -39,9 +39,22 @@ export class DataRoomAccessService {
     }
 
     let effectiveRole: UserRole;
+    // Deliberately NOT folded into isOrgWide's implicit "full access" --
+    // this is a dedicated, explicitly-granted permission (unwatermarked
+    // original download), not something org-wide admin status should confer
+    // automatically. Only SUPER_ADMIN (platform operator, a different trust
+    // tier than any organisation role) bypasses; ORG_ADMIN needs the same
+    // explicit DataRoomMember.canDownloadOriginal flag as everyone else.
+    let canDownloadOriginal = actor.role === UserRole.SUPER_ADMIN;
 
     if (isOrgWide) {
       effectiveRole = actor.role;
+      if (!canDownloadOriginal) {
+        const membership = await this.prisma.dataRoomMember.findUnique({
+          where: { dataRoomId_userId: { dataRoomId, userId: actor.id } },
+        });
+        canDownloadOriginal = membership?.canDownloadOriginal ?? false;
+      }
     } else {
       const membership = await this.prisma.dataRoomMember.findUnique({
         where: { dataRoomId_userId: { dataRoomId, userId: actor.id } },
@@ -52,6 +65,7 @@ export class DataRoomAccessService {
       }
 
       effectiveRole = membership.roleOverride ?? actor.role;
+      canDownloadOriginal = membership.canDownloadOriginal;
     }
 
     // NDA gate. This is the actual enforcement point -- every content/room
@@ -73,7 +87,7 @@ export class DataRoomAccessService {
       }
     }
 
-    return { dataRoom, effectiveRole, isMember: true };
+    return { dataRoom, effectiveRole, isMember: true, canDownloadOriginal };
   }
 
   async assertContentManager(dataRoomId: string, actor: AuthenticatedUser, clientIp?: string) {
@@ -101,6 +115,19 @@ export class DataRoomAccessService {
 
     if (NO_DOWNLOAD_ROLES.includes(access.effectiveRole)) {
       throw new ForbiddenException('Your role is view-only and cannot download documents');
+    }
+
+    return access;
+  }
+
+  // The dedicated DOWNLOAD_ORIGINAL permission -- deliberately a separate
+  // assertion from assertCanDownload rather than a parameter on it, so every
+  // call site has to explicitly choose which one it means.
+  async assertCanDownloadOriginal(dataRoomId: string, actor: AuthenticatedUser, clientIp?: string) {
+    const access = await this.getAccess(dataRoomId, actor, clientIp);
+
+    if (!access.canDownloadOriginal) {
+      throw new ForbiddenException('You do not have permission to download the original, unwatermarked file');
     }
 
     return access;

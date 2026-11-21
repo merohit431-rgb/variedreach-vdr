@@ -8,7 +8,6 @@ import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { CreateFolderDto } from './dto/create-folder.dto';
 import { UpdateFolderDto } from './dto/update-folder.dto';
 import { CopyFolderDto } from './dto/copy-folder.dto';
-import { CIRP_DEFAULT_FOLDERS } from './cirp-folder-template';
 
 @Injectable()
 export class FoldersService {
@@ -264,19 +263,45 @@ export class FoldersService {
     return newFolder;
   }
 
-  // Called by DataRoomsService right after creating a CIRP data room.
-  async seedCirpTemplate(dataRoomId: string, createdBy: string): Promise<void> {
-    await this.prisma.folder.createMany({
-      data: CIRP_DEFAULT_FOLDERS.map((name, index) => ({
-        dataRoomId,
-        parentId: null,
-        name,
-        path: `/${name}`,
-        depth: 0,
-        sortOrder: index,
-        createdBy,
-      })),
+  // Called by DataRoomsService right after creating a data room whose type
+  // has an active DataRoomTemplate. Generic over any template -- CIRP and
+  // IPO are both just rows in data_room_templates/data_room_template_folders
+  // now, not separate code paths. Walks the template's tree top-down (a
+  // level's real Folder rows must exist before its children can reference
+  // them as parentId) and reuses the exact same path/depth/sortOrder
+  // derivation as every other folder-creation path in this service.
+  async seedFromTemplate(dataRoomId: string, templateId: string, createdBy: string): Promise<void> {
+    const templateFolders = await this.prisma.dataRoomTemplateFolder.findMany({
+      where: { templateId },
+      orderBy: { sortOrder: 'asc' },
     });
+
+    const byParent = new Map<string | null, typeof templateFolders>();
+    for (const tf of templateFolders) {
+      const key = tf.parentId;
+      if (!byParent.has(key)) byParent.set(key, []);
+      byParent.get(key)!.push(tf);
+    }
+
+    const createLevel = async (templateParentId: string | null, realParent: Folder | null): Promise<void> => {
+      const level = byParent.get(templateParentId) ?? [];
+      for (const tf of level) {
+        const created = await this.prisma.folder.create({
+          data: {
+            dataRoomId,
+            parentId: realParent?.id ?? null,
+            name: tf.name,
+            path: this.buildPath(realParent, tf.name),
+            depth: realParent ? realParent.depth + 1 : 0,
+            sortOrder: tf.sortOrder,
+            createdBy,
+          },
+        });
+        await createLevel(tf.id, created);
+      }
+    };
+
+    await createLevel(null, null);
   }
 
   // Resolves a relative folder path (e.g. from a browser folder-upload's

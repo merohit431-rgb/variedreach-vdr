@@ -8,6 +8,7 @@ export interface DataRoomAccess {
   canUploadContent: boolean;
   canDeleteContent: boolean;
   canDownload: boolean;
+  canDownloadOriginal: boolean;
 }
 
 export interface DataRoom {
@@ -26,9 +27,38 @@ export interface DataRoom {
 export interface CreateDataRoomInput {
   name: string;
   type: DataRoomType;
+  applyTemplate?: boolean;
   caseNumber?: string;
   startDate?: string;
   endDate?: string;
+}
+
+export interface DataRoomTemplateFolderNode {
+  name: string;
+  children: DataRoomTemplateFolderNode[];
+}
+
+export interface DataRoomTemplatePreview {
+  id: string;
+  name: string;
+  description: string | null;
+  folderCount: number;
+  folders: DataRoomTemplateFolderNode[];
+}
+
+// Null when the selected type has no active template -- callers use that to
+// hide the "apply template" toggle entirely rather than show it empty.
+export function useDataRoomTemplate(type: DataRoomType | '') {
+  return useQuery({
+    queryKey: ['data-room-templates', type],
+    queryFn: async () => {
+      const response = await apiClient.get<{ data: DataRoomTemplatePreview | null }>(
+        `/data-rooms/templates/${type}`,
+      );
+      return response.data.data;
+    },
+    enabled: Boolean(type),
+  });
 }
 
 export function useDataRooms() {

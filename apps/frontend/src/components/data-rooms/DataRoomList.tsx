@@ -29,6 +29,7 @@ const TYPE_COLORS: Record<DataRoomType, string> = {
   CIRP: 'bg-blue-500/10 text-blue-300',
   LIQUIDATION: 'bg-orange-500/10 text-orange-300',
   MA_DUE_DILIGENCE: 'bg-violet-500/10 text-violet-300',
+  IPO: 'bg-emerald-500/10 text-emerald-300',
   OTHER: 'bg-app-s2 text-app-t2',
 };
 

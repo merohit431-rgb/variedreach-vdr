@@ -1,5 +1,6 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createHash } from 'crypto';
 import { rm, open } from 'fs/promises';
 import { File, PermissionPrincipal, UserRole } from '@prisma/client';
 import type { Archiver as ArchiverInstance, ArchiverOptions } from 'archiver';
@@ -472,6 +473,62 @@ export class FilesService {
       buffer: watermarkedBuffer,
       filename: getPreviewFilename(file.name, file.extension),
       mimeType: isOffice ? 'application/pdf' : file.mimeType,
+    };
+  }
+
+  // Option B: Download Original -- the exact stored bytes, unwatermarked,
+  // unconverted, original filename and mimeType preserved. Gated by the
+  // dedicated DOWNLOAD_ORIGINAL permission (assertCanDownloadOriginal), not
+  // assertCanDownload -- having one does not imply the other. Re-verifies
+  // the SHA-256 checksum recorded at upload time on every call rather than
+  // trusting it blanket; a mismatch doesn't block the download (refusing a
+  // legitimate request over an unrelated storage fault would be its own
+  // availability problem) but is recorded loudly in the audit entry so it's
+  // never silently invisible.
+  async getOriginalContent(
+    dataRoomId: string,
+    fileId: string,
+    actor: AuthenticatedUser,
+    context: { ipAddress: string; userAgent?: string },
+    versionId?: string,
+  ): Promise<WatermarkedContent> {
+    await this.dataRoomAccess.assertCanDownloadOriginal(dataRoomId, actor, context.ipAddress);
+    const file = await this.getFileOrThrow(dataRoomId, fileId);
+
+    const version = versionId
+      ? await this.prisma.fileVersion.findFirst({ where: { id: versionId, fileId: file.id } })
+      : await this.prisma.fileVersion.findUnique({ where: { id: file.currentVersionId ?? undefined } });
+
+    if (!version) {
+      throw new NotFoundException('This file has no content to retrieve');
+    }
+
+    const originalBuffer = await this.storage.read(version.storagePath);
+    const actualChecksum = createHash('sha256').update(originalBuffer).digest('hex');
+    const checksumMatches = actualChecksum === version.checksum;
+
+    await this.auditLogService.record({
+      action: 'ORIGINAL_FILE_DOWNLOADED',
+      dataRoomId,
+      userId: actor.id,
+      resourceType: 'File',
+      resourceId: file.id,
+      metadata: {
+        name: file.name,
+        folderId: file.folderId,
+        versionId: version.id,
+        versionNumber: version.versionNumber,
+        checksumVerified: checksumMatches,
+        ...(checksumMatches ? {} : { expectedChecksum: version.checksum, actualChecksum }),
+      },
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
+
+    return {
+      buffer: originalBuffer,
+      filename: file.name,
+      mimeType: file.mimeType,
     };
   }
 
