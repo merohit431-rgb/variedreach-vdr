@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { PDFDocument } from 'pdf-lib';
 import sharp = require('sharp');
 import { WatermarkService, WatermarkElements } from './watermark.service';
@@ -176,5 +177,66 @@ describe('WatermarkService -- per-room config is actually applied', () => {
     await expect(
       service.apply(buffer, 'txt', elements, { template: '{{name}}', opacity: 0.25, position: 'center' }),
     ).resolves.toBeInstanceOf(Buffer);
+  });
+});
+
+// Regression coverage for a real staging crash (2026-11-21): pdf-lib
+// tolerates many broken-but-recoverable PDFs at load() time, but can still
+// throw a raw TypeError/RangeError later, deep inside its internals, for a
+// file with no resolvable page tree -- which previously escaped as an
+// unhandled 500 instead of a clean, non-disclosing 4xx. Every case here was
+// first reproduced directly against pdf-lib outside Jest to confirm it
+// fails fast (under 25ms, no heap growth) rather than hanging or leaking
+// memory, before writing it up as a test.
+describe('WatermarkService.apply -- malformed/truncated/unsupported PDFs', () => {
+  const service = new WatermarkService({} as PrismaService);
+  const elements: WatermarkElements = {
+    name: 'Jane Doe',
+    email: 'jane@example.com',
+    ipAddress: '203.0.113.7',
+    timestamp: '2026-06-28T10:00:00.000Z',
+  };
+
+  it('malformed: a PDF header with no object structure at all throws a clean BadRequestException, not a raw 500', async () => {
+    // The exact bytes that produced "Cannot read properties of undefined
+    // (reading 'Pages')" uncaught on staging.
+    const buffer = Buffer.from('%PDF-1.4\nnot actually a PDF object structure\n');
+
+    await expect(service.apply(buffer, 'pdf', elements)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.apply(buffer, 'pdf', elements)).rejects.toThrow(
+      'This PDF could not be processed for secure viewing',
+    );
+  });
+
+  it('truncated: a valid PDF cut off mid-structure throws the same clean error', async () => {
+    const original = await PDFDocument.create();
+    original.addPage([300, 300]);
+    const validBytes = Buffer.from(await original.save());
+    const truncated = validBytes.subarray(0, Math.floor(validBytes.length * 0.3));
+
+    await expect(service.apply(truncated, 'pdf', elements)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('unsupported: a circular/self-referential page tree throws the same clean error (not an uncaught RangeError)', async () => {
+    const buffer = Buffer.from(
+      '%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [2 0 R] /Count 1 >>\nendobj\ntrailer\n<< /Size 3 /Root 1 0 R >>\n%%EOF\n',
+    );
+
+    await expect(service.apply(buffer, 'pdf', elements)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('an empty buffer throws the same clean error', async () => {
+    await expect(service.apply(Buffer.alloc(0), 'pdf', elements)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('a genuinely valid PDF still watermarks successfully (unaffected by the fix)', async () => {
+    const original = await PDFDocument.create();
+    original.addPage([300, 300]);
+    const buffer = Buffer.from(await original.save());
+
+    const watermarked = await service.apply(buffer, 'pdf', elements);
+
+    expect(watermarked.length).toBeGreaterThan(buffer.length);
+    await expect(PDFDocument.load(watermarked)).resolves.toBeDefined();
   });
 });

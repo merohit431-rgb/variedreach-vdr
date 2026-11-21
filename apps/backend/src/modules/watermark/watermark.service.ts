@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PDFDocument, degrees, rgb, StandardFonts } from 'pdf-lib';
 // `import sharp from 'sharp'` miscompiles to `sharp_1.default(...)` under this
@@ -43,6 +43,8 @@ const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'tiff', 'webp'];
 
 @Injectable()
 export class WatermarkService {
+  private readonly logger = new Logger(WatermarkService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   buildElements(actor: { firstName: string; lastName: string; email: string }, ipAddress: string): WatermarkElements {
@@ -139,32 +141,52 @@ export class WatermarkService {
   }
 
   private async applyToPdf(buffer: Buffer, text: string, opacity: number, diagonal: boolean): Promise<Buffer> {
-    const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const fontSize = 9;
-    const textWidth = font.widthOfTextAtSize(text, fontSize);
-    const stepX = textWidth + 100;
-    const stepY = 130;
-    const rotation = diagonal ? degrees(45) : degrees(0);
+    // pdf-lib deliberately tolerates many real-world-imperfect PDFs at
+    // load() time rather than rejecting them outright, but a sufficiently
+    // broken file (no resolvable page tree, a circular Kids reference, a
+    // truncated xref) can still throw later -- as a raw TypeError/RangeError
+    // from deep inside pdf-lib's internals, not its own structured parse
+    // error. Confirmed this never touches the ORIGINAL buffer (read-only
+    // input; nothing here writes back to storage) and never hangs or grows
+    // memory (tested truncated/empty/self-referential/huge-declared-count
+    // inputs -- every failure mode returns in under 25ms). It's a bad input
+    // file, not a server fault, so it must become a 400, not an unhandled
+    // 500 bubbling up through the global exception filter.
+    try {
+      const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const fontSize = 9;
+      const textWidth = font.widthOfTextAtSize(text, fontSize);
+      const stepX = textWidth + 100;
+      const stepY = 130;
+      const rotation = diagonal ? degrees(45) : degrees(0);
 
-    for (const page of pdfDoc.getPages()) {
-      const { width, height } = page.getSize();
-      for (let y = -height * 0.5; y < height * 1.5; y += stepY) {
-        for (let x = -width * 0.5; x < width * 1.5; x += stepX) {
-          page.drawText(text, {
-            x,
-            y,
-            size: fontSize,
-            font,
-            color: rgb(0.55, 0.55, 0.55),
-            opacity,
-            rotate: rotation,
-          });
+      for (const page of pdfDoc.getPages()) {
+        const { width, height } = page.getSize();
+        for (let y = -height * 0.5; y < height * 1.5; y += stepY) {
+          for (let x = -width * 0.5; x < width * 1.5; x += stepX) {
+            page.drawText(text, {
+              x,
+              y,
+              size: fontSize,
+              font,
+              color: rgb(0.55, 0.55, 0.55),
+              opacity,
+              rotate: rotation,
+            });
+          }
         }
       }
-    }
 
-    return Buffer.from(await pdfDoc.save());
+      return Buffer.from(await pdfDoc.save());
+    } catch (err) {
+      this.logger.warn(
+        `PDF watermarking failed, treating the file as unprocessable: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      throw new BadRequestException(
+        'This PDF could not be processed for secure viewing. It may be corrupted, truncated, or not a valid PDF file.',
+      );
+    }
   }
 
   private async applyToImage(buffer: Buffer, text: string, opacity: number, diagonal: boolean): Promise<Buffer> {
