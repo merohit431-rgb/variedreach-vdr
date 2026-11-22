@@ -42,6 +42,17 @@ const INDIA_LEGAL_ABBREVIATIONS = [
   'w.e.f.',
   'viz.',
   'Govt.',
+  // Found via Phase 3B.1's live adversarial testing: a registered-office
+  // address ending in a state abbreviation ("...Noida, U.P. -- 201301...")
+  // mis-split mid-sentence, since U.P. wasn't recognised and the following
+  // token ("--") isn't a lowercase word, so even the general list alone
+  // wouldn't have suppressed the boundary -- it needs the same unconditional
+  // (prepositive) treatment the company-suffix fix below does. Entries in
+  // this array are spread into BOTH lists below, so adding it here is
+  // sufficient. Same risk applies to any similarly-shaped two-letter state
+  // abbreviation (M.P., A.P., H.P., ...); only the one actually observed to
+  // break is added here rather than speculatively enumerating every state.
+  'U.P.',
 ];
 
 // The library's default ABBREVIATIONS list already contains Pvt./Co./Ltd.,

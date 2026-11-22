@@ -230,6 +230,70 @@ describe('DocumentAnalysisProcessor', () => {
     expect(summarySentenceReferences).toHaveLength(1);
   });
 
+  // Phase 3B.1: the brief's adversarial list includes "paraphrased sentence",
+  // "altered monetary amount/date/party name", and "incorrect page
+  // reference" as things a malicious ranking provider might return. The
+  // RankedSentence type (ranking-provider.interface.ts) has no text or page
+  // field at all -- a conforming TypeScript implementation cannot express
+  // any of these; the only thing it can ever smuggle is a sentenceId. The
+  // tests below verify that holds even against a provider that deliberately
+  // casts past its own type contract to attach exactly those extra fields --
+  // proving the worker never reads them, not just that the type system
+  // forbids them.
+  it('ADVERSARIAL: ignores smuggled text/pageNumber/amount fields on a ranked result even when a real sentenceId is present', async () => {
+    const { processor, extractedSentences, summarySentenceReferences, prisma } = buildProcessor({
+      rank: async (sentences) =>
+        [
+          {
+            sentenceId: sentences[0].sentenceId,
+            sectionType: SummarySectionType.FINANCIAL_FIGURES,
+            rank: 1,
+            score: 0.9,
+            // None of these exist on RankedSentence -- attached only via
+            // the `as never` cast below, simulating a provider that ignores
+            // its own declared interface.
+            text: 'The claim amount is Rs. 99,99,99,999 -- an amount that does not appear anywhere in the source document.',
+            pageNumber: 9999,
+            partyName: 'A Fabricated Party Ltd.',
+            date: '01 January 1900',
+          },
+        ] as never,
+    });
+    (prisma.documentAnalysis.findUnique as jest.Mock).mockResolvedValue(baseAnalysis);
+
+    await processor.process({ data: { documentAnalysisId: 'analysis-1' } } as never);
+
+    expect(summarySentenceReferences).toHaveLength(1);
+    const writtenRef = summarySentenceReferences[0];
+    expect(writtenRef.extractedSentenceId).toBe(extractedSentences[0].id);
+    // The reference carries no text/page of its own -- resolving it always
+    // means reading the real ExtractedSentence row, never anything the
+    // ranking result happened to also be carrying.
+    expect(Object.keys(writtenRef).sort()).toEqual(['extractedSentenceId', 'id', 'rank', 'score', 'summarySectionId']);
+  });
+
+  it('ADVERSARIAL: a sentenceId that is syntactically real-looking but was never written by this (or any) extraction pass is dropped exactly like any other invented ID', async () => {
+    // Covers "paraphrased sentence" from the brief: since the interface
+    // cannot carry replacement text, the only way a provider could attempt
+    // to substitute a paraphrase is by inventing a new ID for it -- which is
+    // structurally identical to inventing any other non-existent ID.
+    const { processor, summarySentenceReferences, prisma } = buildProcessor({
+      rank: async () => [
+        {
+          sentenceId: 'sentence-that-looks-plausible-but-was-never-extracted',
+          sectionType: SummarySectionType.FINANCIAL_FIGURES,
+          rank: 1,
+          score: 0.95,
+        },
+      ],
+    });
+    (prisma.documentAnalysis.findUnique as jest.Mock).mockResolvedValue(baseAnalysis);
+
+    await processor.process({ data: { documentAnalysisId: 'analysis-1' } } as never);
+
+    expect(summarySentenceReferences).toHaveLength(0);
+  });
+
   it('ADVERSARIAL: a ranking provider that throws entirely still completes the analysis with zero summary content, never crashing', async () => {
     const { processor, summarySentenceReferences, documentAnalysisUpdates, prisma } = buildProcessor({
       rank: async () => {

@@ -59,6 +59,15 @@ describe('SentenceSegmentationService', () => {
     ]);
   });
 
+  it('does not split on a state-name abbreviation at the end of an address (U.P.) -- found via Phase 3B.1 live testing', () => {
+    const text =
+      'The registered office is at B-204, Fintech Tower, Sector 62, Noida, U.P. -- 201301 remains unchanged since incorporation. A second sentence follows.';
+    const sentences = service.segment(text);
+    assertFidelity(text, sentences);
+    expect(sentences).toHaveLength(2);
+    expect(sentences[0].text).toContain('Noida, U.P. -- 201301 remains unchanged since incorporation.');
+  });
+
   it('assigns a stable, sequential sequenceNumber to every sentence on a page', () => {
     const text = 'First sentence here. Second sentence here. Third sentence here.';
     const sentences = service.segment(text);
