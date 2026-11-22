@@ -127,6 +127,13 @@ enum AuditAction {
   ORGANISATION_DELETED
   SUBSCRIPTION_DATES_UPDATED
   SUBSCRIPTION_REACTIVATED
+  DOCUMENT_ANALYSIS_REQUESTED
+  DOCUMENT_ANALYSIS_COMPLETED
+  DOCUMENT_ANALYSIS_FAILED
+  DOCUMENT_ANALYSIS_CANCELLED
+  DOCUMENT_ANALYSIS_VIEWED
+  DOCUMENT_ANALYSIS_RETRIED
+  DOCUMENT_ANALYSIS_ACCESS_DENIED
 }
 
 enum PermissionScope {
@@ -275,6 +282,7 @@ model User {
   questionsAsked      Question[]           @relation("QuestionAsker")
   answersGiven        Answer[]             @relation("AnswerAuthor")
   notifications       Notification[]
+  documentAnalysesRequested DocumentAnalysis[]
 
   @@index([organisationId])
   @@map("users")
@@ -704,6 +712,7 @@ model File {
   currentVersion  FileVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id])
   versions        FileVersion[] @relation("FileVersions")
   watermarkEvents Watermark[]
+  analyses        DocumentAnalysis[]
 
   @@index([dataRoomId, folderId])
   @@index([dataRoomId, name])
@@ -793,6 +802,146 @@ model Watermark {
 
   @@index([fileId, createdAt])
   @@map("watermarks")
+}
+
+// ═══════════════════════════════════════════════════════════
+// PHASE 3B — AI-ASSISTED PDF EXTRACTIVE SUMMARISATION
+//
+// Tenant-scoping columns (dataRoomId/organisationId) live only on
+// DocumentAnalysis, the top-level entity -- matching this schema's own
+// convention (Question carries dataRoomId; Answer, one level down, does
+// not, and reaches it via questionId). Every real access pattern starts
+// from a file in a room, never "all sentences across a room" directly.
+//
+// SummarySentenceReference is the actual integrity mechanism, not just a
+// convention: it has no text column at all. A ranking provider (AI or
+// otherwise) can only ever supply a sentenceId; the worker can only ever
+// write a row that foreign-keys to an ExtractedSentence that already
+// exists from the verified extraction pass. A fabricated or altered
+// sentence isn't a validation failure to catch here -- it's a row that
+// cannot be constructed, because there is nowhere to put its text.
+// ═══════════════════════════════════════════════════════════
+
+enum DocumentAnalysisStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  COMPLETED_WITH_WARNINGS
+  FAILED
+  CANCELLED
+}
+
+model DocumentAnalysis {
+  id               String                 @id @default(uuid())
+  fileId           String
+  fileVersionId    String
+  dataRoomId       String
+  organisationId   String
+  status           DocumentAnalysisStatus @default(PENDING)
+  // Increments on an explicit regeneration -- the row for a given
+  // (fileId, fileVersionId) pair is never mutated into a new version in
+  // place; a prior COMPLETED analysis stays exactly as it was.
+  analysisVersion  Int                    @default(1)
+  // FileVersion.checksum captured at the start of processing, and
+  // re-verified (not re-derived) once extraction finishes -- see
+  // checksumVerified below.
+  originalChecksum String
+  checksumVerified Boolean?
+  // Safe, user-facing message only -- never a stack trace or raw error.
+  errorMessage     String?
+  requestedBy      String
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  file     File                @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  requester User               @relation(fields: [requestedBy], references: [id])
+  pages     ExtractedPage[]
+  sentences ExtractedSentence[]
+  sections  SummarySection[]
+
+  @@unique([fileId, fileVersionId, analysisVersion])
+  @@index([dataRoomId])
+  @@index([fileId, fileVersionId])
+  @@map("document_analyses")
+}
+
+model ExtractedPage {
+  id                   String  @id @default(uuid())
+  documentAnalysisId   String
+  pageNumber           Int
+  charCount            Int
+  isScannedOrImageOnly Boolean @default(false)
+
+  documentAnalysis DocumentAnalysis @relation(fields: [documentAnalysisId], references: [id], onDelete: Cascade)
+
+  @@unique([documentAnalysisId, pageNumber])
+  @@map("extracted_pages")
+}
+
+model ExtractedSentence {
+  id                 String   @id @default(uuid())
+  documentAnalysisId String
+  pageNumber         Int
+  sequenceNumber     Int
+  // Exact, verbatim text as sliced from the source by byte offset -- never
+  // edited, never reconstructed from a library's own text property.
+  text               String
+  // Lowercased/whitespace-collapsed, kept SEPARATE from `text` -- used only
+  // for duplicate-sentence detection, never shown to a user and never the
+  // thing matched against for fidelity verification.
+  normalizedText     String
+  createdAt          DateTime @default(now())
+
+  documentAnalysis DocumentAnalysis            @relation(fields: [documentAnalysisId], references: [id], onDelete: Cascade)
+  references       SummarySentenceReference[]
+
+  @@unique([documentAnalysisId, pageNumber, sequenceNumber])
+  @@map("extracted_sentences")
+}
+
+enum SummarySectionType {
+  EXECUTIVE_OVERVIEW
+  BACKGROUND_FACTS
+  PARTIES
+  DATES_CHRONOLOGY
+  FINANCIAL_FIGURES
+  CLAIMS_LIABILITIES
+  LEGAL_PROVISIONS
+  PROCEEDINGS_ORDERS
+  FINDINGS_DECISIONS
+  RELIEF
+  OTHER_MATERIAL
+}
+
+model SummarySection {
+  id                 String             @id @default(uuid())
+  documentAnalysisId String
+  sectionType        SummarySectionType
+  displayOrder       Int
+
+  documentAnalysis DocumentAnalysis           @relation(fields: [documentAnalysisId], references: [id], onDelete: Cascade)
+  sentenceRefs     SummarySentenceReference[]
+
+  @@unique([documentAnalysisId, sectionType])
+  @@map("summary_sections")
+}
+
+model SummarySentenceReference {
+  id                  String @id @default(uuid())
+  summarySectionId    String
+  // Required FK, no text column on this table at all -- see the section
+  // header comment above.
+  extractedSentenceId String
+  rank                Int
+  score               Float
+
+  section  SummarySection    @relation(fields: [summarySectionId], references: [id], onDelete: Cascade)
+  sentence ExtractedSentence @relation(fields: [extractedSentenceId], references: [id], onDelete: Cascade)
+
+  @@unique([summarySectionId, extractedSentenceId])
+  @@map("summary_sentence_references")
 }
 
 // ═══════════════════════════════════════════════════════════

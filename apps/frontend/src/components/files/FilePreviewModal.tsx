@@ -11,11 +11,17 @@ export function FilePreviewModal({
   dataRoomId,
   file,
   canDownload = true,
+  initialPage,
   onClose,
 }: {
   dataRoomId: string;
   file: FileRecord;
   canDownload?: boolean;
+  // Jumps the browser's native PDF viewer to this page via a URL fragment
+  // on the same authorised blob URL below -- not a different fetch, not a
+  // different endpoint, so this never bypasses watermarking/NDA/folder
+  // permissions to get there.
+  initialPage?: number;
   onClose: () => void;
 }) {
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
@@ -104,7 +110,11 @@ export function FilePreviewModal({
             !error &&
             (file.extension.toLowerCase() === 'pdf' || isOfficeConvertible(file.extension)) &&
             objectUrl && (
-              <iframe src={objectUrl} title={file.name} className="h-[75vh] w-full rounded-md border-0" />
+              <iframe
+                src={initialPage ? `${objectUrl}#page=${initialPage}` : objectUrl}
+                title={file.name}
+                className="h-[75vh] w-full rounded-md border-0"
+              />
             )}
 
           {previewable &&

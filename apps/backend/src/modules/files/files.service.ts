@@ -933,7 +933,9 @@ export class FilesService {
     return pdfBuffer;
   }
 
-  private async getFileOrThrow(dataRoomId: string, fileId: string): Promise<File> {
+  // Public: the Phase 3B DocumentAnalysisService reuses this exact lookup
+  // rather than duplicating it -- pure read, no side effects, safe to widen.
+  async getFileOrThrow(dataRoomId: string, fileId: string): Promise<File> {
     const file = await this.prisma.file.findFirst({ where: { id: fileId, dataRoomId, deletedAt: null } });
     if (!file) {
       throw new NotFoundException('File not found');

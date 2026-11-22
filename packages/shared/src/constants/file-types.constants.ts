@@ -78,6 +78,12 @@ export function isOfficeConvertible(extension: string): boolean {
   return OFFICE_CONVERTIBLE_EXTENSIONS.includes(extension.toLowerCase().replace(/^\./, ''));
 }
 
+// Native PDFs only -- see the backend's file-type-rules.ts copy of this
+// function for why Office-convertible files aren't eligible yet.
+export function isPdf(extension: string): boolean {
+  return extension.toLowerCase().replace(/^\./, '') === 'pdf';
+}
+
 // What a preview/download response is actually named once office-convertible
 // files are served as PDF instead of their original format.
 export function getPreviewFilename(name: string, extension: string): string {

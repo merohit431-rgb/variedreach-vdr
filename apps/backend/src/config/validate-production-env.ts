@@ -45,6 +45,16 @@ export function validateProductionEnv(): void {
     }
   }
 
+  // Unlike PAYMENT_PROVIDER above, staying on the default 'mock' ranking
+  // provider is the permanently-supported, approved posture in production --
+  // it is never a failure by itself. Only fail if someone has explicitly
+  // opted into 'external' but left its required key unset, which would
+  // otherwise silently crash every analysis job at runtime instead of
+  // failing fast at boot.
+  if (process.env.RANKING_PROVIDER === 'external' && !process.env.RANKING_EXTERNAL_API_KEY) {
+    failures.push('RANKING_EXTERNAL_API_KEY is not set (required when RANKING_PROVIDER=external)');
+  }
+
   if (failures.length > 0) {
     // eslint-disable-next-line no-console
     console.error(

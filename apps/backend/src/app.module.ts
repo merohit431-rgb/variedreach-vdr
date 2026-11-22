@@ -8,6 +8,8 @@ import mailConfig from './config/mail.config';
 import storageThresholdConfig from './config/storage-threshold.config';
 import conversionConfig from './config/conversion.config';
 import paymentConfig from './config/payment.config';
+import rankingConfig from './config/ranking.config';
+import queueConfig from './config/queue.config';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -41,12 +43,13 @@ import { BillingModule } from './modules/billing/billing.module';
 import { CouponModule } from './modules/coupon/coupon.module';
 import { OrgMembersModule } from './modules/org-members/org-members.module';
 import { GroupsModule } from './modules/groups/groups.module';
+import { DocumentAnalysisModule } from './modules/document-analysis/document-analysis.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, jwtConfig, mailConfig, storageThresholdConfig, conversionConfig, paymentConfig],
+      load: [appConfig, jwtConfig, mailConfig, storageThresholdConfig, conversionConfig, paymentConfig, rankingConfig, queueConfig],
       envFilePath: ['.env'],
     }),
     ThrottlerModule.forRootAsync({
@@ -92,6 +95,7 @@ import { GroupsModule } from './modules/groups/groups.module';
     CouponModule,
     OrgMembersModule,
     GroupsModule,
+    DocumentAnalysisModule,
   ],
   controllers: [AppController],
   providers: [

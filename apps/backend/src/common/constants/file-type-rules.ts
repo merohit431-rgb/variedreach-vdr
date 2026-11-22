@@ -64,6 +64,15 @@ export function isOfficeConvertible(extension: string): boolean {
   return OFFICE_CONVERTIBLE_EXTENSIONS.includes(extension.toLowerCase().replace(/^\./, ''));
 }
 
+// Native PDFs only -- Office-convertible files are deliberately excluded for
+// Phase 3B's extractive summarisation. Reusing getOrCreateConvertedPdf's
+// cached conversion is a natural fast-follow, but a LibreOffice-exported
+// text layer may extract differently from a native PDF and deserves its own
+// validation pass before claiming parity.
+export function isPdf(extension: string): boolean {
+  return extension.toLowerCase().replace(/^\./, '') === 'pdf';
+}
+
 export function getPreviewFilename(name: string, extension: string): string {
   if (!isOfficeConvertible(extension)) {
     return name;

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, DragEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { FolderOpen, Upload, FolderPlus, Grid3X3, List, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, Cloud, Download, FileCheck, History, PenLine, Trash2, Eye } from 'lucide-react';
+import { FolderOpen, Upload, FolderPlus, Grid3X3, List, ArrowUp, ArrowDown, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, Cloud, Download, FileCheck, History, PenLine, Trash2, Eye, Sparkles } from 'lucide-react';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Avatar } from '@/components/ui/Avatar';
 import { ActionMenu, type ActionMenuItem } from '@/components/ui/ActionMenu';
@@ -16,7 +16,7 @@ import {
   bulkDownloadFiles,
   FileRecord,
 } from '@/hooks/use-files';
-import { getPreviewFilename } from '@variedreach-vdr/shared';
+import { getPreviewFilename, isPdf } from '@variedreach-vdr/shared';
 import { useCreateFolder } from '@/hooks/use-folders';
 import { formatBytes, truncateFilename } from '@/lib/format';
 import { extractErrorMessage } from '@/lib/error-message';
@@ -32,6 +32,7 @@ import { ImportProgressPanel } from './ImportProgressPanel';
 import { CloudImportModal } from './CloudImportModal';
 import { FilePreviewModal } from './FilePreviewModal';
 import { VersionHistoryModal } from './VersionHistoryModal';
+import { DocumentAnalysisModal } from './DocumentAnalysisModal';
 import { FileDetailsPanel } from './FileDetailsPanel';
 
 const DESKTOP_NAME_MAX_LENGTH = 23;
@@ -173,8 +174,10 @@ export function FileBrowser({
   const [error, setError] = useState<string | null>(null);
   const [showStorageFull, setShowStorageFull] = useState(false);
   const [previewFile, setPreviewFile] = useState<FileRecord | null>(null);
+  const [previewInitialPage, setPreviewInitialPage] = useState<number | undefined>(undefined);
   const [versionsFile, setVersionsFile] = useState<FileRecord | null>(null);
   const [detailsFile, setDetailsFile] = useState<FileRecord | null>(null);
+  const [analysisFile, setAnalysisFile] = useState<FileRecord | null>(null);
 
   // Drag-over counter avoids false leave events when cursor crosses child elements
   const [dragCounter, setDragCounter] = useState(0);
@@ -268,6 +271,11 @@ export function FileBrowser({
     if (event.dataTransfer.files.length > 0) uploadFileList(event.dataTransfer.files);
   }
 
+  function openPreview(file: FileRecord, page?: number) {
+    setPreviewFile(file);
+    setPreviewInitialPage(page);
+  }
+
   function handleRename(file: FileRecord) {
     const name = window.prompt('Rename file', file.name);
     if (name && name !== file.name) updateFile.mutate({ fileId: file.id, name });
@@ -282,7 +290,7 @@ export function FileBrowser({
 
   function buildFileActions(file: FileRecord): ActionMenuItem[] {
     const items: ActionMenuItem[] = [
-      { key: 'preview', label: 'Preview', icon: Eye, onClick: () => setPreviewFile(file) },
+      { key: 'preview', label: 'Preview', icon: Eye, onClick: () => openPreview(file) },
     ];
     if (canDownload) {
       items.push({
@@ -300,6 +308,12 @@ export function FileBrowser({
         icon: FileCheck,
         onClick: () => downloadOriginalFile(dataRoomId, file.id, file.name),
       });
+    }
+    // Gated the same way the backend itself gates it (assertCanDownload +
+    // isPdf) -- showing this for a role/file combination that would
+    // guaranteed-400/403 server-side is worse than not showing it.
+    if (canDownload && isPdf(file.extension)) {
+      items.push({ key: 'ai-summary', label: 'AI Summary', icon: Sparkles, onClick: () => setAnalysisFile(file) });
     }
     items.push({ key: 'history', label: 'Version history', icon: History, onClick: () => setVersionsFile(file) });
     if (canUpload) {
@@ -758,7 +772,7 @@ export function FileBrowser({
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setPreviewFile(file);
+                                  openPreview(file);
                                 }}
                                 className="truncate font-medium text-app-text hover:text-app-primary hover:underline"
                               >
@@ -875,7 +889,7 @@ export function FileBrowser({
             canDelete={canDelete}
             onClose={() => setDetailsFile(null)}
             onPreview={() => {
-              setPreviewFile(detailsFile);
+              openPreview(detailsFile);
               setDetailsFile(null);
             }}
             onVersions={() => {
@@ -893,7 +907,11 @@ export function FileBrowser({
           dataRoomId={dataRoomId}
           file={previewFile}
           canDownload={canDownload}
-          onClose={() => setPreviewFile(null)}
+          initialPage={previewInitialPage}
+          onClose={() => {
+            setPreviewFile(null);
+            setPreviewInitialPage(undefined);
+          }}
         />
       )}
       {versionsFile && (
@@ -903,6 +921,17 @@ export function FileBrowser({
           canManage={canUpload}
           canDownload={canDownload}
           onClose={() => setVersionsFile(null)}
+        />
+      )}
+      {analysisFile && (
+        <DocumentAnalysisModal
+          dataRoomId={dataRoomId}
+          file={analysisFile}
+          onClose={() => setAnalysisFile(null)}
+          onOpenPage={(file, page) => {
+            setAnalysisFile(null);
+            openPreview(file, page);
+          }}
         />
       )}
       {showCloudImport && (
