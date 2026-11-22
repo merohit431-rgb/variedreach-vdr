@@ -36,6 +36,33 @@ export class PdfTooLargeError extends Error {
 // for summarisation purposes.
 const SCANNED_PAGE_CHAR_THRESHOLD = 20;
 
+// pdfjs-dist's bundled code (legacy/build/pdf.mjs and pdf.worker.mjs) calls
+// Promise.withResolvers() internally -- a method that only shipped natively
+// in V8/Node 22+. It is genuinely absent on this backend's pinned
+// node:20-alpine production image (confirmed empirically against a real
+// document on real staging: every analysis failed with "Promise.withResolvers
+// is not a function", even though both Jest -- which mocks this library
+// entirely -- and the standalone verify-pdf-extraction.js script -- run
+// under whatever Node happens to be on the machine driving it, not the
+// pinned production version -- stayed green). This is the standard,
+// MDN-documented polyfill; the typeof guard makes it a no-op the moment the
+// image is ever upgraded to a Node version that has it natively.
+type PromiseWithResolvers = {
+  withResolvers?: <T>() => { promise: Promise<T>; resolve: (value: T) => void; reject: (reason?: unknown) => void };
+};
+const promiseCtor = Promise as unknown as PromiseWithResolvers;
+if (typeof promiseCtor.withResolvers !== 'function') {
+  promiseCtor.withResolvers = function withResolvers<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  };
+}
+
 // pdfjs-dist is ESM-only; this backend's production entrypoint is plain
 // `node dist/main.js` with no bundler, so the dynamic import is confined to
 // this one adapter module rather than touched anywhere else. See the
