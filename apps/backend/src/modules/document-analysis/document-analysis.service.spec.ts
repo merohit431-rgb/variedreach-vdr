@@ -166,6 +166,37 @@ describe('DocumentAnalysisService.requestAnalysis', () => {
     await service.requestAnalysis('room-1', 'file-1', ACTOR);
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ originalChecksum: VERSION.checksum }) }));
   });
+
+  it("CONCURRENCY: a losing request that races another onto the same (fileId, fileVersionId, analysisVersion) returns the winner's row instead of a raw 500 -- found via Phase 3B.1 live testing", async () => {
+    // The re-fetch-after-conflict query has no `status`/`id` key in its
+    // where clause, so it routes through the `latestAnalysis` override --
+    // same shape as the existing "regeneration" lookup elsewhere in this
+    // service.
+    const winnerRow = { id: 'winner-analysis', analysisVersion: 1, status: DocumentAnalysisStatus.PENDING };
+    const { service, create, queueAdd } = buildService({
+      existingAnalysis: null,
+      latestAnalysis: winnerRow,
+    });
+    create.mockImplementationOnce(() => {
+      throw Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+    });
+
+    const result = await service.requestAnalysis('room-1', 'file-1', ACTOR);
+
+    expect(result).toEqual(winnerRow);
+    // The loser must never enqueue its own duplicate job -- the winner's
+    // own request already did that.
+    expect(queueAdd).not.toHaveBeenCalled();
+  });
+
+  it('CONCURRENCY: a create() failure for any other reason still propagates as a real error, not silently swallowed', async () => {
+    const { service, create } = buildService({ existingAnalysis: null, latestAnalysis: null });
+    create.mockImplementationOnce(() => {
+      throw new Error('a genuine, unrelated database error');
+    });
+
+    await expect(service.requestAnalysis('room-1', 'file-1', ACTOR)).rejects.toThrow('a genuine, unrelated database error');
+  });
 });
 
 describe('DocumentAnalysisService.retryAnalysis / cancelAnalysis', () => {

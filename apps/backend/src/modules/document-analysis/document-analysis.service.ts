@@ -72,18 +72,39 @@ export class DocumentAnalysisService {
     });
     const isRegeneration = Boolean(latest);
 
-    const analysis = await this.prisma.documentAnalysis.create({
-      data: {
-        fileId,
-        fileVersionId: version.id,
-        dataRoomId,
-        organisationId: actor.organisationId,
-        status: DocumentAnalysisStatus.PENDING,
-        analysisVersion: (latest?.analysisVersion ?? 0) + 1,
-        originalChecksum: version.checksum,
-        requestedBy: actor.id,
-      },
-    });
+    let analysis;
+    try {
+      analysis = await this.prisma.documentAnalysis.create({
+        data: {
+          fileId,
+          fileVersionId: version.id,
+          dataRoomId,
+          organisationId: actor.organisationId,
+          status: DocumentAnalysisStatus.PENDING,
+          analysisVersion: (latest?.analysisVersion ?? 0) + 1,
+          originalChecksum: version.checksum,
+          requestedBy: actor.id,
+        },
+      });
+    } catch (error) {
+      // The existing-PENDING/PROCESSING check above and this create() are
+      // not one atomic operation -- found via Phase 3B.1's concurrent-request
+      // testing: two genuinely simultaneous requests can both pass that
+      // check (neither sees the other's row yet) and then race on this
+      // create(), so the loser hits the @@unique([fileId, fileVersionId,
+      // analysisVersion]) constraint instead of a clean "already requested"
+      // response. The constraint itself already does its job -- no duplicate
+      // row is ever actually created -- this only replaces the raw 500 the
+      // loser would otherwise see with the same row the winner just created.
+      if ((error as { code?: string }).code === 'P2002') {
+        const winner = await this.prisma.documentAnalysis.findFirst({
+          where: { fileId, fileVersionId: version.id },
+          orderBy: { analysisVersion: 'desc' },
+        });
+        if (winner) return winner;
+      }
+      throw error;
+    }
 
     await this.queue.add(
       'analyze',
