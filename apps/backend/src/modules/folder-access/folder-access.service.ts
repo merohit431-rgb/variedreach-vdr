@@ -28,6 +28,51 @@ const UNRESTRICTED_RESOLVER: FolderAccessResolver = {
   },
 };
 
+// The nearest-grant-boundary walk itself, pulled out of buildResolver so
+// buildBulkResolvers (many users, one room) can reuse the exact same
+// algorithm instead of a hand-copied second implementation that could drift
+// from this one. Only the per-user input (myGrantedFolderIds) varies between
+// callers -- folders/boundaryFolderIds are the same for every user in a room.
+function resolveReachability(
+  folders: Array<{ id: string; parentId: string | null }>,
+  boundaryFolderIds: ReadonlySet<string>,
+  myGrantedFolderIds: ReadonlySet<string>,
+): Pick<FolderAccessResolver, 'canReach' | 'reachableFolderIds'> {
+  const parentOf = new Map(folders.map((f) => [f.id, f.parentId]));
+  const cache = new Map<string, boolean>();
+
+  const resolveOne = (folderId: string): boolean => {
+    const cached = cache.get(folderId);
+    if (cached !== undefined) return cached;
+
+    let result: boolean;
+    if (boundaryFolderIds.has(folderId)) {
+      result = myGrantedFolderIds.has(folderId);
+    } else {
+      const parentId = parentOf.get(folderId);
+      result = parentId != null && resolveOne(parentId);
+    }
+
+    cache.set(folderId, result);
+    return result;
+  };
+
+  return {
+    canReach: (folderId) => {
+      if (folderId === null) return true;
+      if (!parentOf.has(folderId)) return false;
+      return resolveOne(folderId);
+    },
+    reachableFolderIds: () => {
+      const reachable = new Set<string>();
+      for (const id of parentOf.keys()) {
+        if (resolveOne(id)) reachable.add(id);
+      }
+      return reachable;
+    },
+  };
+}
+
 @Injectable()
 export class FolderAccessService {
   constructor(
@@ -81,7 +126,6 @@ export class FolderAccessService {
     ]);
 
     const myGroupIds = new Set(myGroupMemberships.map((m) => m.groupId));
-    const parentOf = new Map(folders.map((f) => [f.id, f.parentId]));
     // A folder is a "boundary" the moment ANY live grant exists on it --
     // user-type or group-type, regardless of whether the CURRENT actor is
     // covered by it. This is unchanged from the user-only version; only the
@@ -92,47 +136,81 @@ export class FolderAccessService {
         .filter((g) => g.userId === actor.id || (g.groupId !== null && myGroupIds.has(g.groupId)))
         .map((g) => g.folderId),
     );
-    const cache = new Map<string, boolean>();
-
-    const resolveOne = (folderId: string): boolean => {
-      const cached = cache.get(folderId);
-      if (cached !== undefined) return cached;
-
-      let result: boolean;
-      if (boundaryFolderIds.has(folderId)) {
-        // This folder has its own explicit grant list -- authoritative for
-        // this folder regardless of what any ancestor grants. Absence from
-        // this list IS the restriction; the walk does not continue upward.
-        result = myGrantedFolderIds.has(folderId);
-      } else {
-        // No grant boundary on this folder itself: inherit from the parent,
-        // if any. A top-level folder (parentId: null) with no boundary of
-        // its own has nothing left to inherit from -- default-deny.
-        const parentId = parentOf.get(folderId);
-        result = parentId != null && resolveOne(parentId);
-      }
-
-      cache.set(folderId, result);
-      return result;
-    };
-
-    const canReach = (folderId: string | null): boolean => {
-      if (folderId === null) return true;
-      if (!parentOf.has(folderId)) return false; // not a folder in this room at all
-      return resolveOne(folderId);
-    };
 
     return {
       unrestricted: false,
-      canReach,
-      reachableFolderIds: () => {
-        const reachable = new Set<string>();
-        for (const id of parentOf.keys()) {
-          if (resolveOne(id)) reachable.add(id);
-        }
-        return reachable;
-      },
+      ...resolveReachability(folders, boundaryFolderIds, myGrantedFolderIds),
     };
+  }
+
+  // Bulk counterpart to buildResolver, for callers that need reachability
+  // for MANY users in one room at once (e.g. deciding who to notify about an
+  // upload) rather than one request's own actor. Fetches folders/grants
+  // ONCE for the whole room instead of once per user -- the single-actor
+  // version's cost is fine for one request; calling it in a per-member loop
+  // is exactly the "many near-duplicate queries in a tight loop" pattern
+  // that caused the 2026-07-18 notifyUpload incident (see that function's
+  // own comment), so this exists specifically to avoid reintroducing it.
+  // Returns null when the room isn't folder-access-restricted at all --
+  // callers should treat that as "everyone can reach everything" and skip
+  // filtering entirely, same as checking resolver.unrestricted.
+  async buildBulkResolvers(
+    dataRoomId: string,
+    members: Array<{ userId: string; organisationId: string }>,
+  ): Promise<Map<string, FolderAccessResolver> | null> {
+    if (members.length === 0) {
+      return null;
+    }
+
+    const dataRoom = await this.prisma.dataRoom.findUnique({
+      where: { id: dataRoomId },
+      select: { folderAccessRestricted: true },
+    });
+    if (!dataRoom?.folderAccessRestricted) {
+      return null;
+    }
+
+    const [folders, grants, groupMemberships] = await Promise.all([
+      this.prisma.folder.findMany({
+        where: { dataRoomId, deletedAt: null },
+        select: { id: true, parentId: true },
+      }),
+      this.prisma.folderAccessGrant.findMany({
+        where: { folder: { dataRoomId }, revokedAt: null },
+        select: { folderId: true, userId: true, groupId: true },
+      }),
+      this.prisma.groupMember.findMany({
+        where: {
+          userId: { in: members.map((m) => m.userId) },
+          removedAt: null,
+          group: { isActive: true },
+        },
+        select: { userId: true, groupId: true, group: { select: { organisationId: true } } },
+      }),
+    ]);
+
+    const orgByUserId = new Map(members.map((m) => [m.userId, m.organisationId]));
+    const groupIdsByUserId = new Map<string, Set<string>>();
+    for (const gm of groupMemberships) {
+      // Same cross-org safety check buildResolver applies for its single
+      // actor: a group grant can never reach across organisations, so a
+      // membership row is only honoured when the group's own org matches
+      // THIS user's org, not just any org in the batch.
+      if (gm.group.organisationId !== orgByUserId.get(gm.userId)) continue;
+      if (!groupIdsByUserId.has(gm.userId)) groupIdsByUserId.set(gm.userId, new Set());
+      groupIdsByUserId.get(gm.userId)!.add(gm.groupId);
+    }
+
+    const boundaryFolderIds = new Set(grants.map((g) => g.folderId));
+    const resolvers = new Map<string, FolderAccessResolver>();
+    for (const { userId } of members) {
+      const myGroupIds = groupIdsByUserId.get(userId) ?? new Set<string>();
+      const myGrantedFolderIds = new Set(
+        grants.filter((g) => g.userId === userId || (g.groupId !== null && myGroupIds.has(g.groupId))).map((g) => g.folderId),
+      );
+      resolvers.set(userId, { unrestricted: false, ...resolveReachability(folders, boundaryFolderIds, myGrantedFolderIds) });
+    }
+    return resolvers;
   }
 
   // For a direct, single-target operation (open this folder, download this

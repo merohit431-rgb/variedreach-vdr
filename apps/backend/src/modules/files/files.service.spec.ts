@@ -288,3 +288,101 @@ describe('FilesService.getOriginalContent -- folder-ACL is a separate, additiona
     expect(canReach).not.toHaveBeenCalled(); // unrestricted short-circuits before canReach() is ever reached
   });
 });
+
+// Phase 4 fix: notifyUpload() used to decide who to email by querying the
+// dead Permission model (nothing in the app ever writes to it), so every
+// external-role member was notified about every upload regardless of
+// folder-ACL. These tests call the private method directly (uploads's own
+// transaction/storage/quota machinery is irrelevant to what's being tested
+// here) to confirm it now defers to FolderAccessService.buildBulkResolvers
+// and actually respects a denial.
+describe('FilesService.notifyUpload -- folder-ACL now actually gates the email, not a dead table', () => {
+  const UPLOADED_FILE = { id: 'file-9', folderId: 'folder-restricted', name: 'Board Resolution.pdf' } as unknown as File;
+
+  function buildNotifyService(opts: {
+    members: Array<{ userId: string; role: string; organisationId: string }>;
+    buildBulkResolvers: jest.Mock;
+  }) {
+    const dataRoomFindUnique = jest.fn().mockResolvedValue({
+      id: 'room-1',
+      name: 'Test Room',
+      members: opts.members.map((m) => ({
+        userId: m.userId,
+        roleOverride: null,
+        user: { id: m.userId, email: `${m.userId}@test.com`, firstName: m.userId, lastName: 'Member', role: m.role, organisationId: m.organisationId },
+      })),
+    });
+    const folderFindUnique = jest.fn().mockResolvedValue({ path: 'Board Resolutions' });
+    const sendDocumentUploadedEmail = jest.fn().mockResolvedValue(undefined);
+
+    const prisma = {
+      dataRoom: { findUnique: dataRoomFindUnique },
+      folder: { findUnique: folderFindUnique },
+    } as unknown as PrismaService;
+
+    const service = new FilesService(
+      prisma,
+      {} as DataRoomAccessService,
+      { buildBulkResolvers: opts.buildBulkResolvers } as unknown as FolderAccessService,
+      {} as FoldersService,
+      {} as AuditLogService,
+      {} as WatermarkService,
+      {} as OfficeConversionService,
+      { sendDocumentUploadedEmail } as unknown as MailService,
+      { get: jest.fn().mockReturnValue('https://staging.vdr.variedreach.com') } as unknown as ConfigService,
+      {} as NotificationService,
+      {} as IStorageService,
+    );
+    return { service, sendDocumentUploadedEmail };
+  }
+
+  it('does not email an external-role member the bulk resolver says cannot reach the folder', async () => {
+    const buildBulkResolvers = jest.fn().mockResolvedValue(
+      new Map([
+        ['manager-1', { unrestricted: false, canReach: () => true, reachableFolderIds: () => new Set() }],
+        ['blocked-reviewer', { unrestricted: false, canReach: () => false, reachableFolderIds: () => new Set() }],
+        ['granted-reviewer', { unrestricted: false, canReach: () => true, reachableFolderIds: () => new Set() }],
+      ]),
+    );
+    const { service, sendDocumentUploadedEmail } = buildNotifyService({
+      members: [
+        { userId: 'manager-1', role: 'RP_LIQUIDATOR', organisationId: 'org-1' },
+        { userId: 'blocked-reviewer', role: 'PRA', organisationId: 'org-1' },
+        { userId: 'granted-reviewer', role: 'PRA', organisationId: 'org-1' },
+      ],
+      buildBulkResolvers,
+    });
+
+    await (service as unknown as { notifyUpload: (d: string, f: File, a: AuthenticatedUser) => Promise<void> }).notifyUpload(
+      'room-1',
+      UPLOADED_FILE,
+      ACTOR,
+    );
+
+    expect(buildBulkResolvers).toHaveBeenCalledWith('room-1', [
+      { userId: 'manager-1', organisationId: 'org-1' },
+      { userId: 'blocked-reviewer', organisationId: 'org-1' },
+      { userId: 'granted-reviewer', organisationId: 'org-1' },
+    ]);
+    const notifiedEmails = sendDocumentUploadedEmail.mock.calls.map((c) => c[0]);
+    expect(notifiedEmails).toContain('manager-1@test.com');
+    expect(notifiedEmails).toContain('granted-reviewer@test.com');
+    expect(notifiedEmails).not.toContain('blocked-reviewer@test.com');
+  });
+
+  it('notifies every external-role member when the room is unrestricted (buildBulkResolvers returns null)', async () => {
+    const buildBulkResolvers = jest.fn().mockResolvedValue(null);
+    const { service, sendDocumentUploadedEmail } = buildNotifyService({
+      members: [{ userId: 'reviewer-1', role: 'PRA', organisationId: 'org-1' }],
+      buildBulkResolvers,
+    });
+
+    await (service as unknown as { notifyUpload: (d: string, f: File, a: AuthenticatedUser) => Promise<void> }).notifyUpload(
+      'room-1',
+      UPLOADED_FILE,
+      ACTOR,
+    );
+
+    expect(sendDocumentUploadedEmail.mock.calls.map((c) => c[0])).toContain('reviewer-1@test.com');
+  });
+});

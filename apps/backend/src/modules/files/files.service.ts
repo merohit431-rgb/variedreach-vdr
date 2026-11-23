@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundEx
 import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
 import { rm, open } from 'fs/promises';
-import { File, PermissionPrincipal, UserRole } from '@prisma/client';
+import { File, UserRole } from '@prisma/client';
 import type { Archiver as ArchiverInstance, ArchiverOptions } from 'archiver';
 // archiver ships CommonJS; we use a typed cast so the factory is callable
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -1072,7 +1072,9 @@ export class FilesService {
       include: {
         members: {
           where: { removedAt: null },
-          include: { user: { select: { id: true, email: true, firstName: true, lastName: true, role: true } } },
+          include: {
+            user: { select: { id: true, email: true, firstName: true, lastName: true, role: true, organisationId: true } },
+          },
         },
       },
     });
@@ -1084,14 +1086,19 @@ export class FilesService {
       if (folder) folderPath = folder.path;
     }
 
-    let folderPermissions: Array<{ principalType: PermissionPrincipal; principalId: string; flags: unknown }> = [];
-    if (file.folderId) {
-      folderPermissions = await this.prisma.permission.findMany({
-        where: { scopeType: 'FOLDER', scopeId: file.folderId, deletedAt: null },
-        select: { principalType: true, principalId: true, flags: true },
-      });
-    }
-    const hasFolderRestrictions = folderPermissions.length > 0;
+    // Phase 4 fix: this used to query the Permission model, which nothing
+    // in the app ever writes to (schema-ready, not enforced -- see its own
+    // comment in schema.prisma) -- so hasFolderRestrictions was always
+    // false and every external-role member was notified about every
+    // upload regardless of folder-ACL, leaking restricted folder names and
+    // document names to reviewers who may have no FolderAccessGrant reach
+    // to that folder at all. buildBulkResolvers runs the real, live
+    // nearest-grant-boundary algorithm (the same one update()/getWatermarkedContent()
+    // use elsewhere in this file) for every candidate member in one batch.
+    const bulkResolvers = await this.folderAccess.buildBulkResolvers(
+      dataRoomId,
+      dataRoom.members.map((m) => ({ userId: m.userId, organisationId: m.user.organisationId })),
+    );
 
     const actorMember = dataRoom.members.find((m) => m.userId === actor.id);
     const uploaderName = actorMember
@@ -1130,17 +1137,12 @@ export class FilesService {
       if ((DATA_ROOM_MANAGER_ROLES as UserRole[]).includes(effectiveRole)) {
         shouldNotify = true;
       } else if ((EXTERNAL_ROLES as UserRole[]).includes(effectiveRole)) {
-        if (!hasFolderRestrictions) {
-          shouldNotify = true;
-        } else {
-          shouldNotify = folderPermissions.some((p) => {
-            const flags = p.flags as Record<string, boolean>;
-            if (!flags?.view) return false;
-            if (p.principalType === PermissionPrincipal.USER && p.principalId === member.userId) return true;
-            if (p.principalType === PermissionPrincipal.ROLE && p.principalId === effectiveRole) return true;
-            return false;
-          });
-        }
+        const resolver = bulkResolvers?.get(member.userId);
+        // No resolver for this member only happens if buildBulkResolvers
+        // returned null (room isn't folder-access-restricted at all -- the
+        // UNRESTRICTED_RESOLVER case, same as everywhere else this pattern
+        // is used) -- never because of a missing/unexpected member.
+        shouldNotify = !bulkResolvers || (resolver?.canReach(file.folderId) ?? false);
       }
 
       if (!shouldNotify) continue;

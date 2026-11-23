@@ -381,3 +381,143 @@ describe('FolderAccessService never throws ForbiddenException', () => {
     await expect(rejection).rejects.toBeInstanceOf(NotFoundException);
   });
 });
+
+// Phase 4 fix: notifyUpload() used to decide who to email about a new
+// upload by querying the dead Permission model (nothing ever writes to it),
+// so every external-role member was notified regardless of folder-ACL --
+// leaking restricted folder names/document names to reviewers with no real
+// FolderAccessGrant reach. buildBulkResolvers is the replacement: the same
+// nearest-grant-boundary algorithm as buildResolver, run for many members
+// of one room in a single batch of queries instead of one call per member
+// (which would reintroduce the 2026-07-18 DB-pool-saturation incident
+// notifyUpload's own comment describes).
+describe('FolderAccessService.buildBulkResolvers', () => {
+  type BulkGrant = { folderId: string; userId?: string | null; groupId?: string | null };
+
+  function buildBulkService(opts: {
+    folderAccessRestricted: boolean;
+    grants?: BulkGrant[];
+    // userId -> [{groupId, organisationId}] -- organisationId is the
+    // GROUP's org, deliberately settable independently of the member's own
+    // org so the cross-org safety test below can misalign them.
+    groupMemberships?: Record<string, Array<{ groupId: string; organisationId: string }>>;
+  }) {
+    const dataRoomFindUnique = jest.fn().mockResolvedValue({ folderAccessRestricted: opts.folderAccessRestricted });
+    const folderFindMany = jest.fn().mockResolvedValue(FOLDERS);
+    const grantFindMany = jest.fn().mockResolvedValue(
+      (opts.grants ?? []).map((g) => ({ folderId: g.folderId, userId: g.userId ?? null, groupId: g.groupId ?? null })),
+    );
+    const rows: Array<{ userId: string; groupId: string; group: { organisationId: string } }> = [];
+    for (const [userId, memberships] of Object.entries(opts.groupMemberships ?? {})) {
+      for (const m of memberships) rows.push({ userId, groupId: m.groupId, group: { organisationId: m.organisationId } });
+    }
+    const groupMemberFindMany = jest.fn().mockResolvedValue(rows);
+
+    const prisma = {
+      dataRoom: { findUnique: dataRoomFindUnique },
+      folder: { findMany: folderFindMany },
+      folderAccessGrant: { findMany: grantFindMany },
+      groupMember: { findMany: groupMemberFindMany },
+    } as unknown as PrismaService;
+
+    const service = new FolderAccessService(prisma, { record: jest.fn() } as unknown as AuditLogService);
+    return { service, dataRoomFindUnique, groupMemberFindMany };
+  }
+
+  it('returns null (unrestricted) when the room has folderAccessRestricted off, without querying folders/grants', async () => {
+    const { service } = buildBulkService({ folderAccessRestricted: false });
+
+    const resolvers = await service.buildBulkResolvers('room-1', [{ userId: 'user-1', organisationId: 'org-1' }]);
+
+    expect(resolvers).toBeNull();
+  });
+
+  it('returns null for an empty member list without querying the room at all', async () => {
+    const { service, dataRoomFindUnique } = buildBulkService({ folderAccessRestricted: true });
+
+    const resolvers = await service.buildBulkResolvers('room-1', []);
+
+    expect(resolvers).toBeNull();
+    expect(dataRoomFindUnique).not.toHaveBeenCalled();
+  });
+
+  it('gives each user their own independent resolver based on their own user-grant', async () => {
+    const { service } = buildBulkService({
+      folderAccessRestricted: true,
+      grants: [{ folderId: 'D1', userId: 'user-1' }],
+    });
+
+    const resolvers = await service.buildBulkResolvers('room-1', [
+      { userId: 'user-1', organisationId: 'org-1' },
+      { userId: 'user-2', organisationId: 'org-1' },
+    ]);
+
+    expect(resolvers!.get('user-1')!.canReach('D1')).toBe(true);
+    expect(resolvers!.get('user-2')!.canReach('D1')).toBe(false);
+    // Un-boundaried folder (C) with no grant on it at all still default-denies.
+    expect(resolvers!.get('user-1')!.canReach('C')).toBe(false);
+    // Root is always reachable regardless of restriction.
+    expect(resolvers!.get('user-1')!.canReach(null)).toBe(true);
+  });
+
+  it('honours group-based grants per user, batched in one query instead of one per member', async () => {
+    const { service, groupMemberFindMany } = buildBulkService({
+      folderAccessRestricted: true,
+      grants: [{ folderId: 'C', groupId: 'group-reviewers' }],
+      groupMemberships: {
+        'user-1': [{ groupId: 'group-reviewers', organisationId: 'org-1' }],
+        // user-2 is in a different, unrelated group -- no reach.
+        'user-2': [{ groupId: 'group-other', organisationId: 'org-1' }],
+      },
+    });
+
+    const resolvers = await service.buildBulkResolvers('room-1', [
+      { userId: 'user-1', organisationId: 'org-1' },
+      { userId: 'user-2', organisationId: 'org-1' },
+      { userId: 'user-3', organisationId: 'org-1' }, // no group membership at all
+    ]);
+
+    expect(resolvers!.get('user-1')!.canReach('C1')).toBe(true); // inherits C's grant
+    expect(resolvers!.get('user-2')!.canReach('C1')).toBe(false);
+    expect(resolvers!.get('user-3')!.canReach('C1')).toBe(false);
+    expect(groupMemberFindMany).toHaveBeenCalledTimes(1); // one batched call, not one per member
+  });
+
+  it('never honours a group grant across organisations, even inside one batch call', async () => {
+    const { service } = buildBulkService({
+      folderAccessRestricted: true,
+      grants: [{ folderId: 'C', groupId: 'group-x' }],
+      groupMemberships: {
+        // user-1 is genuinely in group-x, but group-x belongs to a
+        // DIFFERENT org than user-1's own -- must not count.
+        'user-1': [{ groupId: 'group-x', organisationId: 'org-OTHER' }],
+      },
+    });
+
+    const resolvers = await service.buildBulkResolvers('room-1', [{ userId: 'user-1', organisationId: 'org-1' }]);
+
+    expect(resolvers!.get('user-1')!.canReach('C1')).toBe(false);
+  });
+
+  it('folders/grants are fetched once for the whole batch, not once per member', async () => {
+    const dataRoomFindUnique = jest.fn().mockResolvedValue({ folderAccessRestricted: true });
+    const folderFindMany = jest.fn().mockResolvedValue(FOLDERS);
+    const grantFindMany = jest.fn().mockResolvedValue([]);
+    const prisma = {
+      dataRoom: { findUnique: dataRoomFindUnique },
+      folder: { findMany: folderFindMany },
+      folderAccessGrant: { findMany: grantFindMany },
+      groupMember: { findMany: jest.fn().mockResolvedValue([]) },
+    } as unknown as PrismaService;
+    const service = new FolderAccessService(prisma, { record: jest.fn() } as unknown as AuditLogService);
+
+    await service.buildBulkResolvers('room-1', [
+      { userId: 'user-1', organisationId: 'org-1' },
+      { userId: 'user-2', organisationId: 'org-1' },
+      { userId: 'user-3', organisationId: 'org-1' },
+    ]);
+
+    expect(folderFindMany).toHaveBeenCalledTimes(1);
+    expect(grantFindMany).toHaveBeenCalledTimes(1);
+  });
+});
