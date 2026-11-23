@@ -137,15 +137,29 @@ export class AuthService {
       );
     }
 
-    if (user.status !== 'ACTIVE') {
-      throw new UnauthorizedException('Account is not active. Contact your administrator.');
-    }
-
     const passwordValid = await bcrypt.compare(dto.password, user.password);
 
     if (!passwordValid) {
       await this.handleFailedLogin(user.id, user.failedLoginAttempts, meta);
       throw new UnauthorizedException('Invalid email or password');
+    }
+
+    // Phase 3B.2: deliberately checked AFTER password verification, not
+    // before -- checking it first would let a caller who doesn't know the
+    // password at all distinguish "this account is suspended" from "wrong
+    // password" by response alone, a narrow account-enumeration side
+    // channel. Verifying the real credential first means this check only
+    // ever runs once we already know the caller legitimately holds the
+    // password.
+    if (user.status !== 'ACTIVE') {
+      await this.auditLogService.record({
+        action: 'LOGIN_DENIED_SUSPENDED',
+        userId: user.id,
+        metadata: { stage: 'login', level: 'user', status: user.status },
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
+      });
+      throw new UnauthorizedException('Account is not active. Contact your administrator.');
     }
 
     // A recognized trusted-device cookie skips the OTP challenge entirely,
@@ -204,47 +218,79 @@ export class AuthService {
     // entirely, same as always. Everyone else resolves which organisation
     // this login is scoped to.
     if (user.role !== 'SUPER_ADMIN') {
-      const allMemberships = await this.prisma.organisationMembership.findMany({
-        where: { userId: user.id, status: 'ACTIVE' },
+      // Phase 3B.2 fix: this used to query `status: 'ACTIVE'` directly,
+      // which made "this user has a membership, but it's SUSPENDED" and
+      // "this user has never had a membership row at all" produce the same
+      // empty result -- and the empty-result case falls through to the
+      // legacy-columns path below (intentionally, for the brief
+      // pre-migration-backfill window). That meant a suspended membership
+      // silently logged the user in anyway, found via Phase 3B.1's live
+      // testing. Fetching every membership regardless of status, then
+      // partitioning in code, lets those two cases be told apart.
+      const allMembershipsAnyStatus = await this.prisma.organisationMembership.findMany({
+        where: { userId: user.id },
         include: { organisation: { include: { subscription: true } } },
       });
-      // A suspended/archived org's membership -- or one whose subscription
-      // has lapsed -- must not appear as a workspace choice, and must never
-      // silently fall through to the "zero memberships" legacy-column path
-      // below (that path exists for the pre-migration-backfill window, not
-      // for "every org this user belongs to happens to be blocked") -- so
-      // partition explicitly rather than just filtering.
-      const memberships = allMemberships.filter(
-        (m) => m.organisation.status === 'ACTIVE' && !m.organisation.deletedAt && !isSubscriptionLapsed(m.organisation.subscription),
-      );
-      if (memberships.length === 0 && allMemberships.length > 0) {
-        throw new UnauthorizedException('Your organisation is not currently active. Contact your administrator.');
-      }
 
-      if (memberships.length > 1) {
-        const workspaceSelectionToken = this.jwtService.sign(
-          { sub: user.id, workspaceSelection: true, rememberMe },
-          { secret: this.configService.get<string>('jwt.accessSecret'), expiresIn: MFA_CHALLENGE_EXPIRY },
+      if (allMembershipsAnyStatus.length > 0) {
+        const activeStatusMemberships = allMembershipsAnyStatus.filter((m) => m.status === 'ACTIVE');
+        if (activeStatusMemberships.length === 0) {
+          // At least one membership exists, but every one of them is
+          // SUSPENDED -- a real membership row, not a migration gap. Reject
+          // with the same message already used for a suspended User-level
+          // account, so the response doesn't reveal which specific
+          // mechanism caused the denial.
+          await this.auditLogService.record({
+            action: 'LOGIN_DENIED_SUSPENDED',
+            userId: user.id,
+            metadata: { stage: 'login', level: 'membership' },
+            ipAddress: meta.ipAddress,
+            userAgent: meta.userAgent,
+          });
+          throw new UnauthorizedException('Account is not active. Contact your administrator.');
+        }
+
+        // A suspended/archived org's membership -- or one whose subscription
+        // has lapsed -- must not appear as a workspace choice, and must
+        // never silently fall through to the "zero memberships" legacy-
+        // column path below (that path exists for the pre-migration-
+        // backfill window, not for "every org this user belongs to happens
+        // to be blocked") -- so partition explicitly rather than just
+        // filtering.
+        const memberships = activeStatusMemberships.filter(
+          (m) => m.organisation.status === 'ACTIVE' && !m.organisation.deletedAt && !isSubscriptionLapsed(m.organisation.subscription),
         );
-        return {
-          requiresWorkspaceSelection: true,
-          workspaceSelectionToken,
-          workspaces: memberships.map((m) => ({
-            organisationId: m.organisationId,
-            organisationName: m.organisation.name,
-            role: m.role,
-          })),
-        };
-      }
+        if (memberships.length === 0) {
+          throw new UnauthorizedException('Your organisation is not currently active. Contact your administrator.');
+        }
 
-      // Exactly one membership -- the case for every user prior to
-      // multi-org support, and the common case for a while yet -- auto-
-      // selects it, so login behaves exactly as before. Zero memberships
-      // (only possible in the brief window before the migration backfill
-      // runs) falls back to the legacy User columns rather than failing.
-      if (memberships.length === 1) {
-        user = { ...user, organisationId: memberships[0].organisationId, role: memberships[0].role };
+        if (memberships.length > 1) {
+          const workspaceSelectionToken = this.jwtService.sign(
+            { sub: user.id, workspaceSelection: true, rememberMe },
+            { secret: this.configService.get<string>('jwt.accessSecret'), expiresIn: MFA_CHALLENGE_EXPIRY },
+          );
+          return {
+            requiresWorkspaceSelection: true,
+            workspaceSelectionToken,
+            workspaces: memberships.map((m) => ({
+              organisationId: m.organisationId,
+              organisationName: m.organisation.name,
+              role: m.role,
+            })),
+          };
+        }
+
+        // Exactly one membership -- the case for every user prior to
+        // multi-org support, and the common case for a while yet -- auto-
+        // selects it, so login behaves exactly as before.
+        if (memberships.length === 1) {
+          user = { ...user, organisationId: memberships[0].organisationId, role: memberships[0].role };
+        }
       }
+      // allMembershipsAnyStatus.length === 0: this user has never had a
+      // membership row at all (only possible in the brief window before the
+      // migration backfill runs) -- falls back to the legacy User columns
+      // rather than failing, unchanged from before this fix.
     }
 
     await this.enforceConcurrentSessionLimit(user.id);
@@ -510,6 +556,23 @@ export class AuthService {
       throw new UnauthorizedException('MFA is not configured for this account');
     }
 
+    // Phase 3B.2: this path (dormant, not exposed in any UI -- see the class
+    // comment at its controller route) didn't re-check account status the
+    // way the email-OTP path already does, since the initial login() call
+    // that minted this challenge token checked it minutes earlier -- long
+    // enough for an admin to suspend the account in between. Mirrors the
+    // identical check in verifyEmailOtpLogin()/resendEmailOtp() below.
+    if (user.deletedAt || user.status !== 'ACTIVE') {
+      await this.auditLogService.record({
+        action: 'LOGIN_DENIED_SUSPENDED',
+        userId: user.id,
+        metadata: { stage: 'mfa_totp', level: 'user' },
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
+      });
+      throw new UnauthorizedException('Account is not active. Contact your administrator.');
+    }
+
     const result = otpVerifySync({ secret: user.totpSecret, token: totpCode });
     if (!result.valid) {
       throw new UnauthorizedException('Invalid TOTP code');
@@ -691,6 +754,13 @@ export class AuthService {
     }
 
     if (session.user.deletedAt || session.user.status !== 'ACTIVE') {
+      await this.auditLogService.record({
+        action: 'LOGIN_DENIED_SUSPENDED',
+        userId: session.user.id,
+        metadata: { stage: 'refresh', level: 'user' },
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
+      });
       throw new UnauthorizedException('Account is not active');
     }
 
@@ -708,6 +778,13 @@ export class AuthService {
         include: { organisation: { include: { subscription: true } } },
       });
       if (!membership || membership.status !== 'ACTIVE') {
+        await this.auditLogService.record({
+          action: 'LOGIN_DENIED_SUSPENDED',
+          userId: session.user.id,
+          metadata: { stage: 'refresh', level: 'membership' },
+          ipAddress: meta.ipAddress,
+          userAgent: meta.userAgent,
+        });
         throw new UnauthorizedException('Session is no longer valid');
       }
       if (!membership.organisation || membership.organisation.deletedAt || membership.organisation.status !== 'ACTIVE') {

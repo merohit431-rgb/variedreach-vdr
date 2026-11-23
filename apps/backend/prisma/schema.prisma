@@ -112,6 +112,12 @@ enum AuditAction {
   MFA_OTP_GENERATED
   MFA_OTP_FAILED
   LOGIN_BLOCKED
+  // Phase 3B.2: distinct from USER_SUSPENDED (the admin action of
+  // suspending someone) -- this is the suspended account's OWN attempt
+  // being denied. One action, not three, covers login/refresh/existing-
+  // session denial; metadata.stage distinguishes which, same convention as
+  // DOCUMENT_ANALYSIS_REQUESTED's metadata.isRegeneration.
+  LOGIN_DENIED_SUSPENDED
   PAYMENT_CAPTURED
   PAYMENT_FAILED
   PAYMENT_REFUND_INITIATED

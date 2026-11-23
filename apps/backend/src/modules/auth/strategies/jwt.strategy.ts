@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { AuditLogService } from '../../audit/audit-log.service';
 import { AuthenticatedUser, JwtPayload } from '../types/jwt-payload.interface';
 import { isSubscriptionLapsed } from '../../../common/utils/subscription.util';
 
@@ -11,6 +12,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly auditLogService: AuditLogService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -26,6 +28,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
 
     if (!user || user.deletedAt || user.status !== 'ACTIVE') {
+      // Phase 3B.2: only audited when the user row actually exists and is
+      // specifically non-ACTIVE (not for a deleted/never-existed user,
+      // which this same branch also rejects but isn't "suspension") -- a
+      // genuinely existing suspended account's already-issued token being
+      // rejected is the event Step 7 asks to capture.
+      if (user && !user.deletedAt) {
+        await this.auditLogService
+          .record({ action: 'LOGIN_DENIED_SUSPENDED', userId: user.id, metadata: { stage: 'session_validation', level: 'user' } })
+          .catch(() => undefined);
+      }
       throw new UnauthorizedException('Session is no longer valid');
     }
 
@@ -53,6 +65,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
 
     if (!membership || membership.status !== 'ACTIVE') {
+      await this.auditLogService
+        .record({ action: 'LOGIN_DENIED_SUSPENDED', userId: user.id, organisationId: payload.organisationId, metadata: { stage: 'session_validation', level: 'membership' } })
+        .catch(() => undefined);
       throw new UnauthorizedException('Session is no longer valid');
     }
 
