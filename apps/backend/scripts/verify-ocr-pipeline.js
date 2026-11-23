@@ -54,13 +54,41 @@ function textPdf(outPath, pages) {
 }
 
 // Converts a page of a text PDF into a genuinely image-only PDF (no text
-// layer) by rasterizing it to PNG then wrapping that PNG into a fresh
-// PDF -- the same real transformation a scanner produces, not a simulation.
+// layer) by rasterizing it to PNG (the real ghostscript.util.ts code path --
+// the only direction production OCR ever needs) then embedding that PNG as
+// the sole content of a fresh PDF page via pdfkit's own image support --
+// deliberately NOT a second Ghostscript invocation: gs's pdfwrite device
+// expects PostScript/PDF input, not a raw raster file (confirmed the hard
+// way -- `gs -sDEVICE=pdfwrite -o out.pdf in.png` throws a syntaxerror on
+// this installed Ghostscript 10.08.0, trying to parse the PNG's bytes as
+// PostScript). The resulting PDF has a real embedded image and genuinely no
+// extractable text layer, which is the only property this fixture actually
+// needs -- pdfjs-dist will correctly flag it scanned.
 async function rasterizeToImageOnlyPdf(sourcePdf, pageNumber, outPdfPath, dpi) {
   const pngPath = path.join(TMP, `${crypto.randomUUID()}.png`);
   await rasterizePage(sourcePdf, pageNumber, dpi, pngPath, TIMEOUT_MS);
-  await execFileAsync('gs', ['-dNOPAUSE', '-dBATCH', '-dSAFER', '-sDEVICE=pdfwrite', `-o${outPdfPath}`, pngPath]);
+
+  await new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ autoFirstPage: false });
+    const stream = fs.createWriteStream(outPdfPath);
+    doc.pipe(stream);
+    const { width, height } = sharp_sync_dimensions(pngPath);
+    doc.addPage({ size: [width, height] });
+    doc.image(pngPath, 0, 0, { width, height });
+    doc.end();
+    stream.on('finish', resolve);
+    stream.on('error', reject);
+  });
+
   return pngPath;
+}
+
+function sharp_sync_dimensions(pngPath) {
+  // sharp's metadata read is async-only; pdfkit needs page dimensions
+  // synchronously when calling addPage(). The PNG header alone (first 24
+  // bytes, IHDR chunk) is enough to read width/height without a decode.
+  const buf = fs.readFileSync(pngPath);
+  return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
 }
 
 async function main() {

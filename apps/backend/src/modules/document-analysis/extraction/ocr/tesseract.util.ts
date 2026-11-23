@@ -46,9 +46,17 @@ export function parseTsv(tsv: string): TesseractResult {
 
 // Runs the Tesseract CLI (installed via apk) against a single rasterized
 // page image. execFile, not exec -- no shell interpolation of any path.
+//
+// "tsv" is a trailing CONFIGFILE positional argument, not a `--tsv` flag --
+// Tesseract's CLI usage is `tesseract input output [options] [configfile]`,
+// where txt/pdf/tsv/hocr are built-in configfile names selecting output
+// format, confirmed directly against `tesseract --help`/`--help-extra` on
+// the real installed binary (`--tsv` fails with "unknown command line
+// argument"). Options (-l, --dpi, etc.) must precede the configfile per
+// that same help text.
 export async function recognize(pngPath: string, languages: string, timeoutMs: number): Promise<TesseractResult> {
   try {
-    const { stdout } = await execFileAsync('tesseract', [pngPath, 'stdout', '-l', languages, '--tsv'], {
+    const { stdout } = await execFileAsync('tesseract', [pngPath, 'stdout', '-l', languages, 'tsv'], {
       timeout: timeoutMs,
       maxBuffer: 10 * 1024 * 1024,
     });
