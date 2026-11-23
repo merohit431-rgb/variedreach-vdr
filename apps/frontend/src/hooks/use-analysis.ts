@@ -35,7 +35,20 @@ export type AiSummaryRunStatus =
   | 'FAILED'
   | 'SKIPPED_LIMIT_REACHED';
 
-export type StatementVerificationStatus = 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'UNVERIFIED';
+export type StatementVerificationStatus = 'VERIFIED' | 'PARTIALLY_SUPPORTED' | 'UNSUPPORTED' | 'CONFLICTING_SOURCE';
+
+export interface ConflictPassage {
+  sentenceId: string;
+  pageNumber: number;
+  value: string;
+  text: string;
+}
+
+export interface ConflictDetail {
+  type: 'CURRENCY' | 'DATE' | 'PROPER_NOUN' | 'SECTION_REFERENCE' | 'PERCENTAGE';
+  statementValue: string;
+  passages: ConflictPassage[];
+}
 
 export type PageExtractionMethod = 'NATIVE_TEXT' | 'OCR' | 'OCR_FAILED' | 'UNAVAILABLE';
 
@@ -57,6 +70,10 @@ export interface AiSummaryStatement {
   displayOrder: number;
   statementText: string;
   verificationStatus: StatementVerificationStatus;
+  // Null for everything except CONFLICTING_SOURCE -- the raw
+  // verificationDetails.conflicts the backend computed; never resolved to
+  // a single "winning" value, by design (see StatementVerificationService).
+  verificationDetails?: { conflicts?: ConflictDetail[] } | null;
   citations: AiSummaryCitation[];
 }
 

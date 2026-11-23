@@ -1049,10 +1049,17 @@ model AiSummaryRun {
   @@map("ai_summary_runs")
 }
 
+// Renamed from VERIFIED/PARTIALLY_VERIFIED/UNVERIFIED during the Phase 3C.1
+// audit closure (zero rows existed at the time, so this was a free rename,
+// not a data migration) to make room for CONFLICTING_SOURCE -- a statement
+// whose OWN cited sources disagree with each other must never be reported
+// as VERIFIED just because one of them happens to match; see
+// StatementVerificationService's cross-citation conflict check.
 enum StatementVerificationStatus {
   VERIFIED
-  PARTIALLY_VERIFIED
-  UNVERIFIED
+  PARTIALLY_SUPPORTED
+  UNSUPPORTED
+  CONFLICTING_SOURCE
 }
 
 model AiSummaryStatement {
@@ -1066,7 +1073,7 @@ model AiSummaryStatement {
   // persisted; every such row's integrity rests entirely on
   // verificationStatus below, never on this column's own shape.
   statementText       String
-  verificationStatus  StatementVerificationStatus @default(UNVERIFIED)
+  verificationStatus  StatementVerificationStatus @default(UNSUPPORTED)
   // {checkedTokens:[{type,value,matched,matchedSentenceId?}], ...} -- a
   // transparency record of what StatementVerificationService actually
   // checked, derived entirely from text already stored elsewhere in this

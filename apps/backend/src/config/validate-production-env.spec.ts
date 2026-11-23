@@ -118,6 +118,82 @@ describe('validateProductionEnv', () => {
     expect(errorSpy).not.toHaveBeenCalled();
   });
 
+  // Added during the Phase 3C.1 audit closure, after a real staging
+  // incident: staging deliberately sets NODE_ENV=production (to catch real
+  // misconfigurations) but must never be ABLE to hold live payment
+  // credentials. APP_ENVIRONMENT=staging is the one narrow exception to the
+  // PAYMENT_PROVIDER check -- every other check in this file must stay
+  // exactly as strict on staging as in real production.
+  describe('APP_ENVIRONMENT=staging payment exemption (Phase 3C.1)', () => {
+    it('passes with a non-razorpay PAYMENT_PROVIDER when APP_ENVIRONMENT=staging', () => {
+      process.env.NODE_ENV = 'production';
+      process.env.JWT_ACCESS_SECRET = 'a'.repeat(40);
+      process.env.COOKIE_SECRET = 'b'.repeat(40);
+      process.env.APP_ENVIRONMENT = 'staging';
+      process.env.PAYMENT_PROVIDER = 'mock';
+
+      validateProductionEnv();
+
+      expect(exitSpy).not.toHaveBeenCalled();
+    });
+
+    it('still exits for a non-razorpay PAYMENT_PROVIDER when APP_ENVIRONMENT is unset (real production is never affected)', () => {
+      process.env.NODE_ENV = 'production';
+      process.env.JWT_ACCESS_SECRET = 'a'.repeat(40);
+      process.env.COOKIE_SECRET = 'b'.repeat(40);
+      delete process.env.APP_ENVIRONMENT;
+      process.env.PAYMENT_PROVIDER = 'mock';
+
+      validateProductionEnv();
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('still requires all three Razorpay keys on staging if PAYMENT_PROVIDER=razorpay is actually chosen there', () => {
+      process.env.NODE_ENV = 'production';
+      process.env.JWT_ACCESS_SECRET = 'a'.repeat(40);
+      process.env.COOKIE_SECRET = 'b'.repeat(40);
+      process.env.APP_ENVIRONMENT = 'staging';
+      process.env.PAYMENT_PROVIDER = 'razorpay';
+      delete process.env.RAZORPAY_KEY_ID;
+      delete process.env.RAZORPAY_KEY_SECRET;
+      delete process.env.RAZORPAY_WEBHOOK_SECRET;
+
+      validateProductionEnv();
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('REGRESSION GUARD: APP_ENVIRONMENT=staging does not weaken the JWT/COOKIE secret checks', () => {
+      process.env.NODE_ENV = 'production';
+      process.env.APP_ENVIRONMENT = 'staging';
+      process.env.PAYMENT_PROVIDER = 'mock';
+      delete process.env.JWT_ACCESS_SECRET;
+      delete process.env.COOKIE_SECRET;
+
+      validateProductionEnv();
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('passes cleanly with a realistic staging configuration end to end', () => {
+      process.env.NODE_ENV = 'production';
+      process.env.JWT_ACCESS_SECRET = 'a'.repeat(40);
+      process.env.COOKIE_SECRET = 'b'.repeat(40);
+      process.env.SEED_ADMIN_PASSWORD = 'something-else-entirely';
+      process.env.APP_ENVIRONMENT = 'staging';
+      process.env.PAYMENT_PROVIDER = 'mock';
+      delete process.env.RAZORPAY_KEY_ID;
+      delete process.env.RAZORPAY_KEY_SECRET;
+      delete process.env.RAZORPAY_WEBHOOK_SECRET;
+
+      validateProductionEnv();
+
+      expect(exitSpy).not.toHaveBeenCalled();
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
+  });
+
   // Backfilling coverage for a pre-existing branch that had none before
   // Phase 3C touched this file -- confirmed missing during the Phase 3C
   // codebase review, not new logic.

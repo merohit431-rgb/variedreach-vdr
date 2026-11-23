@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { FileRecord } from '@/hooks/use-files';
-import { AiSummaryStatement, SummarySectionType } from '@/hooks/use-analysis';
+import { AiSummaryStatement, ConflictDetail, SummarySectionType } from '@/hooks/use-analysis';
 
 // Extends the legacy SECTION_LABELS map in DocumentAnalysisModal.tsx with
 // the two Phase 3C-only section types -- Claude can populate categories the
@@ -27,6 +27,14 @@ export const AI_SECTION_LABELS: Record<SummarySectionType, string> = {
 export const AI_SUMMARY_DISCLAIMER =
   'AI-generated document analysis is provided for information and review. It may contain errors and should be verified against the original document. It does not constitute legal, financial or professional advice.';
 
+const TOKEN_TYPE_LABELS: Record<ConflictDetail['type'], string> = {
+  CURRENCY: 'amount',
+  DATE: 'date',
+  PROPER_NOUN: 'name',
+  SECTION_REFERENCE: 'section reference',
+  PERCENTAGE: 'percentage',
+};
+
 function VerificationBadge({ status }: { status: AiSummaryStatement['verificationStatus'] }) {
   if (status === 'VERIFIED') {
     return (
@@ -35,17 +43,63 @@ function VerificationBadge({ status }: { status: AiSummaryStatement['verificatio
       </span>
     );
   }
-  if (status === 'PARTIALLY_VERIFIED') {
+  if (status === 'PARTIALLY_SUPPORTED') {
     return (
       <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-400">
-        Partially verified
+        Partially supported
+      </span>
+    );
+  }
+  if (status === 'CONFLICTING_SOURCE') {
+    return (
+      <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-orange-400">
+        Conflicting source
       </span>
     );
   }
   return (
     <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-red-400">
-      Unverified
+      Unsupported
     </span>
+  );
+}
+
+// Renders the conflicting passages exactly as found -- never collapsed to a
+// single "winning" value. Every passage keeps its own page link so a
+// reviewer can jump straight to either source and judge for themselves.
+function ConflictDisclosure({
+  conflicts,
+  file,
+  onOpenPage,
+}: {
+  conflicts: ConflictDetail[];
+  file: FileRecord;
+  onOpenPage: (file: FileRecord, page: number) => void;
+}) {
+  return (
+    <div className="mt-1.5 space-y-2 rounded-md border border-orange-500/30 bg-orange-500/5 p-2.5">
+      {conflicts.map((conflict, i) => (
+        <div key={i} className="text-xs">
+          <p className="font-medium text-orange-300">
+            The cited sources disagree on this {TOKEN_TYPE_LABELS[conflict.type]} -- shown as found, not resolved:
+          </p>
+          <ul className="mt-1 space-y-1">
+            {conflict.passages.map((passage, j) => (
+              <li key={j} className="flex flex-wrap items-start gap-1.5 text-app-t3">
+                <span className="font-mono text-orange-300">{passage.value}</span>
+                <span>&mdash; &ldquo;{passage.text}&rdquo;</span>
+                <button
+                  onClick={() => onOpenPage(file, passage.pageNumber)}
+                  className="whitespace-nowrap font-medium text-app-primary hover:underline"
+                >
+                  p.{passage.pageNumber}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -62,6 +116,7 @@ function StatementRow({
   // one button per distinct page is enough; the reader doesn't need N
   // identical "p.4" links for one statement.
   const pages = Array.from(new Set(statement.citations.map((c) => c.sentence.pageNumber))).sort((a, b) => a - b);
+  const conflicts = statement.verificationStatus === 'CONFLICTING_SOURCE' ? statement.verificationDetails?.conflicts : undefined;
 
   return (
     <li className="text-sm text-app-text">
@@ -80,6 +135,7 @@ function StatementRow({
           </button>
         ))}
       </div>
+      {conflicts && conflicts.length > 0 && <ConflictDisclosure conflicts={conflicts} file={file} onOpenPage={onOpenPage} />}
     </li>
   );
 }
@@ -93,13 +149,16 @@ export function AiSummarySection({
   file: FileRecord;
   onOpenPage: (file: FileRecord, page: number) => void;
 }) {
-  const [showUnverified, setShowUnverified] = useState(false);
+  const [showUnsupported, setShowUnsupported] = useState(false);
 
-  const verified = statements.filter((s) => s.verificationStatus !== 'UNVERIFIED');
-  const unverified = statements.filter((s) => s.verificationStatus === 'UNVERIFIED');
+  // CONFLICTING_SOURCE carries information a reviewer needs to see directly
+  // -- it is never hidden behind the disclosure toggle the way a merely
+  // weak-evidence UNSUPPORTED statement is.
+  const shown = statements.filter((s) => s.verificationStatus !== 'UNSUPPORTED');
+  const unsupported = statements.filter((s) => s.verificationStatus === 'UNSUPPORTED');
 
   const bySection = new Map<SummarySectionType, AiSummaryStatement[]>();
-  for (const statement of verified) {
+  for (const statement of shown) {
     const list = bySection.get(statement.sectionType) ?? [];
     list.push(statement);
     bySection.set(statement.sectionType, list);
@@ -120,17 +179,17 @@ export function AiSummarySection({
         </div>
       ))}
 
-      {unverified.length > 0 && (
+      {unsupported.length > 0 && (
         <div className="border-t border-app-border pt-3">
           <button
-            onClick={() => setShowUnverified((v) => !v)}
+            onClick={() => setShowUnsupported((v) => !v)}
             className="text-xs font-medium text-app-t3 hover:text-app-text"
           >
-            {showUnverified ? 'Hide' : 'Show'} {unverified.length} unverified statement{unverified.length === 1 ? '' : 's'}
+            {showUnsupported ? 'Hide' : 'Show'} {unsupported.length} unsupported statement{unsupported.length === 1 ? '' : 's'}
           </button>
-          {showUnverified && (
+          {showUnsupported && (
             <ul className="mt-2 space-y-2">
-              {unverified.map((statement) => (
+              {unsupported.map((statement) => (
                 <StatementRow key={statement.id} statement={statement} file={file} onOpenPage={onOpenPage} />
               ))}
             </ul>

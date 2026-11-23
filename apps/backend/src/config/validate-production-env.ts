@@ -33,10 +33,23 @@ export function validateProductionEnv(): void {
   // or misconfigured value here would silently start production accepting
   // fabricated payment confirmations for real checkouts, not just failing to
   // charge. Same class of risk as the secrets above; same fail-fast response.
+  //
+  // APP_ENVIRONMENT=staging is the one deliberate exception: staging also
+  // sets NODE_ENV=production (to catch real misconfigurations elsewhere),
+  // but must never be ABLE to hold live payment credentials -- a real
+  // staging credential incident (2026-11-23) found a live Razorpay key
+  // reachable from staging specifically because nothing distinguished the
+  // two. This exception applies to the Razorpay check alone; every other
+  // check in this function (secrets, RANKING_PROVIDER, CLAUDE_API_ENABLED)
+  // stays exactly as strict on staging as in real production, which never
+  // sets APP_ENVIRONMENT=staging and is completely unaffected by this.
+  const isStaging = process.env.APP_ENVIRONMENT === 'staging';
   if (process.env.PAYMENT_PROVIDER !== 'razorpay') {
-    failures.push(
-      `PAYMENT_PROVIDER must be set to "razorpay" in production (currently: ${process.env.PAYMENT_PROVIDER ? `"${process.env.PAYMENT_PROVIDER}"` : 'not set'} — this silently falls back to the mock, always-approve payment provider)`,
-    );
+    if (!isStaging) {
+      failures.push(
+        `PAYMENT_PROVIDER must be set to "razorpay" in production (currently: ${process.env.PAYMENT_PROVIDER ? `"${process.env.PAYMENT_PROVIDER}"` : 'not set'} — this silently falls back to the mock, always-approve payment provider)`,
+      );
+    }
   } else {
     for (const key of ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET', 'RAZORPAY_WEBHOOK_SECRET']) {
       if (!process.env[key]) {

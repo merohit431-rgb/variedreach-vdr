@@ -197,8 +197,11 @@ export class ClaudeSynthesisService {
           continue;
         }
 
-        const citedTexts = validCitedIds.map((id) => sentenceById.get(id)!.text);
-        const verification = this.verificationService.verify(candidate.statementText, citedTexts);
+        const citationInputs = validCitedIds.map((id) => {
+          const sentence = sentenceById.get(id)!;
+          return { sentenceId: id, pageNumber: sentence.pageNumber, text: sentence.text };
+        });
+        const verification = this.verificationService.verify(candidate.statementText, citationInputs);
         if (verification.status !== StatementVerificationStatus.VERIFIED) anyUnverified = true;
 
         await this.prisma.aiSummaryStatement.create({
