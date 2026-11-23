@@ -11,6 +11,13 @@ import { MockRankingProvider } from './providers/mock-ranking.provider';
 import { ExternalAiRankingProvider } from './providers/external-ranking.provider';
 import { RANKING_PROVIDER } from './providers/ranking-provider.interface';
 import { ANALYSIS_QUEUE, ANALYSIS_QUEUE_NAME, AnalysisJobData } from './document-analysis.constants';
+import { OcrAdapter } from './extraction/ocr/ocr.adapter';
+import { ClaudeSummaryProvider } from './providers/claude/claude-summary.provider';
+import { DOCUMENT_SYNTHESIS_PROVIDER } from './providers/claude/claude-summary.interface';
+import { StatementVerificationService } from './verification/statement-verification.service';
+import { AiBudgetGuard } from './budget/ai-budget.guard';
+import { AiUsageLedgerService } from './budget/ai-usage-ledger.service';
+import { ClaudeSynthesisService } from './synthesis/claude-synthesis.service';
 
 // Queue/Worker are wired by hand from the raw, genuinely-CJS `bullmq`
 // package rather than via @nestjs/bullmq -- see the comment at the top of
@@ -44,6 +51,21 @@ import { ANALYSIS_QUEUE, ANALYSIS_QUEUE_NAME, AnalysisJobData } from './document
         config.get<string>('ranking.provider') === 'external' ? external : mock,
       inject: [ConfigService, MockRankingProvider, ExternalAiRankingProvider],
     },
+    // Phase 3C: Claude-backed synthesis, strictly additive alongside the
+    // RANKING_PROVIDER machinery above, which is untouched. Unlike
+    // RANKING_PROVIDER, there is no provider-selection factory here --
+    // Anthropic is the sole AI provider per the brief, so
+    // DOCUMENT_SYNTHESIS_PROVIDER always resolves to the one real
+    // implementation. Safety comes from ClaudeSynthesisService/
+    // ClaudeSummaryProvider's own internal claude.apiEnabled checks, not
+    // from a provider swap.
+    OcrAdapter,
+    ClaudeSummaryProvider,
+    { provide: DOCUMENT_SYNTHESIS_PROVIDER, useClass: ClaudeSummaryProvider },
+    StatementVerificationService,
+    AiBudgetGuard,
+    AiUsageLedgerService,
+    ClaudeSynthesisService,
     {
       provide: ANALYSIS_QUEUE,
       useFactory: (config: ConfigService) =>

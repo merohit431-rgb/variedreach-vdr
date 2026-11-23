@@ -140,6 +140,16 @@ enum AuditAction {
   DOCUMENT_ANALYSIS_VIEWED
   DOCUMENT_ANALYSIS_RETRIED
   DOCUMENT_ANALYSIS_ACCESS_DENIED
+  // Phase 3C: only 4 new values, not a parallel AI_SUMMARY_* lifecycle --
+  // Claude synthesis is layered onto the same DocumentAnalysis row/request/
+  // view/retry/cancel lifecycle the 7 actions above already audit. These
+  // are the genuinely new lifecycle points that have no existing
+  // equivalent: local OCR (its own sub-pipeline, not covered by any action
+  // above) and a budget guard blocking a paid call before it's made.
+  AI_OCR_STARTED
+  AI_OCR_COMPLETED
+  AI_OCR_FAILED
+  AI_BUDGET_LIMIT_REACHED
 }
 
 enum PermissionScope {
@@ -194,13 +204,13 @@ model Organisation {
   // present on this model but read nowhere, i.e. fully decorative.
   deletedAt      DateTime?
 
-  users         User[]
-  dataRooms     DataRoom[]
-  subscription  Subscription?
-  payments      Payment[]
-  invoices      Invoice[]
-  memberships   OrganisationMembership[]
-  groups        Group[]
+  users        User[]
+  dataRooms    DataRoom[]
+  subscription Subscription?
+  payments     Payment[]
+  invoices     Invoice[]
+  memberships  OrganisationMembership[]
+  groups       Group[]
 
   @@map("organisations")
 }
@@ -269,25 +279,25 @@ model User {
   updatedAt           DateTime   @updatedAt
   deletedAt           DateTime?
 
-  organisation        Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  organisationMemberships OrganisationMembership[]
-  dataRoomMemberships DataRoomMember[]
-  folderAccessGrants  FolderAccessGrant[]
-  groupMemberships    GroupMember[]
-  sessions            Session[]
-  emailOtpChallenges  EmailOtpChallenge[]
-  trustedDevices      TrustedDevice[]
-  inviteToken         InviteToken?
-  passwordResetTokens PasswordResetToken[]
-  auditLogs           AuditLog[]
-  uploadedFiles       File[]               @relation("FileUploader")
-  uploadedVersions    FileVersion[]        @relation("FileVersionUploader")
-  watermarkEvents     Watermark[]
-  emailLogs           EmailLog[]
-  ndaAcceptances      NdaAcceptance[]
-  questionsAsked      Question[]           @relation("QuestionAsker")
-  answersGiven        Answer[]             @relation("AnswerAuthor")
-  notifications       Notification[]
+  organisation              Organisation             @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  organisationMemberships   OrganisationMembership[]
+  dataRoomMemberships       DataRoomMember[]
+  folderAccessGrants        FolderAccessGrant[]
+  groupMemberships          GroupMember[]
+  sessions                  Session[]
+  emailOtpChallenges        EmailOtpChallenge[]
+  trustedDevices            TrustedDevice[]
+  inviteToken               InviteToken?
+  passwordResetTokens       PasswordResetToken[]
+  auditLogs                 AuditLog[]
+  uploadedFiles             File[]                   @relation("FileUploader")
+  uploadedVersions          FileVersion[]            @relation("FileVersionUploader")
+  watermarkEvents           Watermark[]
+  emailLogs                 EmailLog[]
+  ndaAcceptances            NdaAcceptance[]
+  questionsAsked            Question[]               @relation("QuestionAsker")
+  answersGiven              Answer[]                 @relation("AnswerAuthor")
+  notifications             Notification[]
   documentAnalysesRequested DocumentAnalysis[]
 
   @@index([organisationId])
@@ -365,26 +375,26 @@ model Registration {
 // Refresh-token session record. Enables concurrent-session limiting (PRD:
 // max 3 by default) and remote revocation. tokenHash, never the raw token.
 model Session {
-  id           String    @id @default(uuid())
-  userId       String
+  id             String    @id @default(uuid())
+  userId         String
   // Which organisation this session/refresh-token is currently scoped to --
   // null for SUPER_ADMIN (org-agnostic) and, transiently, for a session
   // that hasn't completed workspace selection yet.
   organisationId String?
-  tokenHash    String    @unique
-  userAgent    String?
-  ipAddress    String?
+  tokenHash      String    @unique
+  userAgent      String?
+  ipAddress      String?
   // Best-effort "City, Country" from a one-time IP geolocation lookup at
   // login (see common/utils/geo-ip.util.ts) -- null if the lookup timed out
   // or the service was unreachable; never blocks or slows down login itself.
-  location     String?
-  rememberMe   Boolean   @default(false)
-  expiresAt    DateTime
-  revokedAt    DateTime?
-  createdAt    DateTime  @default(now())
+  location       String?
+  rememberMe     Boolean   @default(false)
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
   // Bumped on refresh() (~ every access-token lifetime of continued use) as
   // a low-overhead "still active" signal -- not touched on every request.
-  lastActiveAt DateTime  @default(now())
+  lastActiveAt   DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -442,30 +452,30 @@ model TrustedDevice {
 // ═══════════════════════════════════════════════════════════
 
 model DataRoom {
-  id                String         @id @default(uuid())
-  organisationId    String
-  name              String
-  type              DataRoomType   @default(OTHER)
-  caseNumber        String?
-  status            DataRoomStatus @default(ACTIVE)
-  startDate         DateTime?
-  endDate           DateTime?
-  storageLimitGb    Int            @default(25)
-  storageUsedBytes  BigInt         @default(0)
+  id                              String         @id @default(uuid())
+  organisationId                  String
+  name                            String
+  type                            DataRoomType   @default(OTHER)
+  caseNumber                      String?
+  status                          DataRoomStatus @default(ACTIVE)
+  startDate                       DateTime?
+  endDate                         DateTime?
+  storageLimitGb                  Int            @default(25)
+  storageUsedBytes                BigInt         @default(0)
   // Highest storage-warning threshold (0/80/95/100) already emailed for —
   // crossing upward past this fires the next warning once; dropping back
   // below it (e.g. after deletions) resets it so a future re-crossing alerts again.
-  highestStorageThresholdNotified Int @default(0)
+  highestStorageThresholdNotified Int            @default(0)
   // Watermark appearance — tokens: {{name}} {{email}} {{date}} {{time}} {{ip}}
-  watermarkTemplate String         @default("{{name}} | {{email}} | {{date}} | {{ip}} | CONFIDENTIAL")
-  watermarkOpacity  Float          @default(0.25)
-  watermarkPosition String         @default("diagonal")
+  watermarkTemplate               String         @default("{{name}} | {{email}} | {{date}} | {{ip}} | CONFIDENTIAL")
+  watermarkOpacity                Float          @default(0.25)
+  watermarkPosition               String         @default("diagonal")
   // IP Allowlisting — if enabled, only IPs matching allowedIps CIDRs can access
-  ipAllowlistEnabled Boolean       @default(false)
-  allowedIps         String[]      @default([])
+  ipAllowlistEnabled              Boolean        @default(false)
+  allowedIps                      String[]       @default([])
   // NDA Gate — members must accept NDA before viewing content
-  ndaEnabled        Boolean        @default(false)
-  ndaText           String?        @db.Text
+  ndaEnabled                      Boolean        @default(false)
+  ndaText                         String?        @db.Text
   // Folder-level access control (Phase 3A). Defaults false for every
   // existing and new room -- when false, room membership continues to mean
   // "full access to every folder" exactly as before this feature existed;
@@ -473,21 +483,21 @@ model DataRoom {
   // touching FolderAccessGrant at all. Only a room manager can turn this on
   // (see DataRoomsService.setFolderAccessRestricted()), and nothing in this
   // codebase ever sets it to true automatically.
-  folderAccessRestricted Boolean   @default(false)
-  createdBy         String
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  deletedAt         DateTime?
+  folderAccessRestricted          Boolean        @default(false)
+  createdBy                       String
+  createdAt                       DateTime       @default(now())
+  updatedAt                       DateTime       @updatedAt
+  deletedAt                       DateTime?
 
-  organisation    Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
-  members         DataRoomMember[]
-  folders         Folder[]
-  files           File[]
-  auditLogs       AuditLog[]
-  emailLogs       EmailLog[]
-  ndaAcceptances  NdaAcceptance[]
-  questions       Question[]
-  notifications   Notification[]
+  organisation   Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  members        DataRoomMember[]
+  folders        Folder[]
+  files          File[]
+  auditLogs      AuditLog[]
+  emailLogs      EmailLog[]
+  ndaAcceptances NdaAcceptance[]
+  questions      Question[]
+  notifications  Notification[]
 
   @@index([organisationId, deletedAt])
   @@map("data_rooms")
@@ -522,14 +532,14 @@ model DataRoom {
 // (folder,group)" without interfering with each other -- no schema need for
 // a separate GroupFolderAccessGrant table duplicating this same shape.
 model FolderAccessGrant {
-  id         String    @id @default(uuid())
-  folderId   String
-  userId     String?
-  groupId    String?
-  grantedBy  String
-  grantedAt  DateTime  @default(now())
-  revokedAt  DateTime?
-  revokedBy  String?
+  id        String    @id @default(uuid())
+  folderId  String
+  userId    String?
+  groupId   String?
+  grantedBy String
+  grantedAt DateTime  @default(now())
+  revokedAt DateTime?
+  revokedBy String?
 
   folder Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
   user   User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -550,16 +560,16 @@ model FolderAccessGrant {
 // is folded into the same boundary/reachable-set computation, with zero
 // change to the walk algorithm itself.
 model Group {
-  id             String    @id @default(uuid())
+  id             String   @id @default(uuid())
   organisationId String
   name           String
   // Deactivating (not deleting) a group immediately removes every member's
   // group-derived access on the next request -- nothing to separately
   // revoke per folder, same reasoning as DataRoomMember.removedAt.
-  isActive       Boolean   @default(true)
+  isActive       Boolean  @default(true)
   createdBy      String
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   organisation Organisation        @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   members      GroupMember[]
@@ -592,19 +602,19 @@ model GroupMember {
 
 // Junction: a user's membership + optional role override within one data room.
 model DataRoomMember {
-  id           String    @id @default(uuid())
-  dataRoomId   String
-  userId       String
-  roleOverride UserRole?
+  id                  String    @id @default(uuid())
+  dataRoomId          String
+  userId              String
+  roleOverride        UserRole?
   // Which client legal entity this member represents in THIS room -- a
   // single room can span a corporate group with several related entities,
   // and the same person may represent a different one in a different room.
-  clientOrganisation String?
-  notes              String?
-  invitedBy    String?
-  invitedAt    DateTime  @default(now())
-  joinedAt     DateTime?
-  removedAt    DateTime?
+  clientOrganisation  String?
+  notes               String?
+  invitedBy           String?
+  invitedAt           DateTime  @default(now())
+  joinedAt            DateTime?
+  removedAt           DateTime?
   // Explicit, per-member opt-in to bypass watermarking entirely and receive
   // the exact original uploaded binary -- deliberately NOT derived from role
   // or room-manager tier, and defaults false for every existing and new
@@ -612,9 +622,9 @@ model DataRoomMember {
   // manager turns it on per member; SUPER_ADMIN bypasses this check the same
   // way it bypasses IP-allowlist/NDA elsewhere, everyone else (including
   // ORG_ADMIN) needs this flag set explicitly on their own membership row.
-  canDownloadOriginal Boolean @default(false)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  canDownloadOriginal Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   dataRoom DataRoom @relation(fields: [dataRoomId], references: [id], onDelete: Cascade)
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -642,10 +652,10 @@ model Folder {
   updatedAt  DateTime  @updatedAt
   deletedAt  DateTime?
 
-  dataRoom DataRoom @relation(fields: [dataRoomId], references: [id], onDelete: Cascade)
-  parent   Folder?  @relation("FolderTree", fields: [parentId], references: [id])
-  children Folder[] @relation("FolderTree")
-  files    File[]
+  dataRoom     DataRoom            @relation(fields: [dataRoomId], references: [id], onDelete: Cascade)
+  parent       Folder?             @relation("FolderTree", fields: [parentId], references: [id])
+  children     Folder[]            @relation("FolderTree")
+  files        File[]
   accessGrants FolderAccessGrant[]
   questions    Question[]
 
@@ -661,13 +671,13 @@ model Folder {
 // it being offered for new rooms without deleting the historical record of
 // what rooms created under it were actually seeded with.
 model DataRoomTemplate {
-  id          String       @id @default(uuid())
+  id           String       @id @default(uuid())
   dataRoomType DataRoomType @unique
-  name        String
-  description String?
-  isActive    Boolean      @default(true)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  name         String
+  description  String?
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   folders DataRoomTemplateFolder[]
 
@@ -684,8 +694,8 @@ model DataRoomTemplateFolder {
   name       String
   sortOrder  Int     @default(0)
 
-  template DataRoomTemplate        @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  parent   DataRoomTemplateFolder? @relation("TemplateFolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  template DataRoomTemplate         @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  parent   DataRoomTemplateFolder?  @relation("TemplateFolderTree", fields: [parentId], references: [id], onDelete: Cascade)
   children DataRoomTemplateFolder[] @relation("TemplateFolderTree")
 
   @@index([templateId, parentId])
@@ -712,11 +722,11 @@ model File {
   updatedAt        DateTime  @updatedAt
   deletedAt        DateTime?
 
-  dataRoom        DataRoom      @relation(fields: [dataRoomId], references: [id], onDelete: Cascade)
-  folder          Folder?       @relation(fields: [folderId], references: [id])
-  uploader        User          @relation("FileUploader", fields: [uploadedBy], references: [id])
-  currentVersion  FileVersion?  @relation("CurrentVersion", fields: [currentVersionId], references: [id])
-  versions        FileVersion[] @relation("FileVersions")
+  dataRoom        DataRoom           @relation(fields: [dataRoomId], references: [id], onDelete: Cascade)
+  folder          Folder?            @relation(fields: [folderId], references: [id])
+  uploader        User               @relation("FileUploader", fields: [uploadedBy], references: [id])
+  currentVersion  FileVersion?       @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  versions        FileVersion[]      @relation("FileVersions")
   watermarkEvents Watermark[]
   analyses        DocumentAnalysis[]
 
@@ -728,16 +738,16 @@ model File {
 
 // Immutable — a new row is inserted on every re-upload, never updated.
 model FileVersion {
-  id            String   @id @default(uuid())
-  fileId        String
-  versionNumber Int
-  storagePath   String
-  sizeBytes     BigInt
-  mimeType      String
-  checksum      String
-  uploadedBy    String
-  comment       String?
-  createdAt     DateTime @default(now())
+  id               String   @id @default(uuid())
+  fileId           String
+  versionNumber    Int
+  storagePath      String
+  sizeBytes        BigInt
+  mimeType         String
+  checksum         String
+  uploadedBy       String
+  comment          String?
+  createdAt        DateTime @default(now())
   // Cached Office->PDF conversion (Word/Excel/PowerPoint only), populated on
   // first preview/download and reused after — set once, never invalidated,
   // since a given version's bytes never change.
@@ -761,23 +771,23 @@ model FileVersion {
 // dataRoomId is nullable: account-level events (login, logout, invite) aren't
 // scoped to any one data room. Resource-level events (file/folder ops) set it.
 model AuditLog {
-  id           String      @id @default(uuid())
-  dataRoomId   String?
-  userId       String?
+  id             String      @id @default(uuid())
+  dataRoomId     String?
+  userId         String?
   // Which organisation this action was taken in -- not part of the tamper
   // checksum (same reasoning as ipAddress/userAgent: supplementary context,
   // not identity-bearing content). Nullable: historical rows are backfilled
   // from the actor's org at the time; system events with no user stay null.
   organisationId String?
-  action       AuditAction
-  resourceType String?
-  resourceId   String?
-  metadata     Json?
-  ipAddress    String?
-  userAgent    String?
+  action         AuditAction
+  resourceType   String?
+  resourceId     String?
+  metadata       Json?
+  ipAddress      String?
+  userAgent      String?
   // SHA-256 of the row's logical content, computed at insert time — tamper detection
-  checksum     String
-  createdAt    DateTime    @default(now())
+  checksum       String
+  createdAt      DateTime    @default(now())
 
   dataRoom  DataRoom?  @relation(fields: [dataRoomId], references: [id], onDelete: Cascade)
   user      User?      @relation(fields: [userId], references: [id])
@@ -861,11 +871,16 @@ model DocumentAnalysis {
   createdAt        DateTime               @default(now())
   updatedAt        DateTime               @updatedAt
 
-  file     File                @relation(fields: [fileId], references: [id], onDelete: Cascade)
-  requester User               @relation(fields: [requestedBy], references: [id])
-  pages     ExtractedPage[]
-  sentences ExtractedSentence[]
-  sections  SummarySection[]
+  file         File                @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  requester    User                @relation(fields: [requestedBy], references: [id])
+  pages        ExtractedPage[]
+  sentences    ExtractedSentence[]
+  sections     SummarySection[]
+  // Phase 3C: the Claude-backed synthesis run for this analysis, if the
+  // feature was enabled when it ran. Optional and additive -- the Mock
+  // provider's sections/sentenceRefs above are written unconditionally,
+  // regardless of whether this relation is ever populated.
+  aiSummaryRun AiSummaryRun?
 
   @@unique([fileId, fileVersionId, analysisVersion])
   @@index([dataRoomId])
@@ -873,12 +888,31 @@ model DocumentAnalysis {
   @@map("document_analyses")
 }
 
+// Phase 3C: which pipeline actually produced a page's text. NATIVE_TEXT and
+// UNAVAILABLE together reproduce exactly today's pre-Phase-3C behavior
+// (isScannedOrImageOnly was the only signal); OCR/OCR_FAILED are new.
+enum PageExtractionMethod {
+  NATIVE_TEXT
+  OCR
+  OCR_FAILED
+  UNAVAILABLE
+}
+
 model ExtractedPage {
-  id                   String  @id @default(uuid())
+  id                   String               @id @default(uuid())
   documentAnalysisId   String
   pageNumber           Int
   charCount            Int
-  isScannedOrImageOnly Boolean @default(false)
+  isScannedOrImageOnly Boolean              @default(false)
+  // Phase 3C additions. extractionMethod defaults to NATIVE_TEXT for the
+  // migration's sake, but a one-time data-fix sets historically-scanned
+  // rows to UNAVAILABLE (see the migration.sql edit called out in the
+  // Phase 3C plan) -- a freshly-processed page always gets its real value
+  // written by the processor, never left at this default.
+  extractionMethod     PageExtractionMethod @default(NATIVE_TEXT)
+  ocrConfidence        Float?
+  ocrLanguage          String?
+  ocrDurationMs        Int?
 
   documentAnalysis DocumentAnalysis @relation(fields: [documentAnalysisId], references: [id], onDelete: Cascade)
 
@@ -900,8 +934,11 @@ model ExtractedSentence {
   normalizedText     String
   createdAt          DateTime @default(now())
 
-  documentAnalysis DocumentAnalysis            @relation(fields: [documentAnalysisId], references: [id], onDelete: Cascade)
+  documentAnalysis DocumentAnalysis           @relation(fields: [documentAnalysisId], references: [id], onDelete: Cascade)
   references       SummarySentenceReference[]
+  // Phase 3C: citations from Claude-written statements pointing at this
+  // exact, already-verified sentence -- see AiSummaryCitation below.
+  aiCitations      AiSummaryCitation[]
 
   @@unique([documentAnalysisId, pageNumber, sequenceNumber])
   @@map("extracted_sentences")
@@ -919,6 +956,12 @@ enum SummarySectionType {
   FINDINGS_DECISIONS
   RELIEF
   OTHER_MATERIAL
+  // Phase 3C additions -- the Mock provider never emits these (same dead-
+  // under-Mock situation BACKGROUND_FACTS was already in), but Claude's
+  // analysis has no existing value that fits either without conflating two
+  // categories the Phase 3C brief lists as distinct.
+  RISKS_AND_OBSERVATIONS
+  ACTION_ITEMS
 }
 
 model SummarySection {
@@ -948,6 +991,164 @@ model SummarySentenceReference {
 
   @@unique([summarySectionId, extractedSentenceId])
   @@map("summary_sentence_references")
+}
+
+// ═══════════════════════════════════════════════════════════
+// PHASE 3C — CLAUDE-BACKED SYNTHESIS (additive, parallel to the extractive
+// architecture above, which stays completely unchanged and keeps running
+// unconditionally). Unlike SummarySentenceReference, AiSummaryStatement
+// carries Claude's OWN synthesized text, not a verbatim sentence -- the
+// integrity guarantee here isn't "nowhere to put fabricated text" (that
+// guarantee is structurally impossible once a provider can write prose) but
+// "every factual claim in that prose is independently, mechanically checked
+// against the exact text of the sentences it cites" (StatementVerification
+// Service), with the result recorded, never assumed, on every statement.
+// ═══════════════════════════════════════════════════════════
+
+enum AiSummaryRunStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  COMPLETED_WITH_WARNINGS
+  FAILED
+  SKIPPED_LIMIT_REACHED
+}
+
+model AiSummaryRun {
+  id                    String             @id @default(uuid())
+  documentAnalysisId    String             @unique
+  status                AiSummaryRunStatus @default(PENDING)
+  provider              String             @default("ANTHROPIC")
+  // The CLAUDE_SUMMARY_MODEL value read when this run started -- kept
+  // distinct from modelUsed (below) since the configured model and the
+  // model that actually answered are two different facts worth both having.
+  modelRequested        String
+  modelUsed             String?
+  chunkCount            Int                @default(0)
+  // Indexes (not IDs) of PageChunkBuilder's chunks already persisted --
+  // what makes partial-chunk recovery real: a retried run skips any index
+  // already present here instead of re-paying for completed work.
+  completedChunkIndexes Int[]              @default([])
+  inputTokens           Int                @default(0)
+  outputTokens          Int                @default(0)
+  // Money in micro-USD (1 USD = 1,000,000 units) -- mirrors Payment/
+  // Invoice's integer-smallest-unit convention, at the finer precision
+  // Claude's sub-cent-per-call pricing actually needs (a paise-sized unit
+  // would round most individual calls to zero).
+  estimatedCostMicroUsd Int                @default(0)
+  actualCostMicroUsd    Int                @default(0)
+  errorMessage          String?
+  startedAt             DateTime?
+  completedAt           DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  documentAnalysis DocumentAnalysis     @relation(fields: [documentAnalysisId], references: [id], onDelete: Cascade)
+  statements       AiSummaryStatement[]
+
+  @@map("ai_summary_runs")
+}
+
+enum StatementVerificationStatus {
+  VERIFIED
+  PARTIALLY_VERIFIED
+  UNVERIFIED
+}
+
+model AiSummaryStatement {
+  id                  String                      @id @default(uuid())
+  aiSummaryRunId      String
+  sectionType         SummarySectionType
+  displayOrder        Int
+  // Claude's OWN synthesized wording -- NOT required to be a verbatim
+  // substring of any source sentence. This is the one place in the whole
+  // document-analysis feature where generated (not merely selected) text is
+  // persisted; every such row's integrity rests entirely on
+  // verificationStatus below, never on this column's own shape.
+  statementText       String
+  verificationStatus  StatementVerificationStatus @default(UNVERIFIED)
+  // {checkedTokens:[{type,value,matched,matchedSentenceId?}], ...} -- a
+  // transparency record of what StatementVerificationService actually
+  // checked, derived entirely from text already stored elsewhere in this
+  // schema. Never a new confidence signal and never something a provider
+  // supplies -- it is reconstructed by the backend's own verification pass.
+  verificationDetails Json?
+  createdAt           DateTime                    @default(now())
+
+  run       AiSummaryRun        @relation(fields: [aiSummaryRunId], references: [id], onDelete: Cascade)
+  citations AiSummaryCitation[]
+
+  @@index([aiSummaryRunId, sectionType])
+  @@map("ai_summary_statements")
+}
+
+model AiSummaryCitation {
+  id                  String   @id @default(uuid())
+  statementId         String
+  // Required FK into the SAME ExtractedSentence table the extractive
+  // pipeline already populates and verifies -- a citation that doesn't
+  // resolve to a real row for this exact documentAnalysisId (or that wasn't
+  // part of the specific chunk Claude was actually shown) is rejected by
+  // StatementVerificationService before a row here is ever written.
+  extractedSentenceId String
+  citationOrder       Int
+  createdAt           DateTime @default(now())
+
+  statement AiSummaryStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  sentence  ExtractedSentence  @relation(fields: [extractedSentenceId], references: [id], onDelete: Cascade)
+
+  @@unique([statementId, extractedSentenceId])
+  @@index([extractedSentenceId])
+  @@map("ai_summary_citations")
+}
+
+enum AiUsageStatus {
+  SUCCEEDED
+  FAILED
+  RATE_LIMITED
+  TIMEOUT
+  // Call never made -- recorded for budget-block visibility and audit
+  // completeness, always zero tokens/cost.
+  BUDGET_BLOCKED
+}
+
+// One row per Claude call ATTEMPT (not per analysis) -- including failed,
+// rate-limited, timed-out, and budget-blocked attempts, satisfying "usage
+// accounting for failed and retried requests" directly. Deliberately
+// carries no document text anywhere -- only IDs, model/token/cost numbers,
+// and a status.
+model AiUsageLedger {
+  id                    String        @id @default(uuid())
+  organisationId        String
+  dataRoomId            String
+  fileId                String
+  documentAnalysisId    String
+  // Null only for a BUDGET_BLOCKED row recorded before an AiSummaryRun
+  // exists at all (the budget guard runs before the run row is created).
+  aiSummaryRunId        String?
+  // BullMQ job.id -- not always equal to documentAnalysisId; a retry uses a
+  // distinct id (see DocumentAnalysisService.retryAnalysis).
+  jobId                 String
+  provider              String        @default("ANTHROPIC")
+  model                 String
+  inputTokens           Int           @default(0)
+  outputTokens          Int           @default(0)
+  estimatedCostMicroUsd Int
+  // Null until the response returns usage -- in practice not null for long,
+  // since the (non-Batch) Messages API returns usage synchronously in the
+  // same response as the call itself.
+  actualCostMicroUsd    Int?
+  // Always USD -- Anthropic's own billing currency, unrelated to this
+  // product's Payment/Invoice INR convention.
+  currency              String        @default("USD")
+  status                AiUsageStatus
+  createdAt             DateTime      @default(now())
+
+  @@index([organisationId, createdAt])
+  @@index([dataRoomId, createdAt])
+  @@index([documentAnalysisId])
+  @@index([createdAt])
+  @@map("ai_usage_ledger")
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -983,7 +1184,7 @@ enum EmailStatus {
   SENT
   FAILED
   DELIVERED // webhook-confirmed; Resend only, nodemailer/dev never reaches this
-  BOUNCED   // webhook-confirmed; Resend only
+  BOUNCED // webhook-confirmed; Resend only
 }
 
 enum EmailTemplate {
@@ -1300,7 +1501,7 @@ model BusinessProfile {
 
 enum CouponType {
   PERCENT // value = whole percent, e.g. 20 => 20% off
-  FIXED   // value = flat discount in paise
+  FIXED // value = flat discount in paise
 }
 
 enum CouponStatus {

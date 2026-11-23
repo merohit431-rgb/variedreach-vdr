@@ -240,6 +240,23 @@ export class DocumentAnalysisService {
           },
         },
       },
+      // Phase 3C additions. `pages` was never returned by any route before
+      // this -- carries no sentence text, only per-page extraction metadata
+      // (method, OCR confidence), so this adds no new text-leakage surface.
+      // `aiSummaryRun` is null/absent whenever Claude was never enabled for
+      // this analysis, preserving the exact pre-Phase-3C response shape in
+      // that case. Both flow through the SAME access-control chokepoint
+      // (assertEligibleAndReachable) as everything else this method
+      // returns -- no separate gate, no shortcut.
+      pages: { orderBy: { pageNumber: 'asc' } },
+      aiSummaryRun: {
+        include: {
+          statements: {
+            orderBy: { displayOrder: 'asc' },
+            include: { citations: { include: { sentence: true } } },
+          },
+        },
+      },
     });
 
     await this.auditLogService.record({

@@ -55,6 +55,16 @@ export function validateProductionEnv(): void {
     failures.push('RANKING_EXTERNAL_API_KEY is not set (required when RANKING_PROVIDER=external)');
   }
 
+  // Same pattern as RANKING_PROVIDER above: staying on the default
+  // CLAUDE_API_ENABLED=false is the permanently-safe posture (including on
+  // staging, where NODE_ENV=production is also set -- see
+  // docker-compose.staging.yml) and is never a failure by itself. Only an
+  // explicit opt-in with a missing key is a real misconfiguration worth
+  // failing boot on, rather than crashing on the first analysis job.
+  if (process.env.CLAUDE_API_ENABLED === 'true' && !process.env.ANTHROPIC_API_KEY) {
+    failures.push('ANTHROPIC_API_KEY is not set (required when CLAUDE_API_ENABLED=true)');
+  }
+
   if (failures.length > 0) {
     // eslint-disable-next-line no-console
     console.error(

@@ -29,6 +29,18 @@ export const AUDIT_ACTIONS = [
   'FILE_DELETED',
   'REPORT_EXPORTED',
   'STORAGE_UPGRADE_REQUESTED',
+  // Phase 3C -- the 4 genuinely new audit events (OCR lifecycle + budget
+  // enforcement) with no existing equivalent; see the AuditAction enum's
+  // own comment in schema.prisma for why this isn't a full parallel
+  // AI_SUMMARY_* list. This list is already missing labels for most other
+  // AuditAction values added since this file was created (DOCUMENT_ANALYSIS_*,
+  // payment/subscription/organisation actions, etc.) -- AuditLogTable's own
+  // `?? entry.action` fallback already tolerates that gap; backfilling it
+  // is out of scope here.
+  'AI_OCR_STARTED',
+  'AI_OCR_COMPLETED',
+  'AI_OCR_FAILED',
+  'AI_BUDGET_LIMIT_REACHED',
 ] as const;
 
 export type AuditActionType = (typeof AUDIT_ACTIONS)[number];
@@ -63,4 +75,8 @@ export const AUDIT_ACTION_LABELS: Record<AuditActionType, string> = {
   FILE_DELETED: 'File deleted',
   REPORT_EXPORTED: 'Report exported',
   STORAGE_UPGRADE_REQUESTED: 'Storage upgrade requested',
+  AI_OCR_STARTED: 'AI OCR started',
+  AI_OCR_COMPLETED: 'AI OCR completed',
+  AI_OCR_FAILED: 'AI OCR failed',
+  AI_BUDGET_LIMIT_REACHED: 'AI budget limit reached',
 };

@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Job } from 'bullmq';
 import { createHash } from 'crypto';
-import { DocumentAnalysisStatus } from '@prisma/client';
+import { AiSummaryRunStatus, DocumentAnalysisStatus, PageExtractionMethod } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { STORAGE_SERVICE, IStorageService } from '../storage/storage.interface';
@@ -14,7 +14,9 @@ import {
   PdfUnreadableError,
 } from './extraction/pdf-extraction.adapter';
 import { SentenceSegmentationService } from './extraction/sentence-segmentation.service';
+import { OcrAdapter } from './extraction/ocr/ocr.adapter';
 import { RANKING_PROVIDER, RankedSentence, SummaryRankingProvider } from './providers/ranking-provider.interface';
+import { ClaudeSynthesisService } from './synthesis/claude-synthesis.service';
 
 // A plain injectable, NOT a @nestjs/bullmq @Processor/WorkerHost subclass:
 // that package is ESM-only with no CJS build at all (its package.json
@@ -49,6 +51,8 @@ export class DocumentAnalysisProcessor {
     private readonly pdfExtraction: PdfExtractionAdapter,
     private readonly sentenceSegmentation: SentenceSegmentationService,
     @Inject(RANKING_PROVIDER) private readonly rankingProvider: SummaryRankingProvider,
+    private readonly ocrAdapter: OcrAdapter,
+    private readonly claudeSynthesis: ClaudeSynthesisService,
   ) {}
 
   async process(job: Job<AnalysisJobData>): Promise<void> {
@@ -79,8 +83,68 @@ export class DocumentAnalysisProcessor {
       const maxPages = this.configService.get<number>('queue.maxPages')!;
       const pages = await this.pdfExtraction.extractPages(buffer, maxPages);
 
+      // Phase 3C: OCR any page PdfExtractionAdapter flagged as scanned/
+      // image-only -- the detection itself is entirely unchanged from Phase
+      // 3B (the same 20-character threshold). recognizeScannedPages reads
+      // only a throwaway temp copy of `buffer`, never the original storage
+      // path, so verifyChecksum() below is unaffected by construction. A
+      // page whose OCR succeeds becomes effectively a native-text page for
+      // everything downstream (segmentation, the Mock provider, Claude);
+      // one that fails, was skipped (beyond ocr.maxPagesPerDocument), or
+      // OCR is disabled falls through to exactly today's pre-Phase-3C
+      // behavior for that page.
+      const flaggedPageCount = pages.filter((p) => p.isScannedOrImageOnly).length;
+      if (flaggedPageCount > 0 && this.configService.get<boolean>('ocr.enabled')) {
+        await this.auditLogService
+          .record({
+            action: 'AI_OCR_STARTED',
+            dataRoomId: analysis.dataRoomId,
+            resourceType: 'File',
+            resourceId: analysis.fileId,
+            metadata: { analysisId: documentAnalysisId, flaggedPageCount },
+          })
+          .catch(() => undefined);
+      }
+
+      const ocrResults = await this.ocrAdapter.recognizeScannedPages(buffer, pages);
+      const ocrSucceededPageNumbers = new Set(
+        Array.from(ocrResults.entries())
+          .filter(([, result]) => result.extractionMethod === 'OCR')
+          .map(([pageNumber]) => pageNumber),
+      );
+      const ocrFailedPageNumbers = Array.from(ocrResults.entries())
+        .filter(([, result]) => result.extractionMethod === 'OCR_FAILED')
+        .map(([pageNumber]) => pageNumber);
+
+      if (ocrSucceededPageNumbers.size > 0) {
+        await this.auditLogService
+          .record({
+            action: 'AI_OCR_COMPLETED',
+            dataRoomId: analysis.dataRoomId,
+            resourceType: 'File',
+            resourceId: analysis.fileId,
+            metadata: { analysisId: documentAnalysisId, ocrSucceededPageCount: ocrSucceededPageNumbers.size },
+          })
+          .catch(() => undefined);
+      }
+      if (ocrFailedPageNumbers.length > 0) {
+        await this.auditLogService
+          .record({
+            action: 'AI_OCR_FAILED',
+            dataRoomId: analysis.dataRoomId,
+            resourceType: 'File',
+            resourceId: analysis.fileId,
+            metadata: { analysisId: documentAnalysisId, ocrFailedPageCount: ocrFailedPageNumbers.length },
+          })
+          .catch(() => undefined);
+      }
+      const effectivePages = pages.map((p) => {
+        const ocr = ocrResults.get(p.pageNumber);
+        return ocr?.extractionMethod === 'OCR' ? { ...p, text: ocr.text, charCount: ocr.text.length, isScannedOrImageOnly: false } : p;
+      });
+
       const sentenceRows: { pageNumber: number; sequenceNumber: number; text: string; normalizedText: string }[] = [];
-      for (const page of pages) {
+      for (const page of effectivePages) {
         if (page.isScannedOrImageOnly) continue;
         const sentences = this.sentenceSegmentation.segment(page.text);
         for (const sentence of sentences) {
@@ -88,14 +152,26 @@ export class DocumentAnalysisProcessor {
         }
       }
 
+      const ocrLanguages = this.configService.get<string>('ocr.languages');
       await this.prisma.$transaction([
         this.prisma.extractedPage.createMany({
-          data: pages.map((p) => ({
-            documentAnalysisId,
-            pageNumber: p.pageNumber,
-            charCount: p.charCount,
-            isScannedOrImageOnly: p.isScannedOrImageOnly,
-          })),
+          data: effectivePages.map((p) => {
+            const ocr = ocrResults.get(p.pageNumber);
+            return {
+              documentAnalysisId,
+              pageNumber: p.pageNumber,
+              charCount: p.charCount,
+              isScannedOrImageOnly: p.isScannedOrImageOnly,
+              extractionMethod: ocr
+                ? (PageExtractionMethod[ocr.extractionMethod] as PageExtractionMethod)
+                : p.isScannedOrImageOnly
+                  ? PageExtractionMethod.UNAVAILABLE
+                  : PageExtractionMethod.NATIVE_TEXT,
+              ocrConfidence: ocr?.extractionMethod === 'OCR' ? ocr.confidence : null,
+              ocrLanguage: ocr?.extractionMethod === 'OCR' ? ocrLanguages : null,
+              ocrDurationMs: ocr?.durationMs ?? null,
+            };
+          }),
         }),
         this.prisma.extractedSentence.createMany({
           data: sentenceRows.map((s) => ({ documentAnalysisId, ...s })),
@@ -151,18 +227,47 @@ export class DocumentAnalysisProcessor {
         });
       }
 
-      const hasScannedPages = pages.some((p) => p.isScannedOrImageOnly);
+      // Phase 3C: the Claude-backed synthesis path. Strictly additive --
+      // runs AFTER the Mock provider's extractive sections above have
+      // already been written unconditionally, writes only to the new,
+      // parallel ai_summary_* tables, and its own internal apiEnabled check
+      // means this is a guaranteed no-op (no row of any kind, no network
+      // call) whenever CLAUDE_API_ENABLED is not "true". A Claude failure
+      // degrades to "extractive summary only" -- it is never allowed to
+      // fail the whole job.
+      let aiSummaryOutcome: AiSummaryRunStatus | null = null;
+      if (this.configService.get<boolean>('claude.apiEnabled')) {
+        try {
+          aiSummaryOutcome = await this.claudeSynthesis.run({
+            documentAnalysisId,
+            dataRoomId: analysis.dataRoomId,
+            organisationId: analysis.organisationId,
+            fileId: analysis.fileId,
+            jobId: job.id ?? documentAnalysisId,
+            sentences: writtenSentences.map((s) => ({
+              sentenceId: s.id,
+              pageNumber: s.pageNumber,
+              sequenceNumber: s.sequenceNumber,
+              text: s.text,
+              extractionMethod: ocrSucceededPageNumbers.has(s.pageNumber) ? 'OCR' : 'NATIVE_TEXT',
+            })),
+          });
+        } catch (error) {
+          this.logger.warn(`Claude synthesis failed for analysis ${documentAnalysisId}: ${(error as Error).message}`);
+          aiSummaryOutcome = AiSummaryRunStatus.FAILED;
+        }
+      }
+
+      const hasScannedPages = effectivePages.some((p) => p.isScannedOrImageOnly);
       const checksumVerified = await this.verifyChecksum(buffer, analysis.originalChecksum);
+      const finalStatus =
+        hasScannedPages || aiSummaryOutcome === AiSummaryRunStatus.FAILED || aiSummaryOutcome === AiSummaryRunStatus.COMPLETED_WITH_WARNINGS
+          ? DocumentAnalysisStatus.COMPLETED_WITH_WARNINGS
+          : DocumentAnalysisStatus.COMPLETED;
 
       await this.prisma.documentAnalysis.update({
         where: { id: documentAnalysisId },
-        data: {
-          status: hasScannedPages
-            ? DocumentAnalysisStatus.COMPLETED_WITH_WARNINGS
-            : DocumentAnalysisStatus.COMPLETED,
-          checksumVerified,
-          completedAt: new Date(),
-        },
+        data: { status: finalStatus, checksumVerified, completedAt: new Date() },
       });
 
       await this.auditLogService.record({
@@ -173,9 +278,10 @@ export class DocumentAnalysisProcessor {
         metadata: {
           analysisId: documentAnalysisId,
           pageCount: pages.length,
-          scannedPageCount: pages.filter((p) => p.isScannedOrImageOnly).length,
+          scannedPageCount: effectivePages.filter((p) => p.isScannedOrImageOnly).length,
           sentenceCount: writtenSentences.length,
           checksumVerified,
+          aiSummaryOutcome,
         },
       });
     } catch (error) {

@@ -11,8 +11,15 @@ RUN npm run build --workspace=apps/backend
 
 FROM node:20-alpine AS production
 WORKDIR /app
-# su-exec: lightweight setuid helper for dropping privileges after volume chown
-RUN apk add --no-cache openssl su-exec
+# su-exec: lightweight setuid helper for dropping privileges after volume chown.
+# ghostscript + tesseract-ocr (+ eng/hin language data): Phase 3C local OCR
+# for scanned PDF pages -- both are native Alpine packages, chosen
+# specifically to avoid adding Python to this image. OCRmyPDF (the
+# originally-suggested tool) was assessed and rejected: it's a Python
+# package with a C-extension dependency chain (pikepdf, built on qpdf) that
+# carries real musl-libc compatibility risk on Alpine and would introduce a
+# second language runtime into what has always been a 100%-Node image.
+RUN apk add --no-cache openssl su-exec ghostscript tesseract-ocr tesseract-ocr-data-eng tesseract-ocr-data-hin
 ENV NODE_ENV=production
 
 # Non-root service user — no home directory, no shell, no password

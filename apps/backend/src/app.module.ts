@@ -10,6 +10,9 @@ import conversionConfig from './config/conversion.config';
 import paymentConfig from './config/payment.config';
 import rankingConfig from './config/ranking.config';
 import queueConfig from './config/queue.config';
+import claudeConfig from './config/claude.config';
+import ocrConfig from './config/ocr.config';
+import aiBudgetConfig from './config/ai-budget.config';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -49,7 +52,19 @@ import { DocumentAnalysisModule } from './modules/document-analysis/document-ana
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, jwtConfig, mailConfig, storageThresholdConfig, conversionConfig, paymentConfig, rankingConfig, queueConfig],
+      load: [
+        appConfig,
+        jwtConfig,
+        mailConfig,
+        storageThresholdConfig,
+        conversionConfig,
+        paymentConfig,
+        rankingConfig,
+        queueConfig,
+        claudeConfig,
+        ocrConfig,
+        aiBudgetConfig,
+      ],
       envFilePath: ['.env'],
     }),
     ThrottlerModule.forRootAsync({

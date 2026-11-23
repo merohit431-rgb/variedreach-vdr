@@ -70,6 +70,7 @@ function buildFakePrisma() {
 
   return {
     prisma: prisma as unknown as PrismaService,
+    extractedPages,
     extractedSentences,
     summarySections,
     summarySentenceReferences,
@@ -93,11 +94,35 @@ describe('DocumentAnalysisProcessor', () => {
   const ORIGINAL_BUFFER = Buffer.from('fake-pdf-bytes');
   const CORRECT_CHECKSUM = createHash('sha256').update(ORIGINAL_BUFFER).digest('hex');
 
-  function buildProcessor(rankingProvider: SummaryRankingProvider) {
+  // Phase 3C note: this processor now also reads claude.apiEnabled and
+  // ocr.* keys -- a blanket mockReturnValue(500) would make both evaluate
+  // truthy, inadvertently exercising the real OCR/Claude paths (including
+  // real child_process calls) for every pre-existing test in this file.
+  // claude.apiEnabled defaults to false and ocr.enabled to true-but-faked
+  // (via the injected OcrAdapter stub below, never the real class) so every
+  // existing test's behavior is unchanged from before Phase 3C.
+  const DEFAULT_CONFIG: Record<string, unknown> = {
+    'queue.maxPages': 500,
+    'claude.apiEnabled': false,
+    'ocr.languages': 'eng+hin',
+  };
+
+  function buildProcessor(
+    rankingProvider: SummaryRankingProvider,
+    opts: { configOverrides?: Record<string, unknown>; ocrAdapter?: { recognizeScannedPages: jest.Mock }; claudeSynthesis?: { run: jest.Mock } } = {},
+  ) {
     const fake = buildFakePrisma();
     const storage: IStorageService = { read: jest.fn().mockResolvedValue(ORIGINAL_BUFFER) } as never;
     const audit = { record: jest.fn().mockResolvedValue({}) } as unknown as AuditLogService;
-    const config = { get: jest.fn().mockReturnValue(500) } as unknown as ConfigService;
+    const resolvedConfig = { ...DEFAULT_CONFIG, ...opts.configOverrides };
+    const config = { get: jest.fn((key: string) => resolvedConfig[key]) } as unknown as ConfigService;
+    // Never the real OcrAdapter/ClaudeSynthesisService here -- both would
+    // reach out to child_process/network respectively. Default behavior
+    // (no scanned pages found, Claude never run) reproduces exactly the
+    // pre-Phase-3C processor's behavior for every test that doesn't
+    // override it.
+    const ocrAdapter = opts.ocrAdapter ?? { recognizeScannedPages: jest.fn().mockResolvedValue(new Map()) };
+    const claudeSynthesis = opts.claudeSynthesis ?? { run: jest.fn().mockResolvedValue(null) };
 
     const processor = new DocumentAnalysisProcessor(
       fake.prisma,
@@ -107,9 +132,11 @@ describe('DocumentAnalysisProcessor', () => {
       new PdfExtractionAdapter(),
       new SentenceSegmentationService(),
       rankingProvider,
+      ocrAdapter as never,
+      claudeSynthesis as never,
     );
 
-    return { processor, ...fake, audit, storage };
+    return { processor, ...fake, audit, storage, ocrAdapter, claudeSynthesis };
   }
 
   const baseAnalysis = {
@@ -423,5 +450,198 @@ describe('DocumentAnalysisProcessor', () => {
     await processor.onJobFailed({ data: { documentAnalysisId: 'analysis-1' }, failedReason: 'irrelevant' } as never);
 
     expect(documentAnalysisUpdates).toHaveLength(0);
+  });
+
+  // Phase 3C: OCR and Claude synthesis integration. The two most important
+  // tests here are the regression guards -- confirming the pre-Phase-3C
+  // path is genuinely untouched when both features are in their default
+  // states, not just "still passes by coincidence."
+  describe('Phase 3C: OCR integration', () => {
+    it('never calls OcrAdapter.recognizeScannedPages\' underlying work when every page already has real text', async () => {
+      const ocrAdapter = { recognizeScannedPages: jest.fn().mockResolvedValue(new Map()) };
+      const { processor, prisma, extractedPages } = buildProcessor({ rank: async () => [] }, { ocrAdapter });
+      (prisma.documentAnalysis.findUnique as jest.Mock).mockResolvedValue(baseAnalysis);
+
+      await processor.process({ data: { documentAnalysisId: 'analysis-1' } } as never);
+
+      expect(ocrAdapter.recognizeScannedPages).toHaveBeenCalledTimes(1); // the adapter is always consulted...
+      expect((extractedPages as Array<{ extractionMethod: string }>)[0].extractionMethod).toBe('NATIVE_TEXT'); // ...but this page was never flagged, so nothing changes
+    });
+
+    it('flips a scanned page to native text, charCount, and extractionMethod=OCR when OCR succeeds, feeding its text into segmentation', async () => {
+      mockGetDocument.mockReturnValue({ promise: Promise.resolve(mockPdfDoc(['x'])) }); // 1 char -- below the scanned threshold
+      const ocrAdapter = {
+        recognizeScannedPages: jest.fn().mockResolvedValue(
+          new Map([[1, { text: 'ABC Limited filed an application on 15 January 2026.', confidence: 88, extractionMethod: 'OCR', durationMs: 120 }]]),
+        ),
+      };
+      const { processor, prisma, extractedPages, extractedSentences } = buildProcessor({ rank: async () => [] }, { ocrAdapter });
+      (prisma.documentAnalysis.findUnique as jest.Mock).mockResolvedValue(baseAnalysis);
+
+      await processor.process({ data: { documentAnalysisId: 'analysis-1' } } as never);
+
+      const page1 = (extractedPages as Array<{ pageNumber: number; isScannedOrImageOnly: boolean; extractionMethod: string; ocrConfidence: number | null }>).find((p) => p.pageNumber === 1)!;
+      expect(page1.isScannedOrImageOnly).toBe(false);
+      expect(page1.extractionMethod).toBe('OCR');
+      expect(page1.ocrConfidence).toBe(88);
+      expect(extractedSentences.length).toBeGreaterThan(0); // OCR'd text was segmented, same as any native page
+    });
+
+    it('marks a page OCR_FAILED and leaves it unreadable (same as today\'s pre-Phase-3C behavior) when OCR does not succeed for it', async () => {
+      mockGetDocument.mockReturnValue({ promise: Promise.resolve(mockPdfDoc(['x'])) });
+      const ocrAdapter = {
+        recognizeScannedPages: jest.fn().mockResolvedValue(new Map([[1, { text: '', confidence: 0, extractionMethod: 'OCR_FAILED', durationMs: 50 }]])),
+      };
+      const { processor, prisma, extractedPages, extractedSentences } = buildProcessor({ rank: async () => [] }, { ocrAdapter });
+      (prisma.documentAnalysis.findUnique as jest.Mock).mockResolvedValue(baseAnalysis);
+
+      await processor.process({ data: { documentAnalysisId: 'analysis-1' } } as never);
+
+      const page1 = (extractedPages as Array<{ isScannedOrImageOnly: boolean; extractionMethod: string }>)[0];
+      expect(page1.isScannedOrImageOnly).toBe(true);
+      expect(page1.extractionMethod).toBe('OCR_FAILED');
+      expect(extractedSentences).toHaveLength(0);
+    });
+
+    it('marks a page UNAVAILABLE when it is scanned but OCR produced no result for it at all (disabled or beyond the page cap)', async () => {
+      mockGetDocument.mockReturnValue({ promise: Promise.resolve(mockPdfDoc(['x'])) });
+      const ocrAdapter = { recognizeScannedPages: jest.fn().mockResolvedValue(new Map()) }; // OcrAdapter itself decided not to attempt this page
+      const { processor, prisma, extractedPages } = buildProcessor({ rank: async () => [] }, { ocrAdapter });
+      (prisma.documentAnalysis.findUnique as jest.Mock).mockResolvedValue(baseAnalysis);
+
+      await processor.process({ data: { documentAnalysisId: 'analysis-1' } } as never);
+
+      expect((extractedPages as Array<{ extractionMethod: string }>)[0].extractionMethod).toBe('UNAVAILABLE');
+    });
+
+    it('audits AI_OCR_STARTED and AI_OCR_COMPLETED when a scanned page is successfully OCR\'d', async () => {
+      mockGetDocument.mockReturnValue({ promise: Promise.resolve(mockPdfDoc(['x'])) });
+      const ocrAdapter = {
+        recognizeScannedPages: jest.fn().mockResolvedValue(new Map([[1, { text: 'Recovered text.', confidence: 90, extractionMethod: 'OCR', durationMs: 100 }]])),
+      };
+      const { processor, prisma, audit } = buildProcessor(
+        { rank: async () => [] },
+        { configOverrides: { 'ocr.enabled': true }, ocrAdapter },
+      );
+      (prisma.documentAnalysis.findUnique as jest.Mock).mockResolvedValue(baseAnalysis);
+
+      await processor.process({ data: { documentAnalysisId: 'analysis-1' } } as never);
+
+      const actions = (audit.record as jest.Mock).mock.calls.map(([arg]) => arg.action);
+      expect(actions).toContain('AI_OCR_STARTED');
+      expect(actions).toContain('AI_OCR_COMPLETED');
+      expect(actions).not.toContain('AI_OCR_FAILED');
+    });
+
+    it('audits AI_OCR_FAILED (not AI_OCR_COMPLETED) when every flagged page fails OCR', async () => {
+      mockGetDocument.mockReturnValue({ promise: Promise.resolve(mockPdfDoc(['x'])) });
+      const ocrAdapter = {
+        recognizeScannedPages: jest.fn().mockResolvedValue(new Map([[1, { text: '', confidence: 0, extractionMethod: 'OCR_FAILED', durationMs: 50 }]])),
+      };
+      const { processor, prisma, audit } = buildProcessor(
+        { rank: async () => [] },
+        { configOverrides: { 'ocr.enabled': true }, ocrAdapter },
+      );
+      (prisma.documentAnalysis.findUnique as jest.Mock).mockResolvedValue(baseAnalysis);
+
+      await processor.process({ data: { documentAnalysisId: 'analysis-1' } } as never);
+
+      const actions = (audit.record as jest.Mock).mock.calls.map(([arg]) => arg.action);
+      expect(actions).toContain('AI_OCR_STARTED');
+      expect(actions).toContain('AI_OCR_FAILED');
+      expect(actions).not.toContain('AI_OCR_COMPLETED');
+    });
+
+    it('never audits any AI_OCR_* event when no page is flagged as scanned', async () => {
+      const { processor, prisma, audit } = buildProcessor(
+        { rank: async () => [] },
+        { configOverrides: { 'ocr.enabled': true } },
+      );
+      (prisma.documentAnalysis.findUnique as jest.Mock).mockResolvedValue(baseAnalysis);
+
+      await processor.process({ data: { documentAnalysisId: 'analysis-1' } } as never);
+
+      const actions = (audit.record as jest.Mock).mock.calls.map(([arg]) => arg.action);
+      expect(actions.filter((a: string) => a.startsWith('AI_OCR_'))).toHaveLength(0);
+    });
+  });
+
+  describe('Phase 3C: Claude synthesis integration', () => {
+    it('REGRESSION GUARD: never calls ClaudeSynthesisService.run when claude.apiEnabled is false (the default)', async () => {
+      const claudeSynthesis = { run: jest.fn() };
+      const { processor, prisma } = buildProcessor({ rank: async () => [] }, { claudeSynthesis });
+      (prisma.documentAnalysis.findUnique as jest.Mock).mockResolvedValue(baseAnalysis);
+
+      await processor.process({ data: { documentAnalysisId: 'analysis-1' } } as never);
+
+      expect(claudeSynthesis.run).not.toHaveBeenCalled();
+    });
+
+    it('calls ClaudeSynthesisService.run with the written sentences (including extractionMethod) when enabled, and completes normally on success', async () => {
+      const claudeSynthesis = { run: jest.fn().mockResolvedValue(DocumentAnalysisStatus.COMPLETED) };
+      const { processor, prisma, documentAnalysisUpdates } = buildProcessor(
+        { rank: async () => [] },
+        { configOverrides: { 'claude.apiEnabled': true }, claudeSynthesis },
+      );
+      (prisma.documentAnalysis.findUnique as jest.Mock).mockResolvedValue({ ...baseAnalysis, organisationId: 'org-1' });
+
+      await processor.process({ data: { documentAnalysisId: 'analysis-1' } } as never);
+
+      expect(claudeSynthesis.run).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentAnalysisId: 'analysis-1',
+          organisationId: 'org-1',
+          sentences: expect.arrayContaining([expect.objectContaining({ extractionMethod: 'NATIVE_TEXT' })]),
+        }),
+      );
+      const finalUpdate = documentAnalysisUpdates[documentAnalysisUpdates.length - 1];
+      expect(finalUpdate.status).toBe(DocumentAnalysisStatus.COMPLETED);
+    });
+
+    it('marks the analysis COMPLETED_WITH_WARNINGS (not a job failure) when Claude synthesis itself returns COMPLETED_WITH_WARNINGS', async () => {
+      const claudeSynthesis = { run: jest.fn().mockResolvedValue(DocumentAnalysisStatus.COMPLETED_WITH_WARNINGS) };
+      const { processor, prisma, documentAnalysisUpdates } = buildProcessor(
+        { rank: async () => [] },
+        { configOverrides: { 'claude.apiEnabled': true }, claudeSynthesis },
+      );
+      (prisma.documentAnalysis.findUnique as jest.Mock).mockResolvedValue({ ...baseAnalysis, organisationId: 'org-1' });
+
+      await processor.process({ data: { documentAnalysisId: 'analysis-1' } } as never);
+
+      const finalUpdate = documentAnalysisUpdates[documentAnalysisUpdates.length - 1];
+      expect(finalUpdate.status).toBe(DocumentAnalysisStatus.COMPLETED_WITH_WARNINGS);
+    });
+
+    it('degrades to COMPLETED_WITH_WARNINGS, never a job crash, when ClaudeSynthesisService.run throws', async () => {
+      const claudeSynthesis = { run: jest.fn().mockRejectedValue(new Error('Anthropic API exploded')) };
+      const { processor, prisma, documentAnalysisUpdates } = buildProcessor(
+        { rank: async () => [] },
+        { configOverrides: { 'claude.apiEnabled': true }, claudeSynthesis },
+      );
+      (prisma.documentAnalysis.findUnique as jest.Mock).mockResolvedValue({ ...baseAnalysis, organisationId: 'org-1' });
+
+      await processor.process({ data: { documentAnalysisId: 'analysis-1' } } as never);
+
+      const finalUpdate = documentAnalysisUpdates[documentAnalysisUpdates.length - 1];
+      // Not FAILED -- the whole job's extractive summary already succeeded;
+      // only the additive Claude layer had a problem.
+      expect(finalUpdate.status).toBe(DocumentAnalysisStatus.COMPLETED_WITH_WARNINGS);
+    });
+
+    it('still runs the full extractive (Mock) pipeline unchanged even when Claude is enabled and succeeds', async () => {
+      const claudeSynthesis = { run: jest.fn().mockResolvedValue(DocumentAnalysisStatus.COMPLETED) };
+      const { processor, prisma, extractedSentences, summarySentenceReferences } = buildProcessor(
+        {
+          rank: async (sentences) => [{ sentenceId: sentences[0].sentenceId, sectionType: SummarySectionType.PARTIES, rank: 1, score: 0.9 }],
+        },
+        { configOverrides: { 'claude.apiEnabled': true }, claudeSynthesis },
+      );
+      (prisma.documentAnalysis.findUnique as jest.Mock).mockResolvedValue({ ...baseAnalysis, organisationId: 'org-1' });
+
+      await processor.process({ data: { documentAnalysisId: 'analysis-1' } } as never);
+
+      expect(extractedSentences.length).toBeGreaterThan(0);
+      expect(summarySentenceReferences.length).toBeGreaterThan(0); // the Mock path's own output, written unconditionally
+    });
   });
 });

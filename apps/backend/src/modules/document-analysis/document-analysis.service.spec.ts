@@ -276,4 +276,27 @@ describe('DocumentAnalysisService -- view auditing', () => {
     const viewedCall = (record as jest.Mock).mock.calls.find(([arg]) => arg.action === 'DOCUMENT_ANALYSIS_VIEWED');
     expect(Object.keys(viewedCall[0].metadata)).toEqual(['analysisId', 'status']);
   });
+
+  // Phase 3C: aiSummaryRun/pages flow through the exact same chokepoint as
+  // every other field this method returns -- confirming this explicitly
+  // (not just relying on the pre-existing "wrong room" 404 tests above)
+  // since it's a brief-named scenario: access revoked WHILE a completed
+  // analysis (with real AI summary data) already exists must still deny
+  // retrieval, not just deny a fresh request.
+  it('Phase 3C: a completed analysis carrying aiSummaryRun/pages data is still denied if folder access was revoked after it completed', async () => {
+    const assertReachable = jest.fn().mockRejectedValue(new NotFoundException('File not found'));
+    const { service } = buildService({
+      assertReachable,
+      analysisById: {
+        id: 'a1',
+        analysisVersion: 1,
+        status: DocumentAnalysisStatus.COMPLETED,
+        pages: [{ pageNumber: 1, extractionMethod: 'NATIVE_TEXT' }],
+        aiSummaryRun: { status: 'COMPLETED', statements: [{ statementText: 'A claim was filed.' }] },
+      },
+    });
+
+    await expect(service.getAnalysisById('room-1', 'file-1', 'a1', ACTOR)).rejects.toThrow(NotFoundException);
+    expect(assertReachable).toHaveBeenCalled();
+  });
 });

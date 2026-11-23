@@ -9,6 +9,7 @@ import {
   useCancelFileAnalysis,
   SummarySectionType,
 } from '@/hooks/use-analysis';
+import { AiSummarySection } from './AiSummarySection';
 import { extractErrorMessage } from '@/lib/error-message';
 
 const SECTION_LABELS: Record<SummarySectionType, string> = {
@@ -23,6 +24,13 @@ const SECTION_LABELS: Record<SummarySectionType, string> = {
   FINDINGS_DECISIONS: 'Findings & Decisions',
   RELIEF: 'Relief',
   OTHER_MATERIAL: 'Other Material Information',
+  // Phase 3C additions -- unreachable via the Mock provider (same situation
+  // BACKGROUND_FACTS above was already in), present only so this map
+  // satisfies Record<SummarySectionType, string> now that the shared union
+  // type has grown. The Claude-backed view renders its own AI_SECTION_LABELS
+  // (AiSummarySection.tsx) instead of this map.
+  RISKS_AND_OBSERVATIONS: 'Risks & Observations',
+  ACTION_ITEMS: 'Explicit Action Items',
 };
 
 export function DocumentAnalysisModal({
@@ -81,6 +89,20 @@ export function DocumentAnalysisModal({
   // sentences must never render as an empty heading.
   const visibleSections = (analysis?.sections ?? []).filter((section) => section.sentenceRefs.length > 0);
 
+  // Phase 3C: when Claude ran and produced at least one statement, it
+  // replaces the legacy extractive view entirely (not alongside it) --
+  // the legacy sections/disclaimer stay byte-for-byte unchanged for every
+  // analysis where Claude was never enabled or produced nothing.
+  const aiStatements = analysis?.aiSummaryRun?.statements ?? [];
+  const showAiSummary = aiStatements.length > 0;
+
+  // Named, specific unreadable-page wording when per-page data is present;
+  // falls back to today's generic sentence otherwise (e.g. an analysis
+  // processed before Phase 3C shipped, whose row has no `pages` at all).
+  const unreadablePages = (analysis?.pages ?? [])
+    .filter((p) => p.isScannedOrImageOnly)
+    .map((p) => p.pageNumber);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
@@ -90,7 +112,9 @@ export function DocumentAnalysisModal({
         <div className="flex items-center justify-between border-b border-app-border px-4 py-3">
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-app-text">AI Summary — {file.name}</p>
-            <p className="text-xs text-app-t3">Every sentence below is extracted verbatim from the source document.</p>
+            {!showAiSummary && (
+              <p className="text-xs text-app-t3">Every sentence below is extracted verbatim from the source document.</p>
+            )}
           </div>
           <button onClick={onClose} className="ml-3 flex-shrink-0 text-app-t3 hover:text-app-t2" aria-label="Close">
             ✕
@@ -131,6 +155,11 @@ export function DocumentAnalysisModal({
               <p className="text-sm text-app-t2">
                 {analysis.status === 'PENDING' ? 'Queued for analysis…' : 'Analysing document…'}
               </p>
+              {analysis.aiSummaryRun && analysis.aiSummaryRun.chunkCount > 1 && (
+                <p className="text-xs text-app-t3">
+                  Chunk {analysis.aiSummaryRun.completedChunkIndexes.length}/{analysis.aiSummaryRun.chunkCount}
+                </p>
+              )}
               <button
                 onClick={handleCancel}
                 disabled={isBusy}
@@ -173,35 +202,42 @@ export function DocumentAnalysisModal({
             <div className="space-y-5">
               {analysis.status === 'COMPLETED_WITH_WARNINGS' && (
                 <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
-                  Some pages in this document could not be read (for example, scanned or image-only pages) and are
-                  excluded from this summary.
+                  {unreadablePages.length > 0
+                    ? `Page${unreadablePages.length === 1 ? ' ' : 's '}${unreadablePages.join(', ')} could not be read (scanned or image-only) and ${unreadablePages.length === 1 ? 'is' : 'are'} excluded from this summary.`
+                    : 'Some pages in this document could not be read (for example, scanned or image-only pages) and are excluded from this summary.'}
                 </p>
               )}
 
-              {visibleSections.length === 0 && (
-                <p className="text-sm text-app-t3">No summarisable content was found in this document.</p>
-              )}
+              {showAiSummary ? (
+                <AiSummarySection statements={aiStatements} file={file} onOpenPage={onOpenPage} />
+              ) : (
+                <>
+                  {visibleSections.length === 0 && (
+                    <p className="text-sm text-app-t3">No summarisable content was found in this document.</p>
+                  )}
 
-              {visibleSections.map((section) => (
-                <div key={section.id}>
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-app-t3">
-                    {SECTION_LABELS[section.sectionType]}
-                  </h3>
-                  <ul className="space-y-1.5">
-                    {section.sentenceRefs.map((ref) => (
-                      <li key={ref.id} className="text-sm text-app-text">
-                        {ref.sentence.text}{' '}
-                        <button
-                          onClick={() => onOpenPage(file, ref.sentence.pageNumber)}
-                          className="ml-1 whitespace-nowrap text-xs font-medium text-app-primary hover:underline"
-                        >
-                          p.{ref.sentence.pageNumber}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+                  {visibleSections.map((section) => (
+                    <div key={section.id}>
+                      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-app-t3">
+                        {SECTION_LABELS[section.sectionType]}
+                      </h3>
+                      <ul className="space-y-1.5">
+                        {section.sentenceRefs.map((ref) => (
+                          <li key={ref.id} className="text-sm text-app-text">
+                            {ref.sentence.text}{' '}
+                            <button
+                              onClick={() => onOpenPage(file, ref.sentence.pageNumber)}
+                              className="ml-1 whitespace-nowrap text-xs font-medium text-app-primary hover:underline"
+                            >
+                              p.{ref.sentence.pageNumber}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </>
+              )}
 
               <div className="border-t border-app-border pt-3">
                 <button

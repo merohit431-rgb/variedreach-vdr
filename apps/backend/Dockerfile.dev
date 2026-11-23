@@ -4,6 +4,10 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# Phase 3C local OCR -- same packages as the production Dockerfile, see its
+# comment for why Ghostscript+Tesseract were chosen over OCRmyPDF.
+RUN apk add --no-cache ghostscript tesseract-ocr tesseract-ocr-data-eng tesseract-ocr-data-hin
+
 COPY . .
 RUN npm ci
 

@@ -117,4 +117,121 @@ describe('validateProductionEnv', () => {
     expect(exitSpy).not.toHaveBeenCalled();
     expect(errorSpy).not.toHaveBeenCalled();
   });
+
+  // Backfilling coverage for a pre-existing branch that had none before
+  // Phase 3C touched this file -- confirmed missing during the Phase 3C
+  // codebase review, not new logic.
+  describe('RANKING_PROVIDER (pre-existing logic, newly tested)', () => {
+    function validEnv() {
+      process.env.NODE_ENV = 'production';
+      process.env.JWT_ACCESS_SECRET = 'a'.repeat(40);
+      process.env.COOKIE_SECRET = 'b'.repeat(40);
+      process.env.PAYMENT_PROVIDER = 'razorpay';
+      process.env.RAZORPAY_KEY_ID = 'rzp_live_test';
+      process.env.RAZORPAY_KEY_SECRET = 'test-secret';
+      process.env.RAZORPAY_WEBHOOK_SECRET = 'test-webhook-secret';
+    }
+
+    it('passes when RANKING_PROVIDER is unset (the permanently-supported mock default)', () => {
+      validEnv();
+      delete process.env.RANKING_PROVIDER;
+      delete process.env.RANKING_EXTERNAL_API_KEY;
+
+      validateProductionEnv();
+
+      expect(exitSpy).not.toHaveBeenCalled();
+    });
+
+    it('passes when RANKING_PROVIDER is explicitly "mock"', () => {
+      validEnv();
+      process.env.RANKING_PROVIDER = 'mock';
+
+      validateProductionEnv();
+
+      expect(exitSpy).not.toHaveBeenCalled();
+    });
+
+    it('exits when RANKING_PROVIDER=external but RANKING_EXTERNAL_API_KEY is missing', () => {
+      validEnv();
+      process.env.RANKING_PROVIDER = 'external';
+      delete process.env.RANKING_EXTERNAL_API_KEY;
+
+      validateProductionEnv();
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('passes when RANKING_PROVIDER=external and RANKING_EXTERNAL_API_KEY is set', () => {
+      validEnv();
+      process.env.RANKING_PROVIDER = 'external';
+      process.env.RANKING_EXTERNAL_API_KEY = 'test-key';
+
+      validateProductionEnv();
+
+      expect(exitSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('CLAUDE_API_ENABLED (Phase 3C)', () => {
+    function validEnv() {
+      process.env.NODE_ENV = 'production';
+      process.env.JWT_ACCESS_SECRET = 'a'.repeat(40);
+      process.env.COOKIE_SECRET = 'b'.repeat(40);
+      process.env.PAYMENT_PROVIDER = 'razorpay';
+      process.env.RAZORPAY_KEY_ID = 'rzp_live_test';
+      process.env.RAZORPAY_KEY_SECRET = 'test-secret';
+      process.env.RAZORPAY_WEBHOOK_SECRET = 'test-webhook-secret';
+    }
+
+    it('passes when CLAUDE_API_ENABLED is unset (the permanently-safe default)', () => {
+      validEnv();
+      delete process.env.CLAUDE_API_ENABLED;
+      delete process.env.ANTHROPIC_API_KEY;
+
+      validateProductionEnv();
+
+      expect(exitSpy).not.toHaveBeenCalled();
+    });
+
+    it('passes when CLAUDE_API_ENABLED is explicitly "false"', () => {
+      validEnv();
+      process.env.CLAUDE_API_ENABLED = 'false';
+      delete process.env.ANTHROPIC_API_KEY;
+
+      validateProductionEnv();
+
+      expect(exitSpy).not.toHaveBeenCalled();
+    });
+
+    it('passes when CLAUDE_API_ENABLED is a truthy-looking but non-"true" value (never silently enables)', () => {
+      validEnv();
+      process.env.CLAUDE_API_ENABLED = '1';
+      delete process.env.ANTHROPIC_API_KEY;
+
+      validateProductionEnv();
+
+      expect(exitSpy).not.toHaveBeenCalled();
+    });
+
+    it('exits when CLAUDE_API_ENABLED=true but ANTHROPIC_API_KEY is missing', () => {
+      validEnv();
+      process.env.CLAUDE_API_ENABLED = 'true';
+      delete process.env.ANTHROPIC_API_KEY;
+
+      validateProductionEnv();
+
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('ANTHROPIC_API_KEY is not set'));
+    });
+
+    it('passes when CLAUDE_API_ENABLED=true and ANTHROPIC_API_KEY is set', () => {
+      validEnv();
+      process.env.CLAUDE_API_ENABLED = 'true';
+      process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
+
+      validateProductionEnv();
+
+      expect(exitSpy).not.toHaveBeenCalled();
+    });
+  });
 });

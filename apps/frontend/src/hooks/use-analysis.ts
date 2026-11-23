@@ -20,7 +20,54 @@ export type SummarySectionType =
   | 'PROCEEDINGS_ORDERS'
   | 'FINDINGS_DECISIONS'
   | 'RELIEF'
-  | 'OTHER_MATERIAL';
+  | 'OTHER_MATERIAL'
+  | 'RISKS_AND_OBSERVATIONS'
+  | 'ACTION_ITEMS';
+
+// Phase 3C: Claude-backed synthesis types. All optional on DocumentAnalysis
+// below -- absent/null whenever Claude was never enabled for a given
+// analysis, preserving the exact pre-Phase-3C response shape in that case.
+export type AiSummaryRunStatus =
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'COMPLETED'
+  | 'COMPLETED_WITH_WARNINGS'
+  | 'FAILED'
+  | 'SKIPPED_LIMIT_REACHED';
+
+export type StatementVerificationStatus = 'VERIFIED' | 'PARTIALLY_VERIFIED' | 'UNVERIFIED';
+
+export type PageExtractionMethod = 'NATIVE_TEXT' | 'OCR' | 'OCR_FAILED' | 'UNAVAILABLE';
+
+export interface ExtractedPageSummary {
+  pageNumber: number;
+  extractionMethod: PageExtractionMethod;
+  ocrConfidence: number | null;
+  isScannedOrImageOnly: boolean;
+}
+
+export interface AiSummaryCitation {
+  id: string;
+  sentence: ExtractedSentenceSummary;
+}
+
+export interface AiSummaryStatement {
+  id: string;
+  sectionType: SummarySectionType;
+  displayOrder: number;
+  statementText: string;
+  verificationStatus: StatementVerificationStatus;
+  citations: AiSummaryCitation[];
+}
+
+export interface AiSummaryRun {
+  status: AiSummaryRunStatus;
+  modelUsed: string | null;
+  errorMessage: string | null;
+  chunkCount: number;
+  completedChunkIndexes: number[];
+  statements?: AiSummaryStatement[];
+}
 
 export interface ExtractedSentenceSummary {
   id: string;
@@ -55,6 +102,12 @@ export interface DocumentAnalysis {
   // Only present on the GET endpoints (a single-analysis fetch with its
   // sections included) -- absent on the bare row returned by POST .../analysis.
   sections?: SummarySection[];
+  // Phase 3C additions, same GET-only availability as `sections` above.
+  // `pages` carries no sentence text -- only per-page extraction method and
+  // OCR confidence. `aiSummaryRun` is null/absent whenever Claude was never
+  // enabled for this analysis.
+  pages?: ExtractedPageSummary[];
+  aiSummaryRun?: AiSummaryRun | null;
 }
 
 const ACTIVE_STATUSES: DocumentAnalysisStatus[] = ['PENDING', 'PROCESSING'];
