@@ -643,5 +643,35 @@ describe('DocumentAnalysisProcessor', () => {
       expect(extractedSentences.length).toBeGreaterThan(0);
       expect(summarySentenceReferences.length).toBeGreaterThan(0); // the Mock path's own output, written unconditionally
     });
+
+    // Regression test for a real gap found during the Phase 3C pre-production
+    // audit: claude.maxPagesPerAnalysis was defined in config but never read
+    // anywhere, so a document with more pages than the cap would have ALL of
+    // its sentences sent to the paid Claude path instead of being bounded to
+    // the first N pages (the free Mock provider is deliberately NOT bounded
+    // by this -- queue.maxPages already caps it separately, upstream).
+    it('bounds ClaudeSynthesisService.run to the first claude.maxPagesPerAnalysis pages, leaving the Mock provider unbounded by it', async () => {
+      mockGetDocument.mockReturnValue({
+        promise: Promise.resolve(mockPdfDoc([PAGE_TEXT, PAGE_TEXT, PAGE_TEXT])),
+      });
+      const claudeSynthesis = { run: jest.fn().mockResolvedValue(DocumentAnalysisStatus.COMPLETED) };
+      const { processor, prisma, extractedSentences } = buildProcessor(
+        { rank: async () => [] },
+        { configOverrides: { 'claude.apiEnabled': true, 'claude.maxPagesPerAnalysis': 1 }, claudeSynthesis },
+      );
+      (prisma.documentAnalysis.findUnique as jest.Mock).mockResolvedValue({ ...baseAnalysis, organisationId: 'org-1' });
+
+      await processor.process({ data: { documentAnalysisId: 'analysis-1' } } as never);
+
+      // The Mock-provider path (extractedSentences) sees all 3 pages --
+      // unaffected by the Claude-specific cap.
+      const extractedPageNumbers = new Set(extractedSentences.map((s) => s.pageNumber));
+      expect(extractedPageNumbers).toEqual(new Set([1, 2, 3]));
+
+      // ClaudeSynthesisService.run only receives page 1's sentences.
+      const callArg = claudeSynthesis.run.mock.calls[0][0];
+      const claudePageNumbers = new Set(callArg.sentences.map((s: { pageNumber: number }) => s.pageNumber));
+      expect(claudePageNumbers).toEqual(new Set([1]));
+    });
   });
 });

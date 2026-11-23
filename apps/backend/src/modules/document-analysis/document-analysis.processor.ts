@@ -238,19 +238,33 @@ export class DocumentAnalysisProcessor {
       let aiSummaryOutcome: AiSummaryRunStatus | null = null;
       if (this.configService.get<boolean>('claude.apiEnabled')) {
         try {
+          // claude.maxPagesPerAnalysis is a Claude-specific cap, tighter than
+          // (and independent of) queue.maxPages above -- it bounds the cost
+          // of the paid path without limiting how many pages the free Mock
+          // provider summarises. Takes the first N pages by page number;
+          // writtenSentences/rankerInput feeding the Mock path above are
+          // untouched.
+          const maxClaudePages = this.configService.get<number>('claude.maxPagesPerAnalysis')!;
+          const allowedPageNumbers = new Set(
+            Array.from(new Set(writtenSentences.map((s) => s.pageNumber)))
+              .sort((a, b) => a - b)
+              .slice(0, maxClaudePages),
+          );
           aiSummaryOutcome = await this.claudeSynthesis.run({
             documentAnalysisId,
             dataRoomId: analysis.dataRoomId,
             organisationId: analysis.organisationId,
             fileId: analysis.fileId,
             jobId: job.id ?? documentAnalysisId,
-            sentences: writtenSentences.map((s) => ({
-              sentenceId: s.id,
-              pageNumber: s.pageNumber,
-              sequenceNumber: s.sequenceNumber,
-              text: s.text,
-              extractionMethod: ocrSucceededPageNumbers.has(s.pageNumber) ? 'OCR' : 'NATIVE_TEXT',
-            })),
+            sentences: writtenSentences
+              .filter((s) => allowedPageNumbers.has(s.pageNumber))
+              .map((s) => ({
+                sentenceId: s.id,
+                pageNumber: s.pageNumber,
+                sequenceNumber: s.sequenceNumber,
+                text: s.text,
+                extractionMethod: ocrSucceededPageNumbers.has(s.pageNumber) ? 'OCR' : 'NATIVE_TEXT',
+              })),
           });
         } catch (error) {
           this.logger.warn(`Claude synthesis failed for analysis ${documentAnalysisId}: ${(error as Error).message}`);

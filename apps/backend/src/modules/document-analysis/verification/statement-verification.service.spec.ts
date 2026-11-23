@@ -129,4 +129,31 @@ describe('StatementVerificationService.verify', () => {
     // no special effect at all.
     expect(result.status).toBe(StatementVerificationStatus.UNVERIFIED);
   });
+
+  // KNOWN LIMITATION, found during the Phase 3C pre-production audit and
+  // documented here deliberately rather than left to be silently
+  // rediscovered later (same spirit as the 180-degree OCR rotation
+  // limitation documented in verify-ocr-pipeline.js). This service checks
+  // for the PRESENCE of a matching token somewhere in the combined evidence
+  // pool -- it does not check for the ABSENCE of a conflicting token of the
+  // same type. If a source document itself contains two passages that
+  // disagree (e.g. an original and a revised figure for "the" claim
+  // amount), and Claude cites both, a statement that happens to match
+  // either one is marked VERIFIED with no signal that its own evidence pool
+  // was internally inconsistent. This is not a fabrication risk -- every
+  // checked token still has to match something real in the source -- but it
+  // means "VERIFIED" does not imply "the source is unambiguous," which is
+  // worth knowing before treating VERIFIED as a stronger guarantee than it
+  // is. Not fixed here: distinguishing a genuine contradiction from two
+  // complementary partial facts (this suite's own "split across citations"
+  // test two cases above) needs real design, not a quick patch.
+  it('KNOWN LIMITATION: does not flag a contradiction between two cited sentences that give different figures for the same fact', () => {
+    const result = service.verify('The total claim amount is Rs. 50,00,000.', [
+      'The total claim amount is Rs. 50,00,000 as per the final list of creditors.',
+      'The total claim amount is Rs. 75,00,000 as per the revised list of creditors.',
+    ]);
+
+    // Documents the CURRENT behavior, not the desired one.
+    expect(result.status).toBe(StatementVerificationStatus.VERIFIED);
+  });
 });
