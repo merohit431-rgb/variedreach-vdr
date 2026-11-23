@@ -100,7 +100,7 @@ export function SignupForm() {
         <h1 className="mt-4 text-lg font-semibold text-slate-900">Check your email</h1>
         <p className="mt-2 text-sm text-slate-600">
           We&apos;ve sent a verification link to <span className="font-medium text-slate-900">{email}</span>.
-          Click it to confirm your address — we&apos;ll follow up separately about activating your account.
+          Click it to confirm your address, then complete payment to activate your account right away.
         </p>
         <Link href="/login" className="mt-4 inline-block text-sm font-medium text-brand-700 hover:text-brand-800">
           Back to sign in
