@@ -11,6 +11,48 @@ import { DataRoomAccessService } from '../data-room-access/data-room-access.serv
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { ImportGoogleFileDto, ImportOneDriveFileDto } from './dto/import-file.dto';
 
+// Phase 4 security finding: dto.downloadUrl is client-supplied with no host
+// validation at all -- before this fix, an attacker could point it at an
+// internal service or a cloud metadata endpoint (e.g.
+// http://169.254.169.254/...), and the fetched response body would be
+// streamed straight into the Data Room as a "file", turning a blind SSRF
+// into a data-exfiltration/credential-theft primitive. Microsoft's Graph API
+// genuinely does hand back a "pre-authenticated" download URL on one of
+// these domains for a real OneDrive/SharePoint file -- allowlisting them
+// (and requiring https) is the standard SSRF mitigation: reject anything
+// that isn't actually a Microsoft-owned download host, rather than trusting
+// whatever string the client sends.
+const ALLOWED_ONEDRIVE_DOWNLOAD_HOST_SUFFIXES = [
+  '.sharepoint.com',
+  '.sharepointonline.com',
+  '.1drv.com',
+  'onedrive.live.com',
+  'graph.microsoft.com',
+];
+
+function assertSafeOneDriveDownloadUrl(rawUrl: string): URL {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    throw new BadRequestException('Invalid download URL');
+  }
+
+  if (url.protocol !== 'https:') {
+    throw new BadRequestException('Download URL must use https');
+  }
+
+  const hostname = url.hostname.toLowerCase();
+  const isAllowed = ALLOWED_ONEDRIVE_DOWNLOAD_HOST_SUFFIXES.some(
+    (suffix) => hostname === suffix.replace(/^\./, '') || hostname.endsWith(suffix),
+  );
+  if (!isAllowed) {
+    throw new BadRequestException('Download URL is not from a recognised Microsoft OneDrive/SharePoint host');
+  }
+
+  return url;
+}
+
 @Injectable()
 export class CloudImportService {
   constructor(
@@ -69,12 +111,26 @@ export class CloudImportService {
   ) {
     await this.dataRoomAccess.assertContentManager(dataRoomId, actor, clientIp);
 
+    const safeUrl = assertSafeOneDriveDownloadUrl(dto.downloadUrl);
+
     const tempPath = path.join(os.tmpdir(), `vdr-import-${crypto.randomUUID()}`);
     try {
       // OneDrive pre-authenticated download URLs carry credentials in the URL itself
-      const res = await fetch(dto.downloadUrl, {
-        signal: AbortSignal.timeout(300_000),
-      });
+      // redirect: 'error' is deliberate -- the hostname allowlist above is
+      // only meaningful if a redirect from an allowlisted host can't
+      // silently hand the request off to an arbitrary, non-allowlisted one
+      // (fetch follows redirects by default, which would bypass the check
+      // entirely). A genuine OneDrive download URL is expected to serve the
+      // file directly, not redirect.
+      let res: Response;
+      try {
+        res = await fetch(safeUrl, {
+          signal: AbortSignal.timeout(300_000),
+          redirect: 'error',
+        });
+      } catch {
+        throw new BadRequestException(`Could not download "${dto.name}" from OneDrive`);
+      }
       if (!res.ok || !res.body) {
         throw new BadRequestException(`OneDrive returned HTTP ${res.status} for "${dto.name}"`);
       }
