@@ -101,7 +101,7 @@ function extractDateTokens(text: string): Array<{ raw: string; day: number; mont
 // approximate.
 function extractProperNounTokens(text: string): string[] {
   const pattern = /\b(?:[A-Z][a-zA-Z'.]*\s+){1,5}[A-Z][a-zA-Z'.]*\b/g;
-  const matches = text.match(pattern) ?? [];
+  const matches: string[] = text.match(pattern) ?? [];
   return matches.filter((m) => m.trim().split(/\s+/).length >= 2);
 }
 
