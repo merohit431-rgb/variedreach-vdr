@@ -21,7 +21,12 @@ COMPOSE="docker compose -p variedreach-vdr-staging -f docker-compose.yml -f dock
 mkdir -p "$BACKUP_DIR"
 
 echo "==> Dumping staging database..."
-$COMPOSE exec -T postgres pg_dump -U vdr_staging_user insolvency_vdr_staging \
+# --no-owner --no-acl: without these, restoring onto a target Postgres
+# whose role name differs from vdr_staging_user produces failing
+# ALTER ... OWNER TO statements (Phase 4 finding, carried open until now).
+# The data itself always restored fine regardless -- only a cross-host
+# restore onto a differently-named role needed this.
+$COMPOSE exec -T postgres pg_dump --no-owner --no-acl -U vdr_staging_user insolvency_vdr_staging \
   | gzip > "$BACKUP_DIR/db-$TIMESTAMP.sql.gz"
 
 echo "==> Archiving staging uploaded files..."

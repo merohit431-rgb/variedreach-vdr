@@ -1117,6 +1117,17 @@ enum AiUsageStatus {
   // Call never made -- recorded for budget-block visibility and audit
   // completeness, always zero tokens/cost.
   BUDGET_BLOCKED
+  // Budget atomically set aside for one chunk, inside AiBudgetGuard's
+  // advisory-locked transaction, before the Anthropic call is dispatched --
+  // counts toward every tier's sum exactly like a resolved call, closing the
+  // check-then-use race a pure read-only check can't close. Transitions to
+  // SUCCEEDED/FAILED/RATE_LIMITED/TIMEOUT once the call resolves, or
+  // RELEASED if cancelled before the call was ever dispatched.
+  RESERVED
+  // A RESERVED row for a chunk that was safely cancelled before dispatch --
+  // excluded from every budget sum, unlike every other status, since no
+  // spend (billable or not) ever happened.
+  RELEASED
 }
 
 // One row per Claude call ATTEMPT (not per analysis) -- including failed,

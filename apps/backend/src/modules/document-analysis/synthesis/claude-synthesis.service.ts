@@ -61,42 +61,23 @@ export class ClaudeSynthesisService {
     const sentenceById = new Map(input.sentences.map((s) => [s.sentenceId, s]));
 
     const existingRun = await this.prisma.aiSummaryRun.findUnique({ where: { documentAnalysisId: input.documentAnalysisId } });
-
     const estimatedCostMicroUsd = this.estimateRunCostMicroUsd(chunks);
-    const budgetCheck = await this.budgetGuard.assertAvailable({
-      organisationId: input.organisationId,
-      documentAnalysisId: input.documentAnalysisId,
-      estimatedCostMicroUsd,
-    });
 
-    if (!budgetCheck.allowed) {
-      await this.usageLedger.record({
-        organisationId: input.organisationId,
-        dataRoomId: input.dataRoomId,
-        fileId: input.fileId,
-        documentAnalysisId: input.documentAnalysisId,
-        aiSummaryRunId: existingRun?.id,
-        jobId: input.jobId,
-        model: this.configService.get<string>('claude.summaryModel')!,
-        estimatedCostMicroUsd,
-        status: 'BUDGET_BLOCKED',
-      });
-      await this.auditLogService
-        .record({
-          action: 'AI_BUDGET_LIMIT_REACHED',
-          dataRoomId: input.dataRoomId,
-          resourceType: 'File',
-          resourceId: input.fileId,
-          metadata: { documentAnalysisId: input.documentAnalysisId, limitType: budgetCheck.reason },
-        })
-        .catch(() => undefined);
-      return AiSummaryRunStatus.SKIPPED_LIMIT_REACHED;
-    }
-
+    // Budget is no longer checked once upfront for the whole run -- it is
+    // reserved per CHUNK, immediately before that specific chunk is
+    // dispatched (see the loop below), since each chunk is its own real
+    // paid Anthropic request and the brief requires a reservation "before
+    // every" one of those, not just once per document. estimatedCostMicroUsd
+    // is still recorded on the run row below, for visibility only.
     const run = existingRun
       ? await this.prisma.aiSummaryRun.update({
           where: { id: existingRun.id },
-          data: { status: AiSummaryRunStatus.PROCESSING, startedAt: existingRun.startedAt ?? new Date(), chunkCount: chunks.length },
+          data: {
+            status: AiSummaryRunStatus.PROCESSING,
+            startedAt: existingRun.startedAt ?? new Date(),
+            chunkCount: chunks.length,
+            estimatedCostMicroUsd,
+          },
         })
       : await this.prisma.aiSummaryRun.create({
           data: {
@@ -104,6 +85,7 @@ export class ClaudeSynthesisService {
             status: AiSummaryRunStatus.PROCESSING,
             modelRequested: this.configService.get<string>('claude.summaryModel')!,
             chunkCount: chunks.length,
+            estimatedCostMicroUsd,
             startedAt: new Date(),
           },
         });
@@ -118,14 +100,66 @@ export class ClaudeSynthesisService {
     for (const chunk of chunks) {
       if (alreadyCompleted.has(chunk.chunkIndex)) continue; // partial-chunk recovery -- never re-pay for completed work
 
-      // Re-read fresh (not the outer `input`) so a mid-run cancellation is
-      // seen promptly -- before every chunk's paid call, not just once at
-      // job start.
-      const current = await this.prisma.documentAnalysis.findUnique({
+      // Cheap early bail-out: if this analysis was already cancelled before
+      // this chunk's turn came up, skip straight past reserving budget for
+      // it at all. The LATE check below (after reservation, right before
+      // dispatch) is the one that actually matters for correctness; this
+      // one just avoids a pointless reserve+release round trip in the
+      // common case.
+      const early = await this.prisma.documentAnalysis.findUnique({
         where: { id: input.documentAnalysisId },
         select: { status: true },
       });
-      if (!current || current.status === DocumentAnalysisStatus.CANCELLED) {
+      if (!early || early.status === DocumentAnalysisStatus.CANCELLED) {
+        await this.prisma.aiSummaryRun.update({ where: { id: run.id }, data: { status: AiSummaryRunStatus.FAILED, errorMessage: 'Cancelled', completedAt: new Date() } });
+        return AiSummaryRunStatus.FAILED;
+      }
+
+      const chunkEstimateMicroUsd = this.estimateChunkCostMicroUsd(chunk.sentences);
+      const reservation = await this.budgetGuard.reserveBudget({
+        organisationId: input.organisationId,
+        dataRoomId: input.dataRoomId,
+        fileId: input.fileId,
+        documentAnalysisId: input.documentAnalysisId,
+        aiSummaryRunId: run.id,
+        jobId: input.jobId,
+        model: run.modelRequested,
+        estimatedCostMicroUsd: chunkEstimateMicroUsd,
+      });
+
+      if (!reservation.allowed) {
+        await this.auditLogService
+          .record({
+            action: 'AI_BUDGET_LIMIT_REACHED',
+            dataRoomId: input.dataRoomId,
+            resourceType: 'File',
+            resourceId: input.fileId,
+            metadata: { documentAnalysisId: input.documentAnalysisId, limitType: reservation.reason, chunkIndex: chunk.chunkIndex },
+          })
+          .catch(() => undefined);
+        // Chunks completed before this one keep their already-persisted
+        // statements -- a graceful partial result, not an all-or-nothing
+        // discard, exactly like the existing partial-chunk-recovery
+        // guarantee for a crashed/retried job.
+        await this.prisma.aiSummaryRun.update({
+          where: { id: run.id },
+          data: { status: AiSummaryRunStatus.SKIPPED_LIMIT_REACHED, completedAt: new Date() },
+        });
+        return AiSummaryRunStatus.SKIPPED_LIMIT_REACHED;
+      }
+
+      // Re-read fresh (not `early`, and not the outer `input`) as late as
+      // possible -- right before dispatch, after the reservation already
+      // exists -- so a cancellation that lands in the gap between the
+      // early check and now is still caught before any network call, and
+      // the reservation it would otherwise strand is released rather than
+      // left permanently counting against budget for nothing.
+      const late = await this.prisma.documentAnalysis.findUnique({
+        where: { id: input.documentAnalysisId },
+        select: { status: true },
+      });
+      if (!late || late.status === DocumentAnalysisStatus.CANCELLED) {
+        await this.usageLedger.release(reservation.reservationId!);
         await this.prisma.aiSummaryRun.update({ where: { id: run.id }, data: { status: AiSummaryRunStatus.FAILED, errorMessage: 'Cancelled', completedAt: new Date() } });
         return AiSummaryRunStatus.FAILED;
       }
@@ -139,17 +173,7 @@ export class ClaudeSynthesisService {
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        await this.usageLedger.record({
-          organisationId: input.organisationId,
-          dataRoomId: input.dataRoomId,
-          fileId: input.fileId,
-          documentAnalysisId: input.documentAnalysisId,
-          aiSummaryRunId: run.id,
-          jobId: input.jobId,
-          model: run.modelRequested,
-          estimatedCostMicroUsd: this.estimateChunkCostMicroUsd(chunk.sentences),
-          status: this.classifyFailureStatus(error),
-        });
+        await this.usageLedger.finalizeFailure(reservation.reservationId!, this.classifyFailureStatus(error));
         await this.prisma.aiSummaryRun.update({
           where: { id: run.id },
           data: { status: AiSummaryRunStatus.FAILED, errorMessage: message, completedAt: new Date() },
@@ -164,19 +188,11 @@ export class ClaudeSynthesisService {
       const actualCostMicroUsd = this.computeCostMicroUsd(result.inputTokens, result.outputTokens);
       totalActualCostMicroUsd += actualCostMicroUsd;
 
-      await this.usageLedger.record({
-        organisationId: input.organisationId,
-        dataRoomId: input.dataRoomId,
-        fileId: input.fileId,
-        documentAnalysisId: input.documentAnalysisId,
-        aiSummaryRunId: run.id,
-        jobId: input.jobId,
+      await this.usageLedger.finalizeSuccess(reservation.reservationId!, {
         model: result.modelUsed,
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
-        estimatedCostMicroUsd: this.estimateChunkCostMicroUsd(chunk.sentences),
         actualCostMicroUsd,
-        status: 'SUCCEEDED',
       });
 
       const inChunkIds = new Set(chunk.sentences.map((s) => s.sentenceId));

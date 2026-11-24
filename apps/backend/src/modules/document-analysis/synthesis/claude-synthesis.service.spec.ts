@@ -95,12 +95,17 @@ function buildService(opts: {
   const configService = { get: jest.fn((key: string) => config[key]) } as unknown as ConfigService;
   const auditRecord = jest.fn().mockResolvedValue({});
   const auditLogService = { record: auditRecord } as unknown as AuditLogService;
-  const budgetAssertAvailable = jest
-    .fn()
-    .mockResolvedValue(opts.budgetAllowed === false ? { allowed: false, reason: opts.budgetReason ?? 'DAILY_ORG' } : { allowed: true });
-  const budgetGuard = { assertAvailable: budgetAssertAvailable } as unknown as AiBudgetGuard;
-  const ledgerRecord = jest.fn().mockResolvedValue({});
-  const usageLedger = { record: ledgerRecord } as unknown as AiUsageLedgerService;
+  let reservationCounter = 0;
+  const reserveBudget = jest.fn().mockImplementation(async () =>
+    opts.budgetAllowed === false
+      ? { allowed: false, reason: opts.budgetReason ?? 'DAILY_ORG' }
+      : { allowed: true, reservationId: `reservation-${reservationCounter++}` },
+  );
+  const budgetGuard = { reserveBudget } as unknown as AiBudgetGuard;
+  const finalizeSuccess = jest.fn().mockResolvedValue({});
+  const finalizeFailure = jest.fn().mockResolvedValue({});
+  const release = jest.fn().mockResolvedValue({});
+  const usageLedger = { finalizeSuccess, finalizeFailure, release } as unknown as AiUsageLedgerService;
   const verificationService = new StatementVerificationService();
 
   let callIndex = 0;
@@ -123,7 +128,7 @@ function buildService(opts: {
     provider,
   );
 
-  return { service, ...fakePrisma, auditRecord, budgetAssertAvailable, ledgerRecord, analyzeChunk };
+  return { service, ...fakePrisma, auditRecord, reserveBudget, finalizeSuccess, finalizeFailure, release, analyzeChunk };
 }
 
 function sentence(id: string, pageNumber: number, text: string): ChunkSentenceInput {
@@ -140,13 +145,13 @@ const BASE_INPUT = {
 
 describe('ClaudeSynthesisService.run', () => {
   it('returns null and touches nothing when claude.apiEnabled is false', async () => {
-    const { service, analyzeChunk, budgetAssertAvailable, runs } = buildService({ config: { 'claude.apiEnabled': false } });
+    const { service, analyzeChunk, reserveBudget, runs } = buildService({ config: { 'claude.apiEnabled': false } });
 
     const result = await service.run({ ...BASE_INPUT, sentences: [sentence('s1', 1, 'Some text.')] });
 
     expect(result).toBeNull();
     expect(analyzeChunk).not.toHaveBeenCalled();
-    expect(budgetAssertAvailable).not.toHaveBeenCalled();
+    expect(reserveBudget).not.toHaveBeenCalled();
     expect(runs.size).toBe(0);
   });
 
@@ -159,8 +164,12 @@ describe('ClaudeSynthesisService.run', () => {
     expect(runs.size).toBe(0);
   });
 
-  it('returns SKIPPED_LIMIT_REACHED and records a BUDGET_BLOCKED ledger row + audit event, without calling the provider', async () => {
-    const { service, analyzeChunk, ledgerRecord, auditRecord, runs } = buildService({
+  it('returns SKIPPED_LIMIT_REACHED and records an audit event, without calling the provider', async () => {
+    // The BUDGET_BLOCKED ledger row itself is now written atomically INSIDE
+    // AiBudgetGuard.reserveBudget (see ai-budget.guard.spec.ts) -- here the
+    // guard is mocked, so this test only asserts what the orchestrator
+    // itself is responsible for: stopping before any dispatch and auditing.
+    const { service, analyzeChunk, finalizeSuccess, finalizeFailure, auditRecord, runs } = buildService({
       budgetAllowed: false,
       budgetReason: 'DAILY_ORG',
     });
@@ -169,11 +178,16 @@ describe('ClaudeSynthesisService.run', () => {
 
     expect(result).toBe(AiSummaryRunStatus.SKIPPED_LIMIT_REACHED);
     expect(analyzeChunk).not.toHaveBeenCalled();
-    expect(ledgerRecord).toHaveBeenCalledWith(expect.objectContaining({ status: 'BUDGET_BLOCKED' }));
+    expect(finalizeSuccess).not.toHaveBeenCalled();
+    expect(finalizeFailure).not.toHaveBeenCalled();
     expect(auditRecord).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'AI_BUDGET_LIMIT_REACHED', metadata: expect.objectContaining({ limitType: 'DAILY_ORG' }) }),
     );
-    expect(runs.size).toBe(0); // budget-blocked happens before any AiSummaryRun row is created
+    // Unlike the old once-per-run check, the run row already exists by the
+    // time the first chunk's reservation is attempted (reservation is now
+    // per-chunk) -- it ends up SKIPPED_LIMIT_REACHED rather than absent.
+    expect(runs.size).toBe(1);
+    expect(Array.from(runs.values())[0].status).toBe(AiSummaryRunStatus.SKIPPED_LIMIT_REACHED);
   });
 
   it('completes successfully, persisting a verified statement with its citation', async () => {
@@ -292,16 +306,17 @@ describe('ClaudeSynthesisService.run', () => {
     expect(statements).toHaveLength(0); // dropped -- s2 was real, but not part of chunk 0
   });
 
-  it('stops the run and marks it FAILED when the provider throws, recording the failure in the ledger', async () => {
+  it('stops the run and marks it FAILED when the provider throws, finalizing the reservation as the failure status', async () => {
     const error = new Error('simulated failure');
     error.name = 'ClaudeRateLimitedError';
-    const { service, runs, ledgerRecord } = buildService({ providerError: error });
+    const { service, runs, finalizeFailure, release } = buildService({ providerError: error });
 
     const result = await service.run({ ...BASE_INPUT, sentences: [sentence('s1', 1, 'Some text.')] });
 
     expect(result).toBe(AiSummaryRunStatus.FAILED);
     expect(Array.from(runs.values())[0].status).toBe(AiSummaryRunStatus.FAILED);
-    expect(ledgerRecord).toHaveBeenCalledWith(expect.objectContaining({ status: 'RATE_LIMITED' }));
+    expect(finalizeFailure).toHaveBeenCalledWith(expect.stringContaining('reservation-'), 'RATE_LIMITED');
+    expect(release).not.toHaveBeenCalled(); // this was a real dispatched-and-failed attempt, not a pre-dispatch cancellation
   });
 
   it('stops before the next chunk and marks the run FAILED when the analysis is cancelled mid-run', async () => {
