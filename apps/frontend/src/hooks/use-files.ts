@@ -30,24 +30,43 @@ export interface FileRecord {
   updatedAt: string;
 }
 
+export interface FilesPageMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
 interface FilesQuery {
   folderId?: string | null;
   search?: string;
+  // Phase 4 finding P4-05: the endpoint is now paginated (previously
+  // returned every file in one unbounded response -- measured at 5.65MB/
+  // 2.65s for 10,000 files). Defaulting to the backend's own generous
+  // FILES_DEFAULT_LIMIT (200) here keeps every room at today's typical
+  // scale rendering exactly as before, with no UI change required; a room
+  // that actually exceeds one page is the one case that needs a real
+  // "load more"/paged browsing UI, which is a deliberate follow-up, not
+  // silently handled by this hook -- meta.totalPages is exposed so that
+  // follow-up has what it needs without another backend change.
+  page?: number;
+  limit?: number;
 }
 
 export function useFiles(dataRoomId: string, query: FilesQuery) {
   return useQuery({
     queryKey: ['data-rooms', dataRoomId, 'files', query],
     queryFn: async () => {
-      const params: Record<string, string> = {};
+      const params: Record<string, string | number> = { page: query.page ?? 1, limit: query.limit ?? 200 };
       if (query.search) {
         params.search = query.search;
       } else if (query.folderId) {
         params.folderId = query.folderId;
       }
-      const response = await apiClient.get<{ data: FileRecord[] }>(`/data-rooms/${dataRoomId}/files`, {
-        params,
-      });
+      const response = await apiClient.get<{ data: { data: FileRecord[]; meta: FilesPageMeta } }>(
+        `/data-rooms/${dataRoomId}/files`,
+        { params },
+      );
       return response.data.data;
     },
     enabled: Boolean(dataRoomId),

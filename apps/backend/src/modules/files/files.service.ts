@@ -21,7 +21,7 @@ import { MailService } from '../mail/mail.service';
 import { IStorageService, STORAGE_SERVICE } from '../storage/storage.interface';
 import { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 import { UpdateFileDto } from './dto/update-file.dto';
-import { ListFilesQueryDto } from './dto/list-files-query.dto';
+import { FILES_DEFAULT_LIMIT, ListFilesQueryDto } from './dto/list-files-query.dto';
 import { StorageWarningLevel } from '../mail/templates/storage-warning.template';
 import { NotificationService } from '../notifications/notification.service';
 import { getOrgStorageUsage } from '../../common/org-storage.util';
@@ -54,6 +54,22 @@ export class FilesService {
     const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor, clientIp);
     const resolver = await this.folderAccess.buildResolver(dataRoomId, actor, effectiveRole);
 
+    // Phase 4 finding P4-05 (High): this endpoint had no pagination at all,
+    // measured at 10,000 files returning a single 5.65MB/2.65s response.
+    // page/limit default to FILES_DEFAULT_LIMIT/1 via the DTO itself (class
+    // defaults), so an older or unmodified client still gets a response,
+    // just a page-bounded one rather than an unbounded one -- limit is also
+    // hard-capped at FILES_MAX_LIMIT by the DTO's own @Max, so no client
+    // input can request the old unbounded behavior back.
+    const page = query.page ?? 1;
+    const limit = query.limit ?? FILES_DEFAULT_LIMIT;
+    const skip = (page - 1) * limit;
+    const include = {
+      currentVersion: true,
+      uploader: { select: { id: true, firstName: true, lastName: true } },
+    } as const;
+    const orderBy = { name: 'asc' as const };
+
     if (query.search) {
       // Search spans the whole room by name, ignoring folderId entirely --
       // without this, a restricted member could discover a file's existence
@@ -61,31 +77,20 @@ export class FilesService {
       // or iterating search terms. Scoped BEFORE the query runs, not
       // filtered after, so a restricted-folder match never gets fetched in
       // the first place.
-      if (!resolver.unrestricted) {
-        const reachable = [...resolver.reachableFolderIds()];
-        return this.prisma.file.findMany({
-          where: {
+      const where = resolver.unrestricted
+        ? { dataRoomId, deletedAt: null, name: { contains: query.search, mode: 'insensitive' as const } }
+        : {
             dataRoomId,
             deletedAt: null,
-            name: { contains: query.search, mode: 'insensitive' },
-            OR: [{ folderId: null }, { folderId: { in: reachable } }],
-          },
-          include: {
-            currentVersion: true,
-            uploader: { select: { id: true, firstName: true, lastName: true } },
-          },
-          orderBy: { name: 'asc' },
-        });
-      }
+            name: { contains: query.search, mode: 'insensitive' as const },
+            OR: [{ folderId: null }, { folderId: { in: [...resolver.reachableFolderIds()] } }],
+          };
 
-      return this.prisma.file.findMany({
-        where: { dataRoomId, deletedAt: null, name: { contains: query.search, mode: 'insensitive' } },
-        include: {
-          currentVersion: true,
-          uploader: { select: { id: true, firstName: true, lastName: true } },
-        },
-        orderBy: { name: 'asc' },
-      });
+      const [items, total] = await Promise.all([
+        this.prisma.file.findMany({ where, include, orderBy, skip, take: limit }),
+        this.prisma.file.count({ where }),
+      ]);
+      return { data: items, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
     }
 
     // Direct request for one specific folder's contents (or the room root,
@@ -102,14 +107,12 @@ export class FilesService {
       });
     }
 
-    return this.prisma.file.findMany({
-      where: { dataRoomId, deletedAt: null, folderId: query.folderId ?? null },
-      include: {
-        currentVersion: true,
-        uploader: { select: { id: true, firstName: true, lastName: true } },
-      },
-      orderBy: { name: 'asc' },
-    });
+    const where = { dataRoomId, deletedAt: null, folderId: query.folderId ?? null };
+    const [items, total] = await Promise.all([
+      this.prisma.file.findMany({ where, include, orderBy, skip, take: limit }),
+      this.prisma.file.count({ where }),
+    ]);
+    return { data: items, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
 
   async upload(
@@ -1027,11 +1030,19 @@ export class FilesService {
     const manageUrl = `${frontendUrl}/data-rooms/${dataRoomId}`;
     const recipients = await this.resolveStorageAlertRecipients(dataRoomId, organisationId);
 
+    // Phase 4 finding P4-22: unguarded -- the upload that triggered this
+    // warning has already succeeded by the time this runs; a notification
+    // failure must never surface as if the upload itself failed. Caught
+    // per-recipient too, so one recipient's failure (or a DB-write hiccup
+    // inside dispatch()) never stops the rest of the list from being
+    // notified.
     for (const recipient of recipients) {
-      await this.mailService.sendStorageWarningEmail(recipient.email, level, dataRoomName, percentUsed, manageUrl, {
-        userId: recipient.id,
-        dataRoomId,
-      });
+      await this.mailService
+        .sendStorageWarningEmail(recipient.email, level, dataRoomName, percentUsed, manageUrl, {
+          userId: recipient.id,
+          dataRoomId,
+        })
+        .catch(() => undefined);
     }
   }
 

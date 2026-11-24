@@ -1,4 +1,4 @@
-import { renderEmailHtml, renderEmailText } from './layout';
+import { escapeHtml, renderEmailHtml, renderEmailText } from './layout';
 
 export interface LoginAlertParams {
   firstName: string;
@@ -22,10 +22,13 @@ export function loginAlertTemplate(params: LoginAlertParams): { subject: string;
   ];
   const rowsHtml = rows
     .map(
+      // device/ipAddress/location are all client-influenceable (device is
+      // derived from the request's own User-Agent header) -- escaped here
+      // same as any other untrusted string reaching this template.
       ([label, value]) => `
         <tr>
-          <td style="padding: 6px 16px 6px 0; font-size: 13px; color: #64748b; white-space: nowrap; vertical-align: top;">${label}</td>
-          <td style="padding: 6px 0; font-size: 14px; color: #0f172a;">${value}</td>
+          <td style="padding: 6px 16px 6px 0; font-size: 13px; color: #64748b; white-space: nowrap; vertical-align: top;">${escapeHtml(label)}</td>
+          <td style="padding: 6px 0; font-size: 14px; color: #0f172a;">${escapeHtml(value)}</td>
         </tr>`,
     )
     .join('');
@@ -38,7 +41,7 @@ export function loginAlertTemplate(params: LoginAlertParams): { subject: string;
     : '';
 
   const bodyHtml = `
-    <p style="margin: 0 0 16px 0;">Hi ${firstName}, we noticed a new sign-in to your account:</p>
+    <p style="margin: 0 0 16px 0;">Hi ${escapeHtml(firstName)}, we noticed a new sign-in to your account:</p>
     <table style="border-collapse: collapse; width: 100%; margin: 0 0 20px 0;">${rowsHtml}</table>
     ${trustedNote}
     <p style="margin: 0;">If this was you, no action is needed. If you don't recognize this, secure your account immediately and change your password.</p>

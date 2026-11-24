@@ -961,7 +961,14 @@ export class AuthService {
     const frontendUrl = this.configService.get<string>('app.frontendUrl');
     const resetUrl = `${frontendUrl}/reset-password?token=${raw}`;
 
-    await this.mailService.sendPasswordResetEmail(user.email, resetUrl, expiresMinutes, { userId: user.id });
+    // Phase 4 finding P4-22: unguarded -- in the narrow case where
+    // EmailLogService's own DB write fails (not an ordinary Resend
+    // delivery failure, which the SDK already converts to a safe result),
+    // the exception would propagate after the real password-reset token
+    // already committed, reporting a false failure for an operation that
+    // in fact succeeded. Matches the existing correct pattern used by
+    // sendLoginAlert/sendMfaStatusChangedAlert elsewhere in this file.
+    await this.mailService.sendPasswordResetEmail(user.email, resetUrl, expiresMinutes, { userId: user.id }).catch(() => undefined);
     await this.auditLogService.record({ action: 'USER_PASSWORD_RESET_REQUESTED', userId: user.id });
   }
 
@@ -1053,12 +1060,13 @@ export class AuthService {
     });
 
     const frontendUrl = this.configService.get<string>('app.frontendUrl');
-    await this.mailService.sendWelcomeEmail(
-      inviteToken.user.email,
-      inviteToken.user.firstName,
-      `${frontendUrl}/login`,
-      { userId: inviteToken.userId },
-    );
+    // Phase 4 finding P4-22: unguarded -- the invite was already marked
+    // accepted above; a send failure here must never turn an
+    // already-successful acceptance into a reported error (a retry would
+    // then hit a confusing "invite already accepted" instead).
+    await this.mailService
+      .sendWelcomeEmail(inviteToken.user.email, inviteToken.user.firstName, `${frontendUrl}/login`, { userId: inviteToken.userId })
+      .catch(() => undefined);
   }
 
   private async handleFailedLogin(

@@ -1,4 +1,4 @@
-import { renderEmailHtml, renderEmailText } from './layout';
+import { escapeHtml, renderEmailHtml, renderEmailText } from './layout';
 
 export interface SubscriptionActivatedParams {
   recipientName: string;
@@ -19,8 +19,8 @@ export function subscriptionActivatedTemplate(params: SubscriptionActivatedParam
 
   const row = (label: string, value: string) => `
     <tr>
-      <td style="padding: 6px 0; font-family: Helvetica, Arial, sans-serif; font-size: 13px; color: #64748B;">${label}</td>
-      <td style="padding: 6px 0; font-family: Helvetica, Arial, sans-serif; font-size: 13px; color: #0F172A; text-align: right; font-weight: 600;">${value}</td>
+      <td style="padding: 6px 0; font-family: Helvetica, Arial, sans-serif; font-size: 13px; color: #64748B;">${escapeHtml(label)}</td>
+      <td style="padding: 6px 0; font-family: Helvetica, Arial, sans-serif; font-size: 13px; color: #0F172A; text-align: right; font-weight: 600;">${escapeHtml(value)}</td>
     </tr>`;
 
   const summary = invoiceNumber
@@ -39,8 +39,8 @@ export function subscriptionActivatedTemplate(params: SubscriptionActivatedParam
     : '';
 
   const bodyHtml = `
-    <p style="margin: 0 0 16px 0;">Hi ${recipientName},</p>
-    <p style="margin: 0 0 16px 0;">Thank you — your payment was received and your <strong>${planName}</strong> subscription is now active. Your organisation and admin account are ready.</p>
+    <p style="margin: 0 0 16px 0;">Hi ${escapeHtml(recipientName)},</p>
+    <p style="margin: 0 0 16px 0;">Thank you — your payment was received and your <strong>${escapeHtml(planName)}</strong> subscription is now active. Your organisation and admin account are ready.</p>
     ${summary}
     <p style="margin: 0 0 8px 0;">Your tax invoice is available anytime from <strong>Settings → Billing</strong> in your dashboard.</p>
   `;

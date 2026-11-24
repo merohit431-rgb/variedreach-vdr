@@ -9,6 +9,22 @@
 
 import { BUSINESS_INFO } from '../../../common/constants/business-info';
 
+// Phase 4 finding P4-11: only contact-request.template.ts (unauthenticated
+// public input) escaped interpolated values -- every other template
+// interpolated user-controlled strings (a data room name, an inviter's
+// display name, an uploaded file name, a folder path) directly into HTML
+// sent to OTHER tenants' users, with no character-set restriction at the
+// DTO level upstream. Plain-text bodies need no escaping (no markup is
+// ever rendered there); this is for bodyHtml interpolation sites only.
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const BRAND_700 = '#083E84';
 const BRAND_600 = '#0A4DA3';
 const SLATE_900 = '#0F172A';

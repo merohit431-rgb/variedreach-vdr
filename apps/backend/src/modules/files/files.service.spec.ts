@@ -386,3 +386,95 @@ describe('FilesService.notifyUpload -- folder-ACL now actually gates the email, 
     expect(sendDocumentUploadedEmail.mock.calls.map((c) => c[0])).toContain('reviewer-1@test.com');
   });
 });
+
+// Phase 4 finding P4-05 (High, Phase 3C.3 closure): this endpoint had zero
+// test coverage before this fix, and zero pagination -- measured on staging
+// at 10,000 files: one 5.65MB/2.65s response. Both are addressed together.
+describe('FilesService.list', () => {
+  function buildListService(opts: {
+    resolver?: { unrestricted: boolean; reachableFolderIds: () => Set<string> };
+    findMany?: jest.Mock;
+    count?: jest.Mock;
+  }) {
+    const resolver = opts.resolver ?? { unrestricted: true, reachableFolderIds: () => new Set<string>() };
+    const getAccess = jest.fn().mockResolvedValue({ effectiveRole: 'PRA' });
+    const buildResolver = jest.fn().mockResolvedValue(resolver);
+    const assertReachable = jest.fn().mockResolvedValue(undefined);
+    const findMany = opts.findMany ?? jest.fn().mockResolvedValue([]);
+    const count = opts.count ?? jest.fn().mockResolvedValue(0);
+
+    const prisma = { file: { findMany, count } } as unknown as PrismaService;
+    const service = new FilesService(
+      prisma,
+      { getAccess } as unknown as DataRoomAccessService,
+      { buildResolver, assertReachable } as unknown as FolderAccessService,
+      {} as FoldersService,
+      {} as AuditLogService,
+      {} as WatermarkService,
+      {} as OfficeConversionService,
+      {} as MailService,
+      {} as ConfigService,
+      {} as NotificationService,
+      {} as IStorageService,
+    );
+    return { service, findMany, count, assertReachable };
+  }
+
+  it('defaults to page 1 / the standard page size when the client sends neither', async () => {
+    const { service, findMany } = buildListService({});
+
+    const result = await service.list('room-1', ACTOR, {});
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 0, take: 200 }));
+    expect(result.meta).toMatchObject({ page: 1, limit: 200 });
+  });
+
+  it('computes skip from an explicit page/limit', async () => {
+    const { service, findMany } = buildListService({ count: jest.fn().mockResolvedValue(95) });
+
+    const result = await service.list('room-1', ACTOR, { page: 3, limit: 20 });
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 40, take: 20 }));
+    expect(result.meta).toEqual({ page: 3, limit: 20, total: 95, totalPages: 5 });
+  });
+
+  it('returns {data, meta} -- not a bare array -- for both the folder-scoped and search-scoped query paths', async () => {
+    const scoped = buildListService({ count: jest.fn().mockResolvedValue(1) });
+    const scopedResult = await scoped.service.list('room-1', ACTOR, { folderId: 'folder-1' });
+    expect(scopedResult).toHaveProperty('data');
+    expect(scopedResult).toHaveProperty('meta');
+
+    const searched = buildListService({ count: jest.fn().mockResolvedValue(1) });
+    const searchResult = await searched.service.list('room-1', ACTOR, { search: 'invoice' });
+    expect(searchResult).toHaveProperty('data');
+    expect(searchResult).toHaveProperty('meta');
+  });
+
+  it('REGRESSION GUARD: a restricted resolver still scopes the paginated search query to reachable folders only', async () => {
+    const resolver = { unrestricted: false, reachableFolderIds: () => new Set(['folder-allowed']) };
+    const { service, findMany } = buildListService({ resolver });
+
+    await service.list('room-1', ACTOR, { search: 'report', page: 1, limit: 50 });
+
+    const whereArg = findMany.mock.calls[0][0].where;
+    expect(whereArg.OR).toEqual([{ folderId: null }, { folderId: { in: ['folder-allowed'] } }]);
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 0, take: 50 }));
+  });
+
+  it('REGRESSION GUARD: an unreachable folderId still 404s before any paginated query runs', async () => {
+    const { service, assertReachable, findMany } = buildListService({});
+    assertReachable.mockRejectedValue(new NotFoundException('Folder not found'));
+
+    await expect(service.list('room-1', ACTOR, { folderId: 'folder-x' })).rejects.toThrow('Folder not found');
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it('a request for page 2 of a 10,000-file room still only fetches one page\'s worth, not the whole room', async () => {
+    const { service, findMany, count } = buildListService({ count: jest.fn().mockResolvedValue(10_000) });
+
+    await service.list('room-1', ACTOR, { page: 2, limit: 200 });
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 200, take: 200 }));
+    expect(count).toHaveBeenCalledTimes(1);
+  });
+});

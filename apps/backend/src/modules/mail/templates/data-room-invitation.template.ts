@@ -1,4 +1,4 @@
-import { renderEmailHtml, renderEmailText } from './layout';
+import { escapeHtml, renderEmailHtml, renderEmailText } from './layout';
 
 export interface DataRoomInvitationParams {
   recipientName: string;
@@ -15,8 +15,8 @@ export function dataRoomInvitationTemplate(params: DataRoomInvitationParams): { 
   const subject = `You've been added to "${dataRoomName}" on Varied Reach`;
 
   const bodyHtml = `
-    <p style="margin: 0 0 16px 0;">Hi ${recipientName},</p>
-    <p style="margin: 0 0 16px 0;"><strong>${inviterName}</strong> has added you to the <strong>${dataRoomName}</strong> data room on Varied Reach.</p>
+    <p style="margin: 0 0 16px 0;">Hi ${escapeHtml(recipientName)},</p>
+    <p style="margin: 0 0 16px 0;"><strong>${escapeHtml(inviterName)}</strong> has added you to the <strong>${escapeHtml(dataRoomName)}</strong> data room on Varied Reach.</p>
     <p style="margin: 0 0 16px 0;">Log in to your existing account to view it.</p>
   `;
   const bodyText = `Hi ${recipientName},\n\n${inviterName} has added you to the "${dataRoomName}" data room on Varied Reach.\n\nLog in to your existing account to view it.`;

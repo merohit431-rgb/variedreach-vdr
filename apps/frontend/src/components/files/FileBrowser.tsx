@@ -156,7 +156,13 @@ export function FileBrowser({
   canDownload: boolean;
   canDownloadOriginal: boolean;
 }) {
-  const { data: files, isLoading } = useFiles(dataRoomId, { folderId, search });
+  // useFiles now returns {data, meta} (Phase 4 finding P4-05: the endpoint
+  // is paginated) -- unwrapped here so every existing use of `files` below
+  // stays exactly as it was (a plain FileRecord[] | undefined). `meta` is
+  // available from the hook for a future "load more" UI once a room
+  // actually exceeds one page; not wired into this component yet.
+  const { data: filesResponse, isLoading } = useFiles(dataRoomId, { folderId, search });
+  const files = filesResponse?.data;
   const updateFile = useUpdateFile(dataRoomId);
   const deleteFile = useDeleteFile(dataRoomId);
   const bulkDeleteFiles = useBulkDeleteFiles(dataRoomId);

@@ -540,6 +540,21 @@ export class DataRoomsService {
       orderBy: { sentAt: 'desc' },
     });
 
+    // Phase 4 finding P4-21: no idempotency guard existed here at all -- two
+    // near-simultaneous calls could race on the deleteMany-then-create pair
+    // below (one throwing an unhandled P2002, or both sending separate
+    // emails where only the later token stays valid). Mirrors the same
+    // cooldown pattern already used correctly for MFA OTP resend
+    // (resendEmailOtp), reusing its own config value rather than adding a
+    // new one for what's the same category of "prevent a double-click".
+    const cooldownSeconds = this.configService.get<number>('jwt.emailOtpResendCooldownSeconds')!;
+    if (previousLog?.sentAt) {
+      const elapsedSeconds = (Date.now() - previousLog.sentAt.getTime()) / 1000;
+      if (elapsedSeconds < cooldownSeconds) {
+        throw new BadRequestException(`Please wait ${Math.ceil(cooldownSeconds - elapsedSeconds)}s before resending this invite`);
+      }
+    }
+
     const { raw, hash } = generateOpaqueToken();
     const inviteHours = this.configService.get<number>('jwt.inviteExpiresHours')!;
 

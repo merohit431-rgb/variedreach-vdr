@@ -1,4 +1,4 @@
-import { renderEmailHtml, renderEmailText } from './layout';
+import { escapeHtml, renderEmailHtml, renderEmailText } from './layout';
 
 export interface AccountCreatedParams {
   recipientName: string;
@@ -14,7 +14,7 @@ export function accountCreatedTemplate(params: AccountCreatedParams): { subject:
   const subject = 'Your Varied Reach account has been created';
 
   const bodyHtml = `
-    <p style="margin: 0 0 16px 0;">Hi ${recipientName},</p>
+    <p style="margin: 0 0 16px 0;">Hi ${escapeHtml(recipientName)},</p>
     <p style="margin: 0 0 16px 0;">An account has been created for you on Varied Reach.</p>
   `;
   const bodyText = `Hi ${recipientName},\n\nAn account has been created for you on Varied Reach.`;

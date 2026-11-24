@@ -1,4 +1,4 @@
-import { renderEmailHtml, renderEmailText } from './layout';
+import { escapeHtml, renderEmailHtml, renderEmailText } from './layout';
 
 export interface WelcomeEmailParams {
   recipientName: string;
@@ -12,7 +12,7 @@ export function welcomeEmailTemplate(params: WelcomeEmailParams): { subject: str
   const subject = 'Welcome to Varied Reach';
 
   const bodyHtml = `
-    <p style="margin: 0 0 16px 0;">Hi ${recipientName},</p>
+    <p style="margin: 0 0 16px 0;">Hi ${escapeHtml(recipientName)},</p>
     <p style="margin: 0 0 16px 0;">Your account is set up and ready to go.</p>
   `;
   const bodyText = `Hi ${recipientName},\n\nYour account is set up and ready to go.`;

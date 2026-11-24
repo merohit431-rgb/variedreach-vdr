@@ -1,4 +1,4 @@
-import { renderEmailHtml, renderEmailText } from './layout';
+import { escapeHtml, renderEmailHtml, renderEmailText } from './layout';
 
 export interface MfaStatusChangedParams {
   firstName: string;
@@ -15,7 +15,7 @@ export function mfaStatusChangedTemplate(params: MfaStatusChangedParams): { subj
 
   const bodyHtml = `
     <p style="margin: 0 0 16px 0;">
-      Hi ${firstName}, email verification codes were ${enabled ? 'enabled' : 'disabled'} for your account on ${whenLabel}.
+      Hi ${escapeHtml(firstName)}, email verification codes were ${enabled ? 'enabled' : 'disabled'} for your account on ${whenLabel}.
     </p>
     <p style="margin: 0;">If this was you, no action is needed. If you didn't make this change, secure your account immediately and contact your administrator.</p>
   `;

@@ -201,7 +201,9 @@ export class MailService {
     return this.dispatch({ template: 'STORAGE_UPGRADE_REQUESTED', to, replyTo }, rendered);
   }
 
-  // Dormant -- no caller invokes this today. See email-verification.template.ts.
+  // Phase 4 finding P4-23: this comment previously claimed "dormant -- no
+  // caller invokes this today", which was wrong -- registration.service.ts
+  // calls this on every self-serve signup.
   async sendEmailVerificationEmail(
     to: string,
     recipientName: string,
@@ -237,7 +239,9 @@ export class MailService {
     return this.dispatch({ template, to, ...context }, rendered);
   }
 
-  // Dormant -- no caller invokes this today. See subscription-activated.template.ts.
+  // Phase 4 finding P4-23: this comment previously claimed "dormant -- no
+  // caller invokes this today", which was wrong -- provisioning.service.ts
+  // calls this once a registration's payment is confirmed.
   async sendSubscriptionActivatedEmail(
     to: string,
     recipientName: string,

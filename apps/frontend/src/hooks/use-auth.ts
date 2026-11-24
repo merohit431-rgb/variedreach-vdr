@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import { useAuthStore } from '@/store/auth-store';
 import { extractErrorMessage } from '@/lib/error-message';
@@ -18,6 +19,7 @@ export interface WorkspaceOption {
 
 export function useAuth() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user, accessToken, isInitializing, setAuth, clearAuth } = useAuthStore();
 
   const login = useCallback(
@@ -70,19 +72,26 @@ export function useAuth() {
     try {
       await apiClient.post('/auth/logout');
     } finally {
+      // Phase 4 finding P4-19: the cache previously outlived the session it
+      // was fetched under, with no user/org scoping on its query keys -- on
+      // a shared machine, a second user logging in shortly after (pure
+      // client-side nav, no reload) could briefly see the first user's
+      // cached dashboard/data-room data within its staleTime window.
+      queryClient.clear();
       clearAuth();
       router.push('/login');
     }
-  }, [clearAuth, router]);
+  }, [clearAuth, queryClient, router]);
 
   const logoutEverywhere = useCallback(async () => {
     try {
       await apiClient.post('/auth/sessions/revoke-all');
     } finally {
+      queryClient.clear();
       clearAuth();
       router.push('/login');
     }
-  }, [clearAuth, router]);
+  }, [clearAuth, queryClient, router]);
 
   const forgotPassword = useCallback(async (email: string) => {
     try {

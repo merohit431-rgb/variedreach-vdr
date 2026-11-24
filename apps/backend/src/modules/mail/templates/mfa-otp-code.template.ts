@@ -7,7 +7,12 @@ export interface MfaOtpCodeParams {
 
 export function mfaOtpCodeTemplate(params: MfaOtpCodeParams): { subject: string; html: string; text: string } {
   const { code, expiresInMinutes } = params;
-  const subject = `${code} is your verification code`;
+  // Phase 4 finding P4-10: the code previously appeared in the subject line
+  // (and MailService.dispatch() persists the subject verbatim into
+  // EmailLog, with no redaction, indefinitely) -- kept body-only now. The
+  // code still needs to be visible somewhere the user can read it; the
+  // email body (never logged) is that place.
+  const subject = 'Your verification code';
   const spacedCode = code.split('').join(' ');
 
   const bodyHtml = `
@@ -26,7 +31,7 @@ export function mfaOtpCodeTemplate(params: MfaOtpCodeParams): { subject: string;
 
   return {
     subject,
-    html: renderEmailHtml({ previewText: `Your verification code is ${code}`, bodyHtml }),
+    html: renderEmailHtml({ previewText: 'Use this code to finish signing in.', bodyHtml }),
     text: renderEmailText({ bodyText }),
   };
 }

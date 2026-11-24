@@ -1,4 +1,4 @@
-import { renderEmailHtml, renderEmailText } from './layout';
+import { escapeHtml, renderEmailHtml, renderEmailText } from './layout';
 
 export interface PaymentFailedParams {
   recipientName: string;
@@ -15,8 +15,8 @@ export function paymentFailedTemplate(params: PaymentFailedParams): { subject: s
   const subject = `Your Varied Reach payment did not go through`;
 
   const bodyHtml = `
-    <p style="margin: 0 0 16px 0;">Hi ${recipientName},</p>
-    <p style="margin: 0 0 16px 0;">We weren't able to process your payment for the <strong>${planName}</strong> plan${reason ? ` (${reason})` : ''}. No charge was made and your account has not been created.</p>
+    <p style="margin: 0 0 16px 0;">Hi ${escapeHtml(recipientName)},</p>
+    <p style="margin: 0 0 16px 0;">We weren't able to process your payment for the <strong>${escapeHtml(planName)}</strong> plan${reason ? ` (${escapeHtml(reason)})` : ''}. No charge was made and your account has not been created.</p>
     <p style="margin: 0 0 8px 0;">You can pick up right where you left off — your plan selection is saved.</p>
   `;
 

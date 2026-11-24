@@ -1,4 +1,4 @@
-import { renderEmailHtml, renderEmailText } from './layout';
+import { escapeHtml, renderEmailHtml, renderEmailText } from './layout';
 
 export type StorageWarningLevel = 'WARNING' | 'CRITICAL' | 'FULL';
 
@@ -24,7 +24,7 @@ export function storageWarningTemplate(params: StorageWarningParams): { subject:
   const subject = `"${dataRoomName}" ${copy.subjectWord}`;
 
   const bodyHtml = `
-    <p style="margin: 0 0 16px 0;">The data room <strong>${dataRoomName}</strong> ${copy.headline} (${percentUsed}% used).</p>
+    <p style="margin: 0 0 16px 0;">The data room <strong>${escapeHtml(dataRoomName)}</strong> ${copy.headline} (${percentUsed}% used).</p>
     <p style="margin: 0 0 16px 0;">Consider archiving old files or removing files that are no longer needed.</p>
   `;
   const bodyText = `The data room "${dataRoomName}" ${copy.headline} (${percentUsed}% used).\n\nConsider archiving old files or removing files that are no longer needed.`;
