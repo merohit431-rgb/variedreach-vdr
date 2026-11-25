@@ -66,7 +66,8 @@
     "sentence-splitter": "^5.1.0",
     "sharp": "^0.34.5",
     "ts-node": "^10.9.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "yauzl": "^3.4.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.9",
@@ -84,6 +85,7 @@
     "@types/pdfkit": "^0.17.6",
     "@types/qrcode": "^1.5.6",
     "@types/supertest": "^6.0.2",
+    "@types/yauzl": "^3.4.0",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
     "embedded-postgres": "^16.16.0-beta.19",

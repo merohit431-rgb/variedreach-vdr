@@ -25,6 +25,7 @@ import { FILES_DEFAULT_LIMIT, ListFilesQueryDto } from './dto/list-files-query.d
 import { StorageWarningLevel } from '../mail/templates/storage-warning.template';
 import { NotificationService } from '../notifications/notification.service';
 import { getOrgStorageUsage } from '../../common/org-storage.util';
+import { ArchiveService, ArchiveListing } from './archive.service';
 
 const STORAGE_ALERT_ORG_WIDE_ROLES: UserRole[] = [UserRole.SUPER_ADMIN, UserRole.ORG_ADMIN];
 
@@ -48,6 +49,7 @@ export class FilesService {
     private readonly configService: ConfigService,
     private readonly notificationService: NotificationService,
     @Inject(STORAGE_SERVICE) private readonly storage: IStorageService,
+    private readonly archiveService: ArchiveService,
   ) {}
 
   async list(dataRoomId: string, actor: AuthenticatedUser, query: ListFilesQueryDto, clientIp?: string) {
@@ -599,6 +601,60 @@ export class FilesService {
       filename: getPreviewFilename(file.name, file.extension),
       mimeType: isOffice ? 'application/pdf' : file.mimeType,
     };
+  }
+
+  // Phase 3D (client-confirmed requirement): "ZIP/7Z/RAR: File metadata and
+  // archive listing only where safely supported." Same access gate as
+  // preview (getAccess + folder reachability) -- this reveals what's inside
+  // an archive, which is the same class of information a preview reveals,
+  // not stricter and not looser. 7Z/RAR have no safe listing library (see
+  // archive.service.ts); requesting a listing for anything but a real,
+  // signature-valid ZIP is a clean 400, matching "for unsupported previews,
+  // display a clear message" rather than a silent empty result.
+  async getArchiveListing(
+    dataRoomId: string,
+    fileId: string,
+    actor: AuthenticatedUser,
+    context: { ipAddress: string; userAgent?: string },
+  ): Promise<ArchiveListing> {
+    const { effectiveRole } = await this.dataRoomAccess.getAccess(dataRoomId, actor, context.ipAddress);
+    const file = await this.getFileOrThrow(dataRoomId, fileId);
+    const resolver = await this.folderAccess.buildResolver(dataRoomId, actor, effectiveRole);
+    await this.folderAccess.assertReachable(resolver, file.folderId, 'File not found', {
+      dataRoomId,
+      actor,
+      resourceType: 'File',
+      resourceId: file.id,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
+
+    if (file.extension.toLowerCase() !== 'zip') {
+      throw new BadRequestException(
+        'Archive listing is only available for ZIP files. 7Z and RAR archives can be downloaded but not listed.',
+      );
+    }
+
+    const version = await this.prisma.fileVersion.findUnique({ where: { id: file.currentVersionId ?? undefined } });
+    if (!version) {
+      throw new NotFoundException('This file has no content to retrieve');
+    }
+
+    const buffer = await this.storage.read(version.storagePath);
+    const listing = await this.archiveService.listZipEntries(buffer);
+
+    await this.auditLogService.record({
+      action: 'FILE_VIEWED',
+      dataRoomId,
+      userId: actor.id,
+      resourceType: 'File',
+      resourceId: file.id,
+      metadata: { name: file.name, versionNumber: version.versionNumber, archiveListing: true, entryCount: listing.totalEntries },
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
+
+    return listing;
   }
 
   // Option B: Download Original -- the exact stored bytes, unwatermarked,

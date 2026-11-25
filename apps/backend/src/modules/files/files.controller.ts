@@ -178,6 +178,21 @@ export class FilesController {
     sendFileResponse(res, content, 'inline');
   }
 
+  // Phase 3D: ZIP-only archive content listing, same throttle tier as preview.
+  @Throttle({ global: { ttl: 60, limit: 120 } })
+  @Get(':fileId/archive-listing')
+  archiveListing(
+    @Param('dataRoomId') dataRoomId: string,
+    @Param('fileId') fileId: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Req() req: Request,
+  ) {
+    return this.filesService.getArchiveListing(dataRoomId, fileId, user, {
+      ipAddress: req.ip ?? '0.0.0.0',
+      userAgent: req.headers['user-agent'],
+    });
+  }
+
   @Throttle({ global: { ttl: 60, limit: 120 } })
   @Get(':fileId/download')
   async download(

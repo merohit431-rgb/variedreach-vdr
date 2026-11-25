@@ -12,6 +12,7 @@ import type { MailService } from '../mail/mail.service';
 import type { ConfigService } from '@nestjs/config';
 import type { NotificationService } from '../notifications/notification.service';
 import type { IStorageService } from '../storage/storage.interface';
+import type { ArchiveService } from './archive.service';
 import type { AuthenticatedUser } from '../auth/types/jwt-payload.interface';
 
 const FILE = {
@@ -86,6 +87,7 @@ function buildService(opts: {
     {} as ConfigService,
     {} as NotificationService,
     { read: storageRead } as unknown as IStorageService,
+    {} as ArchiveService,
   );
 
   return { service, assertCanDownloadOriginal, fileFindFirst, storageRead, record, watermarkApply, watermarkBuildElements };
@@ -333,6 +335,7 @@ describe('FilesService.notifyUpload -- folder-ACL now actually gates the email, 
       { get: jest.fn().mockReturnValue('https://staging.vdr.variedreach.com') } as unknown as ConfigService,
       {} as NotificationService,
       {} as IStorageService,
+      {} as ArchiveService,
     );
     return { service, sendDocumentUploadedEmail };
   }
@@ -417,6 +420,7 @@ describe('FilesService.list', () => {
       {} as ConfigService,
       {} as NotificationService,
       {} as IStorageService,
+      {} as ArchiveService,
     );
     return { service, findMany, count, assertReachable };
   }
@@ -520,6 +524,7 @@ describe('FilesService.getWatermarkedContent -- PDF-only watermarking (Phase 3D)
       {} as ConfigService,
       {} as NotificationService,
       { read: storageRead } as unknown as IStorageService,
+      {} as ArchiveService,
     );
 
     return { service, storageRead, watermarkApply, watermarkBuildElements, recordWatermark, record };
