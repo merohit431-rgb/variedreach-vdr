@@ -39,6 +39,7 @@ export function useGrantFolderAccess(dataRoomId: string, folderId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['data-rooms', dataRoomId, 'folders', folderId, 'access'] });
       queryClient.invalidateQueries({ queryKey: ['data-rooms', dataRoomId, 'folders'] });
+      queryClient.invalidateQueries({ queryKey: ['data-rooms', dataRoomId, 'files'] });
     },
   });
 }
@@ -56,6 +57,7 @@ export function useRevokeFolderAccess(dataRoomId: string, folderId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['data-rooms', dataRoomId, 'folders', folderId, 'access'] });
       queryClient.invalidateQueries({ queryKey: ['data-rooms', dataRoomId, 'folders'] });
+      queryClient.invalidateQueries({ queryKey: ['data-rooms', dataRoomId, 'files'] });
     },
   });
 }

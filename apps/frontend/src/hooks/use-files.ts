@@ -63,11 +63,11 @@ export function useFiles(dataRoomId: string, query: FilesQuery) {
       } else if (query.folderId) {
         params.folderId = query.folderId;
       }
-      const response = await apiClient.get<{ data: { data: FileRecord[]; meta: FilesPageMeta } }>(
+      const response = await apiClient.get<{ data: FileRecord[]; meta: FilesPageMeta }>(
         `/data-rooms/${dataRoomId}/files`,
         { params },
       );
-      return response.data.data;
+      return response.data;
     },
     enabled: Boolean(dataRoomId),
   });
