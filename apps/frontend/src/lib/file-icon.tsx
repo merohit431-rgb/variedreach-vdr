@@ -1,4 +1,4 @@
-import { FileText, FileSpreadsheet, Presentation, Image as ImageIcon, File as FileIcon, LucideIcon } from 'lucide-react';
+import { FileText, FileSpreadsheet, Presentation, Image as ImageIcon, Archive, Box, File as FileIcon, LucideIcon } from 'lucide-react';
 import { getFileTypeRule } from '@variedreach-vdr/shared';
 
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
@@ -6,6 +6,8 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
   Spreadsheets: FileSpreadsheet,
   Presentations: Presentation,
   Images: ImageIcon,
+  Archives: Archive,
+  CAD: Box,
   Others: FileIcon,
 };
 

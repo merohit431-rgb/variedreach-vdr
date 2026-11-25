@@ -25,52 +25,53 @@ describe('WatermarkService', () => {
     expect(reloaded.getPageCount()).toBe(1);
   });
 
-  it('stamps an image without corrupting it', async () => {
+  // Phase 3D (client-confirmed requirement): dynamic watermarking applies
+  // ONLY to PDF. Every other format -- including images and text, which this
+  // service used to also watermark -- must come back byte-for-byte
+  // unchanged (same reference, not just equal content), never a modified or
+  // misleadingly-"watermarked" copy.
+  it('leaves an image byte-for-byte unchanged (no longer watermarked)', async () => {
     const buffer = await sharp({
       create: { width: 200, height: 100, channels: 3, background: { r: 255, g: 0, b: 0 } },
     })
       .png()
       .toBuffer();
 
-    const watermarked = await service.apply(buffer, 'png', elements);
-
-    const metadata = await sharp(watermarked).metadata();
-    expect(metadata.width).toBe(200);
-    expect(metadata.height).toBe(100);
+    const result = await service.apply(buffer, 'png', elements);
+    expect(result).toBe(buffer);
   });
 
-  it('prepends a readable header to text files', async () => {
+  it('leaves a text file byte-for-byte unchanged (no longer watermarked)', async () => {
     const buffer = Buffer.from('Original confidential content.', 'utf-8');
-
-    const watermarked = await service.apply(buffer, 'txt', elements);
-    const text = watermarked.toString('utf-8');
-
-    expect(text).toContain('Jane Doe');
-    expect(text).toContain('jane@example.com');
-    expect(text).toContain('203.0.113.7');
-    expect(text).toContain('Original confidential content.');
+    const result = await service.apply(buffer, 'txt', elements);
+    expect(result).toBe(buffer);
   });
 
-  it('leaves unsupported types untouched', async () => {
+  it('leaves .eml files byte-for-byte unchanged (no longer watermarked)', async () => {
+    const buffer = Buffer.from('From: a@x.com\r\nTo: b@x.com\r\nSubject: Hi\r\n\r\nBody text.', 'utf-8');
+    const result = await service.apply(buffer, 'eml', elements);
+    expect(result).toBe(buffer);
+  });
+
+  it('leaves an Office document untouched when (unusually) called with its own extension directly, not "pdf"', async () => {
+    // The real call sites in files.service.ts always pass extension: 'pdf'
+    // for an Office-convertible file (conversion happens before apply() is
+    // ever invoked) -- this exercises apply()'s own fallback in isolation,
+    // for the case where it's handed the original extension regardless.
     const buffer = Buffer.from('binary-ish content');
     const result = await service.apply(buffer, 'docx', elements);
     expect(result).toBe(buffer);
   });
 
-  // .eml is plain-text MIME, so it's watermarked the same way as txt/csv.
-  it('stamps a readable header onto .eml files, same as txt', async () => {
-    const buffer = Buffer.from('From: a@x.com\r\nTo: b@x.com\r\nSubject: Hi\r\n\r\nBody text.', 'utf-8');
-    const watermarked = await service.apply(buffer, 'eml', elements);
-    const text = watermarked.toString('utf-8');
-    expect(text).toContain('Jane Doe');
-    expect(text).toContain('Body text.');
+  it('leaves archive and CAD files byte-for-byte unchanged (never watermarked)', async () => {
+    for (const extension of ['zip', '7z', 'rar', 'dwg', 'dxf', 'dwfx']) {
+      const buffer = Buffer.from(`fake ${extension} content`);
+      const result = await service.apply(buffer, extension, elements);
+      expect(result).toBe(buffer);
+    }
   });
 
-  // .msg is a binary OLE2 file, not text -- confirmed a deliberate,
-  // documented non-fix (see apply()'s own comment): touching its bytes
-  // without a real parser would corrupt it, so it must pass through
-  // byte-for-byte unchanged rather than get "watermarked" into garbage.
-  it('leaves .msg files byte-for-byte unchanged rather than corrupting the binary format', async () => {
+  it('leaves .msg files byte-for-byte unchanged (binary OLE2 -- never safe to touch, and no longer watermarked anyway)', async () => {
     const buffer = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0x00, 0x01, 0x02, 0x03]);
     const result = await service.apply(buffer, 'msg', elements);
     expect(result).toBe(buffer);
@@ -80,11 +81,9 @@ describe('WatermarkService', () => {
 // Regression coverage for the "configured but never enforced" bug: a data
 // room's watermarkTemplate/Opacity/Position were stored and shown in the
 // UI's own API response but apply() never read them, always using
-// hardcoded text/opacity/rotation instead -- confirmed live during the
-// production-readiness audit (a real data room already had non-default-
-// looking values persisted, but WatermarkService had zero references to
-// any of the three fields anywhere in the codebase).
-describe('WatermarkService -- per-room config is actually applied', () => {
+// hardcoded text/opacity/rotation instead. Exercised against PDF -- the only
+// format apply() still actually renders a watermark onto, post-Phase-3D.
+describe('WatermarkService -- per-room config is actually applied (PDF)', () => {
   const service = new WatermarkService({} as PrismaService);
   const elements: WatermarkElements = {
     name: 'Priya Sharma',
@@ -93,42 +92,54 @@ describe('WatermarkService -- per-room config is actually applied', () => {
     timestamp: '2026-09-21T14:30:05.000Z',
   };
 
-  it('renders a custom template into the text watermark, not the hardcoded default', async () => {
-    const buffer = Buffer.from('Original confidential content.', 'utf-8');
-    const watermarked = await service.apply(buffer, 'txt', elements, {
+  async function blankPdf(): Promise<Buffer> {
+    const doc = await PDFDocument.create();
+    doc.addPage([300, 300]);
+    return Buffer.from(await doc.save());
+  }
+
+  // pdf-lib's default save() FlateDecode-compresses content streams, so the
+  // drawn text isn't a readable substring of the raw saved bytes -- unlike
+  // the plain-text formats the old tests exercised this same assertion
+  // against. Decompressing just to assert on literal content would mean a
+  // new dependency for a test; following this same file's own existing
+  // precedent (the opacity test below), these assert the document stays
+  // valid and loadable with the configured template/opacity in play, not
+  // the literal rendered text.
+  it('renders a custom template into the PDF watermark without corrupting the document', async () => {
+    const buffer = await blankPdf();
+    const watermarked = await service.apply(buffer, 'pdf', elements, {
       template: 'Prepared for {{name}} ({{email}}) on {{date}} at {{time}} from {{ip}}',
       opacity: 0.25,
       position: 'diagonal',
     });
-    const text = watermarked.toString('utf-8');
 
-    expect(text).toContain('Prepared for Priya Sharma (priya@example.com) on 2026-09-21 at 14:30:05 from 198.51.100.20');
+    expect(watermarked.length).toBeGreaterThan(buffer.length);
+    await expect(PDFDocument.load(watermarked)).resolves.toBeDefined();
   });
 
-  it('leaves an unrecognized {{token}} verbatim instead of silently dropping it', async () => {
-    const buffer = Buffer.from('content', 'utf-8');
-    const watermarked = await service.apply(buffer, 'txt', elements, {
-      template: '{{name}} — {{nonexistentToken}}',
-      opacity: 0.25,
-      position: 'diagonal',
-    });
-    expect(watermarked.toString('utf-8')).toContain('Priya Sharma — {{nonexistentToken}}');
+  it('leaves an unrecognized {{token}} verbatim instead of silently dropping it', () => {
+    // renderTemplate is private and its output isn't recoverable from a
+    // compressed PDF's saved bytes (see the test above) -- this is the one
+    // assertion in this file that reaches past that boundary deliberately,
+    // since "an unknown token vanishes silently" vs. "stays visible and
+    // reportable" is a real, specific behavior worth its own direct check.
+    const rendered = (service as unknown as { renderTemplate(template: string, elements: WatermarkElements): string }).renderTemplate(
+      '{{name}} — {{nonexistentToken}}',
+      elements,
+    );
+    expect(rendered).toBe('Priya Sharma — {{nonexistentToken}}');
   });
 
-  it('a room with no config (default) still renders the same result as before this fix', async () => {
-    const buffer = Buffer.from('content', 'utf-8');
-    const watermarked = await service.apply(buffer, 'txt', elements);
-    const text = watermarked.toString('utf-8');
-    expect(text).toContain('Priya Sharma');
-    expect(text).toContain('priya@example.com');
-    expect(text).toContain('198.51.100.20');
-    expect(text).toContain('CONFIDENTIAL');
+  it('a room with no config (default) still renders successfully, same as before this fix', async () => {
+    const buffer = await blankPdf();
+    const watermarked = await service.apply(buffer, 'pdf', elements);
+    expect(watermarked.length).toBeGreaterThan(buffer.length);
+    await expect(PDFDocument.load(watermarked)).resolves.toBeDefined();
   });
 
   it('applies the configured opacity to a PDF watermark, not the hardcoded 0.3', async () => {
-    const original = await PDFDocument.create();
-    original.addPage([300, 300]);
-    const buffer = Buffer.from(await original.save());
+    const buffer = await blankPdf();
 
     const faint = await service.apply(buffer, 'pdf', elements, { template: '{{name}}', opacity: 0.05, position: 'diagonal' });
     const bold = await service.apply(buffer, 'pdf', elements, { template: '{{name}}', opacity: 1, position: 'diagonal' });
@@ -142,40 +153,29 @@ describe('WatermarkService -- per-room config is actually applied', () => {
   });
 
   it('clamps an out-of-range opacity instead of passing it straight to the renderer', async () => {
-    const buffer = await sharp({
-      create: { width: 50, height: 50, channels: 3, background: { r: 255, g: 255, b: 255 } },
-    })
-      .png()
-      .toBuffer();
+    const buffer = await blankPdf();
 
     // 0 would make the watermark invisible -- defeats the point of the
     // feature -- and this is the defense-in-depth floor documented next to
     // MIN_OPACITY, exercised in case a value ever reaches apply() without
     // going through the DTO's own @Min(0.05) validator.
-    await expect(service.apply(buffer, 'png', elements, { template: '{{name}}', opacity: 0, position: 'diagonal' })).resolves.toBeInstanceOf(Buffer);
-    await expect(service.apply(buffer, 'png', elements, { template: '{{name}}', opacity: 5, position: 'diagonal' })).resolves.toBeInstanceOf(Buffer);
+    await expect(service.apply(buffer, 'pdf', elements, { template: '{{name}}', opacity: 0, position: 'diagonal' })).resolves.toBeInstanceOf(Buffer);
+    await expect(service.apply(buffer, 'pdf', elements, { template: '{{name}}', opacity: 5, position: 'diagonal' })).resolves.toBeInstanceOf(Buffer);
   });
 
-  it('renders an image watermark without rotation when position is "tiled"', async () => {
-    const buffer = await sharp({
-      create: { width: 200, height: 100, channels: 3, background: { r: 255, g: 0, b: 0 } },
-    })
-      .png()
-      .toBuffer();
-
-    const watermarked = await service.apply(buffer, 'png', elements, { template: '{{name}}', opacity: 0.3, position: 'tiled' });
-    const metadata = await sharp(watermarked).metadata();
-    expect(metadata.width).toBe(200);
-    expect(metadata.height).toBe(100);
+  it('renders a PDF watermark without rotation when position is "tiled"', async () => {
+    const buffer = await blankPdf();
+    const watermarked = await service.apply(buffer, 'pdf', elements, { template: '{{name}}', opacity: 0.3, position: 'tiled' });
+    await expect(PDFDocument.load(watermarked)).resolves.toBeDefined();
   });
 
   it('falls back to the diagonal default for an unrecognized position value', async () => {
-    const buffer = Buffer.from('content', 'utf-8');
+    const buffer = await blankPdf();
     // 'tiled' is the only recognized alternative -- anything else (a typo,
     // a future value written by another tool) must not throw or silently
     // remove the watermark.
     await expect(
-      service.apply(buffer, 'txt', elements, { template: '{{name}}', opacity: 0.25, position: 'center' }),
+      service.apply(buffer, 'pdf', elements, { template: '{{name}}', opacity: 0.25, position: 'center' }),
     ).resolves.toBeInstanceOf(Buffer);
   });
 });

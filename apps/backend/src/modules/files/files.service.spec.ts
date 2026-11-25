@@ -37,6 +37,7 @@ const UNRESTRICTED_FOLDER_ACCESS = {
     canReach: () => true,
     reachableFolderIds: () => new Set<string>(),
   }),
+  assertReachable: jest.fn().mockResolvedValue(undefined),
 } as unknown as FolderAccessService;
 
 function buildService(opts: {
@@ -476,5 +477,96 @@ describe('FilesService.list', () => {
 
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 200, take: 200 }));
     expect(count).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Phase 3D (client-confirmed requirement): dynamic watermarking applies
+// ONLY to PDF -- a native .pdf upload, or an Office-convertible file's
+// converted-to-PDF preview. Every other format (image, archive, CAD, text)
+// must be served as its own original, unmodified bytes, with no Watermark
+// DB row implying one was applied.
+describe('FilesService.getWatermarkedContent -- PDF-only watermarking (Phase 3D)', () => {
+  const NON_PDF_BUFFER = Buffer.from('original image bytes, never watermarked');
+  const WATERMARKED_PDF_BUFFER = Buffer.from('watermarked pdf bytes');
+
+  function buildWatermarkTestService(file: { extension: string; mimeType: string; name: string }) {
+    const fileRow = { id: 'file-1', dataRoomId: 'room-1', folderId: null, currentVersionId: 'version-1', deletedAt: null, ...file };
+    const version = { id: 'version-1', versionNumber: 1, storagePath: '/storage/room-1/file-1/v1', checksum: 'irrelevant-here' };
+
+    const fileFindFirst = jest.fn().mockResolvedValue(fileRow);
+    const versionFindUnique = jest.fn().mockResolvedValue(version);
+    const storageRead = jest.fn().mockResolvedValue(NON_PDF_BUFFER);
+    const record = jest.fn().mockResolvedValue({ id: 'audit-1' });
+    const watermarkApply = jest.fn().mockResolvedValue(WATERMARKED_PDF_BUFFER);
+    const watermarkBuildElements = jest.fn().mockReturnValue({ name: 'A', email: 'a@x.com', ipAddress: '127.0.0.1', timestamp: '2026-01-01T00:00:00.000Z' });
+    const recordWatermark = jest.fn().mockResolvedValue({});
+    const assertCanDownload = jest.fn().mockResolvedValue({ dataRoom: { id: 'room-1' }, effectiveRole: 'PRA' });
+    const getAccess = jest.fn().mockResolvedValue({ dataRoom: { id: 'room-1' }, effectiveRole: 'PRA' });
+
+    const prisma = {
+      file: { findFirst: fileFindFirst },
+      fileVersion: { findFirst: jest.fn(), findUnique: versionFindUnique },
+    } as unknown as PrismaService;
+
+    const service = new FilesService(
+      prisma,
+      { assertCanDownload, getAccess } as unknown as DataRoomAccessService,
+      UNRESTRICTED_FOLDER_ACCESS,
+      {} as FoldersService,
+      { record } as unknown as AuditLogService,
+      { apply: watermarkApply, buildElements: watermarkBuildElements, recordWatermark } as unknown as WatermarkService,
+      {} as OfficeConversionService,
+      {} as MailService,
+      {} as ConfigService,
+      {} as NotificationService,
+      { read: storageRead } as unknown as IStorageService,
+    );
+
+    return { service, storageRead, watermarkApply, watermarkBuildElements, recordWatermark, record };
+  }
+
+  it('watermarks a native PDF and records a Watermark row', async () => {
+    const { service, watermarkApply, recordWatermark, record } = buildWatermarkTestService({
+      extension: 'pdf',
+      mimeType: 'application/pdf',
+      name: 'report.pdf',
+    });
+
+    const result = await service.getWatermarkedContent('room-1', 'file-1', ACTOR, CONTEXT, 'FILE_DOWNLOADED');
+
+    expect(watermarkApply).toHaveBeenCalledWith(NON_PDF_BUFFER, 'pdf', expect.anything(), expect.anything());
+    expect(result.buffer).toBe(WATERMARKED_PDF_BUFFER);
+    expect(recordWatermark).toHaveBeenCalledTimes(1);
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.objectContaining({ watermarked: true }) }));
+  });
+
+  it.each([
+    ['png', 'image/png', 'photo.png'],
+    ['jpeg', 'image/jpeg', 'photo.jpg'],
+    ['txt', 'text/plain', 'notes.txt'],
+    ['csv', 'text/csv', 'data.csv'],
+    ['zip', 'application/zip', 'archive.zip'],
+    ['7z', 'application/x-7z-compressed', 'archive.7z'],
+    ['rar', 'application/x-rar-compressed', 'archive.rar'],
+    ['dwg', 'application/acad', 'drawing.dwg'],
+    ['dxf', 'application/dxf', 'drawing.dxf'],
+  ])('never watermarks a .%s file -- serves the original buffer untouched, no Watermark row', async (extension, mimeType, name) => {
+    const { service, watermarkApply, recordWatermark, record } = buildWatermarkTestService({ extension, mimeType, name });
+
+    const result = await service.getWatermarkedContent('room-1', 'file-1', ACTOR, CONTEXT, 'FILE_DOWNLOADED');
+
+    expect(watermarkApply).not.toHaveBeenCalled();
+    expect(result.buffer).toBe(NON_PDF_BUFFER);
+    expect(result.mimeType).toBe(mimeType);
+    expect(recordWatermark).not.toHaveBeenCalled();
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.objectContaining({ watermarked: false }) }));
+  });
+
+  it('still records a download/view audit event for a non-PDF file -- only the watermark-specific row is skipped', async () => {
+    const { service, record } = buildWatermarkTestService({ extension: 'png', mimeType: 'image/png', name: 'photo.png' });
+
+    await service.getWatermarkedContent('room-1', 'file-1', ACTOR, CONTEXT, 'FILE_VIEWED');
+
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ action: 'FILE_VIEWED' }));
   });
 });

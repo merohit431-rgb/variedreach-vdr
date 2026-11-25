@@ -15,7 +15,7 @@ import { AuditLogService } from '../audit/audit-log.service';
 import { DataRoomAccessService } from '../data-room-access/data-room-access.service';
 import { FolderAccessService } from '../folder-access/folder-access.service';
 import { FoldersService } from '../folders/folders.service';
-import { WatermarkService, WatermarkConfig } from '../watermark/watermark.service';
+import { WatermarkService, WatermarkConfig, WatermarkElements } from '../watermark/watermark.service';
 import { OfficeConversionService } from '../office-conversion/office-conversion.service';
 import { MailService } from '../mail/mail.service';
 import { IStorageService, STORAGE_SERVICE } from '../storage/storage.interface';
@@ -547,19 +547,31 @@ export class FilesService {
       throw new NotFoundException('This file has no content to retrieve');
     }
 
+    // Phase 3D (client-confirmed requirement): dynamic watermarking applies
+    // ONLY to PDF -- a native .pdf upload, or an Office-convertible file's
+    // converted-to-PDF preview (the conversion itself is not "watermarking"
+    // a non-PDF format; it's generating the PDF rendering a .pdf gets for
+    // free, which then gets watermarked exactly like any other PDF). Every
+    // other format must be served as its own original, unmodified bytes --
+    // no watermark attempt, no Watermark DB row implying one exists.
     const isOffice = isOfficeConvertible(file.extension);
+    const isWatermarkable = isOffice || file.extension.toLowerCase() === 'pdf';
     const sourceBuffer = isOffice
       ? await this.getOrCreateConvertedPdf(dataRoomId, file, version)
       : await this.storage.read(version.storagePath);
     const sourceExtension = isOffice ? 'pdf' : file.extension;
 
-    const elements = this.watermarkService.buildElements(actor, context.ipAddress);
-    const watermarkedBuffer = await this.watermarkService.apply(
-      sourceBuffer,
-      sourceExtension,
-      elements,
-      this.watermarkConfigFor(dataRoom),
-    );
+    let resultBuffer = sourceBuffer;
+    let watermarkElements: WatermarkElements | null = null;
+    if (isWatermarkable) {
+      watermarkElements = this.watermarkService.buildElements(actor, context.ipAddress);
+      resultBuffer = await this.watermarkService.apply(
+        sourceBuffer,
+        sourceExtension,
+        watermarkElements,
+        this.watermarkConfigFor(dataRoom),
+      );
+    }
 
     const auditLog = await this.auditLogService.record({
       action,
@@ -567,21 +579,23 @@ export class FilesService {
       userId: actor.id,
       resourceType: 'File',
       resourceId: file.id,
-      metadata: { name: file.name, versionNumber: version.versionNumber },
+      metadata: { name: file.name, versionNumber: version.versionNumber, watermarked: isWatermarkable },
       ipAddress: context.ipAddress,
       userAgent: context.userAgent,
     });
 
-    await this.watermarkService.recordWatermark({
-      auditLogId: auditLog.id,
-      fileId: file.id,
-      fileVersionId: version.id,
-      userId: actor.id,
-      elements,
-    });
+    if (watermarkElements) {
+      await this.watermarkService.recordWatermark({
+        auditLogId: auditLog.id,
+        fileId: file.id,
+        fileVersionId: version.id,
+        userId: actor.id,
+        elements: watermarkElements,
+      });
+    }
 
     return {
-      buffer: watermarkedBuffer,
+      buffer: resultBuffer,
       filename: getPreviewFilename(file.name, file.extension),
       mimeType: isOffice ? 'application/pdf' : file.mimeType,
     };
@@ -726,13 +740,18 @@ export class FilesService {
 
       const version = file.currentVersion;
       const isOffice = isOfficeConvertible(file.extension);
+      const isWatermarkable = isOffice || file.extension.toLowerCase() === 'pdf';
       const sourceBuffer = isOffice
         ? await this.getOrCreateConvertedPdf(dataRoomId, file, version)
         : await this.storage.read(version.storagePath);
 
-      const watermarked = await this.watermarkService.apply(sourceBuffer, isOffice ? 'pdf' : file.extension, elements, watermarkConfig);
+      // Phase 3D: PDF-only watermarking -- every other format goes into the
+      // archive as its own original bytes, never watermarked.
+      const resultBuffer = isWatermarkable
+        ? await this.watermarkService.apply(sourceBuffer, isOffice ? 'pdf' : file.extension, elements, watermarkConfig)
+        : sourceBuffer;
       const entryName = isOffice ? getPreviewFilename(file.name, file.extension) : file.name;
-      archive.append(watermarked, { name: entryName });
+      archive.append(resultBuffer, { name: entryName });
 
       const auditLog = await this.auditLogService.record({
         action: 'FILE_DOWNLOADED',
@@ -740,17 +759,19 @@ export class FilesService {
         userId: actor.id,
         resourceType: 'File',
         resourceId: file.id,
-        metadata: { name: file.name, versionNumber: version.versionNumber, bulkDownload: true },
+        metadata: { name: file.name, versionNumber: version.versionNumber, bulkDownload: true, watermarked: isWatermarkable },
         ipAddress: context.ipAddress,
         userAgent: context.userAgent,
       });
-      await this.watermarkService.recordWatermark({
-        auditLogId: auditLog.id,
-        fileId: file.id,
-        fileVersionId: version.id,
-        userId: actor.id,
-        elements,
-      });
+      if (isWatermarkable) {
+        await this.watermarkService.recordWatermark({
+          auditLogId: auditLog.id,
+          fileId: file.id,
+          fileVersionId: version.id,
+          userId: actor.id,
+          elements,
+        });
+      }
     }
 
     await new Promise<void>((resolve, reject) => {
@@ -856,15 +877,20 @@ export class FilesService {
 
       const version = file.currentVersion;
       const isOffice = isOfficeConvertible(file.extension);
+      const isWatermarkable = isOffice || file.extension.toLowerCase() === 'pdf';
       const sourceBuffer = isOffice
         ? await this.getOrCreateConvertedPdf(dataRoomId, file, version)
         : await this.storage.read(version.storagePath);
 
-      const watermarked = await this.watermarkService.apply(sourceBuffer, isOffice ? 'pdf' : file.extension, elements, watermarkConfig);
+      // Phase 3D: PDF-only watermarking -- every other format goes into the
+      // archive as its own original bytes, never watermarked.
+      const resultBuffer = isWatermarkable
+        ? await this.watermarkService.apply(sourceBuffer, isOffice ? 'pdf' : file.extension, elements, watermarkConfig)
+        : sourceBuffer;
       const entryName = isOffice ? getPreviewFilename(file.name, file.extension) : file.name;
       const folderPath = file.folder?.path ?? '';
       const zipPath = folderPath ? `${folderPath}/${entryName}` : entryName;
-      archive.append(watermarked, { name: zipPath });
+      archive.append(resultBuffer, { name: zipPath });
 
       const auditLog = await this.auditLogService.record({
         action: 'FILE_DOWNLOADED',
@@ -872,17 +898,19 @@ export class FilesService {
         userId: actor.id,
         resourceType: 'File',
         resourceId: file.id,
-        metadata: { name: file.name, versionNumber: version.versionNumber, folderDownload: true },
+        metadata: { name: file.name, versionNumber: version.versionNumber, folderDownload: true, watermarked: isWatermarkable },
         ipAddress: context.ipAddress,
         userAgent: context.userAgent,
       });
-      await this.watermarkService.recordWatermark({
-        auditLogId: auditLog.id,
-        fileId: file.id,
-        fileVersionId: version.id,
-        userId: actor.id,
-        elements,
-      });
+      if (isWatermarkable) {
+        await this.watermarkService.recordWatermark({
+          auditLogId: auditLog.id,
+          fileId: file.id,
+          fileVersionId: version.id,
+          userId: actor.id,
+          elements,
+        });
+      }
     }
 
     await new Promise<void>((resolve, reject) => {

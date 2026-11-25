@@ -1,10 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PDFDocument, degrees, rgb, StandardFonts } from 'pdf-lib';
-// `import sharp from 'sharp'` miscompiles to `sharp_1.default(...)` under this
-// tsconfig (no esModuleInterop) and throws "is not a function" at runtime —
-// use the CJS-correct form instead.
-import sharp = require('sharp');
 import { PrismaService } from '../../prisma/prisma.service';
 
 export interface WatermarkElements {
@@ -39,8 +35,6 @@ const DEFAULT_CONFIG: WatermarkConfig = { template: DEFAULT_TEMPLATE, opacity: D
 // some other path (a seed script, an old row) rather than the primary gate.
 const MIN_OPACITY = 0.05;
 
-const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'tiff', 'webp'];
-
 @Injectable()
 export class WatermarkService {
   private readonly logger = new Logger(WatermarkService.name);
@@ -71,30 +65,18 @@ export class WatermarkService {
     // rather than rendering nothing or throwing.
     const diagonal = config.position !== 'tiled';
 
+    // Phase 3D (client-confirmed requirement): dynamic watermarking applies
+    // ONLY to PDF -- both native PDF uploads and an Office-convertible file's
+    // converted-to-PDF preview, since callers in files.service.ts already
+    // pass extension: 'pdf' for that case (the conversion happens before
+    // this method is ever called). Every other format -- images, text,
+    // archives, CAD -- must return the ORIGINAL bytes unchanged, never a
+    // watermarked or otherwise modified copy, and never a misleading
+    // "watermarked" preview. This used to also watermark images/text; that
+    // was a real gap against this exact requirement, not a deliberate
+    // feature, and is removed rather than kept as dead, re-enablable code.
     if (normalized === 'pdf') {
       return this.applyToPdf(buffer, text, opacity, diagonal);
-    }
-    if (IMAGE_EXTENSIONS.includes(normalized)) {
-      return this.applyToImage(buffer, text, opacity, diagonal);
-    }
-    // .eml is a plain-text MIME message (RFC 822/2822) -- safe to prepend a
-    // banner exactly like txt/csv. This does mean a watermarked .eml is no
-    // longer strictly re-importable into a mail client (the banner sits
-    // before its From:/To:/Subject: headers), but that's the same trade-off
-    // every other format already makes -- the watermarked copy is provably
-    // different from the pristine original by design.
-    //
-    // .msg is deliberately NOT handled here. It's a binary OLE2 compound
-    // file, not text -- prepending or otherwise touching its bytes without
-    // a real OLE-aware parser would corrupt it, which is worse than an
-    // unwatermarked-but-intact download. Confirmed during the production-
-    // readiness audit as a real, current gap: a .msg file downloads/
-    // previews with no watermark at all. Properly fixing it needs a
-    // dedicated .msg parsing library (e.g. to extract and re-embed a
-    // watermark note, or convert to .eml/PDF first) -- a real dependency
-    // decision, not something to add silently as a side effect of this fix.
-    if (normalized === 'txt' || normalized === 'csv' || normalized === 'eml') {
-      return this.applyToText(buffer, text);
     }
 
     return buffer;
@@ -189,42 +171,4 @@ export class WatermarkService {
     }
   }
 
-  private async applyToImage(buffer: Buffer, text: string, opacity: number, diagonal: boolean): Promise<Buffer> {
-    const image = sharp(buffer, { animated: false });
-    const metadata = await image.metadata();
-    const width = metadata.width ?? 1000;
-    const height = metadata.height ?? 1000;
-    const escaped = this.escapeXml(text);
-    const rotation = diagonal ? -30 : 0;
-
-    const stepX = 280;
-    const stepY = 150;
-    const tiles: string[] = [];
-
-    for (let y = 40; y < height + stepY; y += stepY) {
-      for (let x = 0; x < width + stepX; x += stepX) {
-        tiles.push(
-          `<text x="${x}" y="${y}" transform="rotate(${rotation} ${x} ${y})" font-size="14" font-family="Helvetica, Arial, sans-serif" fill="rgba(128,128,128,${opacity})">${escaped}</text>`,
-        );
-      }
-    }
-
-    const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">${tiles.join('')}</svg>`;
-
-    return image.composite([{ input: Buffer.from(svg), top: 0, left: 0 }]).toBuffer();
-  }
-
-  private applyToText(buffer: Buffer, text: string): Buffer {
-    const divider = '='.repeat(60);
-    const header = [divider, 'CONFIDENTIAL — WATERMARKED COPY', text, divider, ''].join('\n');
-    return Buffer.concat([Buffer.from(header, 'utf-8'), buffer]);
-  }
-
-  private escapeXml(value: string): string {
-    return value
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
 }
