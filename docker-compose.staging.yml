@@ -24,6 +24,17 @@ services:
       POSTGRES_USER: vdr_staging_user
       POSTGRES_PASSWORD: ${STAGING_POSTGRES_PASSWORD}
       POSTGRES_DB: insolvency_vdr_staging
+    # Override -- the base docker-compose.yml's healthcheck is hardcoded to
+    # production's role/db names (vdr_user/insolvency_vdr), which don't
+    # exist here. pg_isready still reports "accepting connections" (and so
+    # this container still showed healthy) even on that auth failure, but
+    # it logged a FATAL line to Postgres every 10s, 24/7 -- confirmed via
+    # docker logs (712 occurrences in the prior 2 hours alone).
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U vdr_staging_user -d insolvency_vdr_staging']
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: always
     deploy:
       resources:
