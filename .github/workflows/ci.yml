@@ -22,7 +22,10 @@ jobs:
       - run: npm run lint
       - run: npm run build
     env:
-      DATABASE_URL: postgresql://vdr_user:vdr_password@localhost:5432/insolvency_vdr?schema=public
+      # No postgres service is defined in this job -- nothing ever connects
+      # to this URL; it exists only so prisma generate sees DATABASE_URL set.
+      # Deliberately not a real credential, isolated from every real database.
+      DATABASE_URL: postgresql://ci_placeholder_user:ci_placeholder_password@localhost:5432/ci_placeholder_db?schema=public
 
   frontend:
     runs-on: ubuntu-latest
