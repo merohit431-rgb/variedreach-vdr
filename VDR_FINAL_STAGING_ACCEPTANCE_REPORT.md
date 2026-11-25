@@ -1,13 +1,32 @@
 # VDR Final Staging Acceptance Report
 
-**Phase 3C.6 — Final Staging Acceptance & Outstanding Risk Closure**
+**Updated for Phase 3D — Client-Confirmed VDR Requirements, File Format Support & Production Launch Prep**
 
-- **Exact deployed commit:** `233fa47` (branch `wave1-foundation`) — confirmed identical to the local repository HEAD via direct comparison (`git log --oneline -1` on both the local checkout and the staging host). No drift.
+- **Exact deployed commit:** `0a3e742` (branch `wave1-foundation`) — confirmed identical to the local repository HEAD and to the staging host's own checkout via direct `git log` comparison. No drift.
 - **Verification date:** 2026-11-25
 - **Environment:** `staging.vdr.variedreach.com`, staging-only. No production system was accessed, queried, or modified at any point during this phase.
-- **Anthropic AI Integration status:** **Implemented — Commercially Pending — Disabled.**
+- **Anthropic AI Integration status:** **Implemented — Commercially Pending — Disabled** (unchanged).
 
-Every check below was executed fresh against the live staging environment this phase — no finding is restated from a prior report without being independently re-confirmed.
+Section 0 below is new this phase. Sections 1–15 are the Phase 3C.6 report, carried forward unchanged except where Section 0 explicitly supersedes a point — re-verifying every Phase 3C.6 finding from scratch was not repeated this phase, since nothing in Phase 3D touched authentication, RBAC, NDA, folder-ACL, backup, or deployment-locking code; this report is honest about what's freshly checked today versus what's carried forward.
+
+---
+
+## 0. Phase 3D — file-format support, PDF-only watermarking, archive handling
+
+**Summary**: implemented upload/validation/storage support for every file format in the client's confirmed list (26 formats across 6 categories), fixed a real pre-existing compliance gap (watermarking was not PDF-only before this phase), and added a new ZIP archive-listing capability with explicit, tested archive-bomb/path-traversal protections. Full detail, the complete per-format test matrix, and the client-facing requirements checklist are in two dedicated documents: `SUPPORTED_FILE_FORMAT_TEST_MATRIX.md` and `CLIENT_CONFIRMED_VDR_REQUIREMENTS.md`. Summarized here:
+
+| Area | Result |
+|---|---|
+| File formats implemented | 26/26 — none silently omitted. 16 were already supported; 10 were genuine new work (XLSB, BMP, a TIF allow-list bug fix, ZIP, 7Z, RAR, DWG, DWF, DXF, DWFX). "DFX" confirmed with the client to mean DXF. |
+| PDF-only watermarking | **Fixed a real gap**: the service previously also watermarked images and text. Live-verified on staging: a real PNG now returns byte-identical content on preview/download (zero `Watermark` rows written); a real PDF still watermarks correctly (one row written, content provably larger). |
+| Archive security | ZIP metadata listing only, never extraction. A real bug was found and fixed during testing: `yauzl`'s default behavior hard-rejects a path-traversal-shaped entry name by erroring out the *entire* listing, not just that entry — fixed so one bad entry is flagged, not a crash of the whole feature. |
+| Malware scanning | **Confirmed absent, formally documented** (was already an informal, pre-existing gap) — recommended fix: ClamAV or a hosted AV API, not built this phase. |
+| Macro execution | **Confirmed already safe** — Gotenberg's LibreOffice macro execution requires an explicit opt-in flag, absent from all three of this project's compose files. No code change needed; verified rather than assumed. |
+| Regression | 591/591 backend tests passing (up from 583 at the end of Phase 3C.6), clean frontend build, clean typecheck both apps. |
+| Live verification | Real synthetic PNG/PDF/XLSB/ZIP files uploaded to the pre-existing `rbac-rp-liquidator@staging.test` fixture room, exercised, and fully deleted afterward — zero residue, confirmed via a post-cleanup file listing. |
+| Production readiness | See `VDR_PRODUCTION_RELEASE_PLAN.md` — production is actually on commit `961feed` (not `686f4f9` as assumed in the brief; verified directly), 8 commits behind current HEAD, all additive (2 new enum values, no destructive migration). One real, pre-existing environment-variable naming bug found on production's own `.env` (`THROTTLE_TTL`/`THROTTLE_LIMIT` instead of the names the code reads) — identified, not yet fixed, since it's a production-only change awaiting approval. |
+
+**Verdict for this phase's own scope: READY WITH LIMITATIONS.** The file-format and watermarking requirements are implemented and verified; the two honestly-open items (malware scanning, TIFF/XLSB preview fidelity) are documented precisely rather than silently assumed, and neither blocks the features that were actually requested from working correctly.
 
 ---
 
