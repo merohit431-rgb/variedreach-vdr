@@ -4,6 +4,7 @@ import { ArchiveService } from './archive.service';
 // Same require()-based import files.service.ts already uses for this
 // package -- archiver's own type declarations don't export a usable
 // `create` function signature directly.
+// eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
 const createArchive = require('archiver') as (format: string, opts?: ArchiverOptions) => ArchiverInstance;
 
 // Builds a real ZIP buffer in memory via the same `archiver` library this

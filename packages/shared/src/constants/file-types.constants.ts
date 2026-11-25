@@ -87,6 +87,30 @@ export const OFFICE_CONVERTIBLE_EXTENSIONS = [
 
 export const ALL_SUPPORTED_EXTENSIONS = FILE_TYPE_RULES.flatMap((rule) => rule.extensions);
 
+// Derived from FILE_TYPE_RULES itself rather than hand-duplicated -- the
+// frontend previously kept its own separate, hardcoded image-extension list
+// (components/files/FilePreviewModal.tsx) that had already drifted out of
+// sync with this file (missing bmp/tif) before this phase even started.
+// Single source of truth now; it can't drift again by construction.
+export const IMAGE_EXTENSIONS = FILE_TYPE_RULES.find((rule) => rule.category === 'Images')?.extensions ?? [];
+
+// Plain-text-renderable formats: previewable, but not a PDF, not an image,
+// and not Office-convertible (which gets rendered as its converted PDF,
+// not as raw text) -- what's left is exactly txt/csv/xml/json today, without
+// hand-listing them a third time. msg/eml are deliberately previewable:
+// false in FILE_TYPE_RULES already (a binary OLE2 file and a MIME message
+// aren't meaningfully "plain text" to show a user), so they're correctly
+// excluded here too, with no separate check needed.
+export function isTextPreviewable(extension: string): boolean {
+  const normalized = extension.toLowerCase().replace(/^\./, '');
+  return (
+    isPreviewable(normalized) &&
+    !isPdf(normalized) &&
+    !isOfficeConvertible(normalized) &&
+    !IMAGE_EXTENSIONS.includes(normalized)
+  );
+}
+
 export function getFileTypeRule(extension: string): FileTypeRule | undefined {
   const normalized = extension.toLowerCase().replace(/^\./, '');
   return FILE_TYPE_RULES.find((rule) => rule.extensions.includes(normalized));

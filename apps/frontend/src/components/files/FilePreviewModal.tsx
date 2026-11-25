@@ -1,11 +1,72 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { isPreviewable, isOfficeConvertible, getPreviewFilename } from '@variedreach-vdr/shared';
-import { fetchFileBlob, downloadFile, FileRecord } from '@/hooks/use-files';
+import { isPreviewable, isOfficeConvertible, isTextPreviewable, IMAGE_EXTENSIONS, getPreviewFilename } from '@variedreach-vdr/shared';
+import { fetchFileBlob, downloadFile, useArchiveListing, FileRecord } from '@/hooks/use-files';
 import { extractErrorMessage } from '@/lib/error-message';
 
-const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'tiff', 'webp'];
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(1)} ${units[unitIndex]}`;
+}
+
+// Phase 3D: "ZIP/7Z/RAR: File metadata and archive listing only where
+// safely supported" -- ZIP is the one with a safe listing path (see
+// archive.service.ts); this renders it, never an extraction UI.
+function ArchiveListingPanel({ dataRoomId, fileId }: { dataRoomId: string; fileId: string }) {
+  const { data: listing, isLoading, error } = useArchiveListing(dataRoomId, fileId, true);
+
+  if (isLoading) return <p className="text-sm text-app-t3">Reading archive contents…</p>;
+  if (error) return <p className="text-sm text-red-400">{extractErrorMessage(error)}</p>;
+  if (!listing) return null;
+
+  return (
+    <div className="text-sm">
+      {listing.suspiciousTotalSize && (
+        <p className="mb-2 rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-500">
+          ⚠ This archive&apos;s declared uncompressed size is unusually large relative to its compressed size.
+        </p>
+      )}
+      {listing.truncated && (
+        <p className="mb-2 text-xs text-app-t3">
+          Showing the first {listing.entries.length} of {listing.totalEntries} entries.
+        </p>
+      )}
+      <table className="w-full text-left text-xs">
+        <thead>
+          <tr className="border-b border-app-border text-app-t3">
+            <th className="py-1.5 font-medium">Name</th>
+            <th className="py-1.5 font-medium">Size</th>
+          </tr>
+        </thead>
+        <tbody>
+          {listing.entries.map((entry) => (
+            <tr key={entry.name} className="border-b border-app-border/50">
+              <td className="truncate py-1.5 pr-2 text-app-text">
+                {entry.name}
+                {entry.suspiciousPath && <span className="ml-1.5 text-amber-500" title="Unusual stored path">⚠</span>}
+                {entry.suspiciouslyHighRatio && (
+                  <span className="ml-1.5 text-amber-500" title="Unusually high compression ratio">⚠</span>
+                )}
+                {entry.isEncrypted && <span className="ml-1.5 text-app-t3" title="Encrypted entry">🔒</span>}
+              </td>
+              <td className="whitespace-nowrap py-1.5 text-app-t3">
+                {entry.isDirectory ? '—' : formatBytes(entry.uncompressedSizeBytes)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export function FilePreviewModal({
   dataRoomId,
@@ -45,7 +106,7 @@ export function FilePreviewModal({
         const blob = await fetchFileBlob(`/data-rooms/${dataRoomId}/files/${file.id}/preview`);
         if (cancelled) return;
 
-        if (file.extension.toLowerCase() === 'txt') {
+        if (isTextPreviewable(file.extension)) {
           setTextContent(await blob.text());
         } else {
           url = URL.createObjectURL(blob);
@@ -88,7 +149,9 @@ export function FilePreviewModal({
         </div>
 
         <div className="flex-1 overflow-auto bg-app-s2 p-4">
-          {!previewable && (
+          {file.extension.toLowerCase() === 'zip' && <ArchiveListingPanel dataRoomId={dataRoomId} fileId={file.id} />}
+
+          {file.extension.toLowerCase() !== 'zip' && !previewable && (
             <div className="flex h-64 flex-col items-center justify-center gap-2 text-center text-sm text-app-t3">
               <p>Preview isn&apos;t available for this file type.</p>
               {canDownload && (

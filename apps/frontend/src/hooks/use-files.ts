@@ -179,6 +179,39 @@ export function useFileVersions(dataRoomId: string, fileId: string | null) {
   });
 }
 
+export interface ArchiveEntryInfo {
+  name: string;
+  isDirectory: boolean;
+  compressedSizeBytes: number;
+  uncompressedSizeBytes: number;
+  isEncrypted: boolean;
+  suspiciousPath: boolean;
+  suspiciouslyHighRatio: boolean;
+}
+
+export interface ArchiveListing {
+  entries: ArchiveEntryInfo[];
+  totalEntries: number;
+  truncated: boolean;
+  suspiciousTotalSize: boolean;
+}
+
+// Phase 3D: ZIP-only metadata listing -- `enabled` should be gated on the
+// file actually being a .zip by the caller, since the backend itself 400s
+// for 7z/rar (no safe listing library exists for either).
+export function useArchiveListing(dataRoomId: string, fileId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ['data-rooms', dataRoomId, 'files', fileId, 'archive-listing'],
+    queryFn: async () => {
+      const response = await apiClient.get<{ data: ArchiveListing }>(
+        `/data-rooms/${dataRoomId}/files/${fileId}/archive-listing`,
+      );
+      return response.data.data;
+    },
+    enabled: Boolean(fileId) && enabled,
+  });
+}
+
 export function useAddFileVersion(dataRoomId: string, fileId: string) {
   const queryClient = useQueryClient();
   return useMutation({
