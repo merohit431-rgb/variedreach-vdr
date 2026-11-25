@@ -4,6 +4,7 @@ import type { PrismaService } from '../../prisma/prisma.service';
 import type { AuditLogService } from '../audit/audit-log.service';
 import type { IPaymentProvider } from '../payment/payment-provider.interface';
 import type { RazorpayPaymentProvider } from '../payment/providers/razorpay-payment.provider';
+import type { ProvisioningService } from '../registration/provisioning.service';
 
 function buildService(overrides: {
   organisation?: unknown;
@@ -14,6 +15,9 @@ function buildService(overrides: {
   fileVersionAggregate?: jest.Mock;
   folderCount?: jest.Mock;
   dataRoomCount?: jest.Mock;
+  registration?: unknown;
+  fetchOrderPayments?: jest.Mock;
+  provision?: jest.Mock;
 }) {
   const record = overrides.record ?? jest.fn().mockResolvedValue({});
   const update = overrides.update ?? jest.fn().mockResolvedValue({});
@@ -34,15 +38,19 @@ function buildService(overrides: {
     },
     folder: { count: overrides.folderCount ?? jest.fn().mockResolvedValue(0) },
     dataRoom: { count: overrides.dataRoomCount ?? jest.fn().mockResolvedValue(0) },
+    registration: {
+      findUnique: jest.fn().mockResolvedValue(overrides.registration ?? null),
+    },
   } as unknown as PrismaService;
   const auditLogService = { record } as unknown as AuditLogService;
-  const service = new SuperAdminService(
-    prisma,
-    auditLogService,
-    {} as IPaymentProvider,
-    {} as RazorpayPaymentProvider,
-  );
-  return { service, prisma, record, update };
+  const razorpayProvider = {
+    fetchOrderPayments: overrides.fetchOrderPayments ?? jest.fn().mockResolvedValue([]),
+  } as unknown as RazorpayPaymentProvider;
+  const provisioningService = {
+    provision: overrides.provision ?? jest.fn(),
+  } as unknown as ProvisioningService;
+  const service = new SuperAdminService(prisma, auditLogService, {} as IPaymentProvider, razorpayProvider, provisioningService);
+  return { service, prisma, record, update, razorpayProvider, provisioningService };
 }
 
 describe('SuperAdminService.archiveOrganisation', () => {
@@ -548,6 +556,7 @@ function buildRevenueService(overrides: {
     {} as AuditLogService,
     {} as IPaymentProvider,
     {} as RazorpayPaymentProvider,
+    {} as ProvisioningService,
   );
   return { service, prisma };
 }
@@ -635,5 +644,86 @@ describe('SuperAdminService -- subscription date-lapse excluded from MRR/active 
     const result = await service.getSubscriptions(1, 20);
 
     expect(result.statusBreakdown).toEqual({ ACTIVE: 5, PAST_DUE: 1, CANCELLED: 2, EXPIRED: 7 });
+  });
+});
+
+describe('SuperAdminService.retryProvisioning', () => {
+  const STUCK_REGISTRATION = { id: 'reg-1', provisionedAt: null, gatewayOrderId: 'order_1' };
+
+  it('rejects when the registration does not exist', async () => {
+    const { service } = buildService({ registration: null });
+
+    await expect(service.retryProvisioning('reg-missing', 'admin-1')).rejects.toThrow(NotFoundException);
+  });
+
+  it('rejects an already-provisioned registration without ever calling Razorpay', async () => {
+    const fetchOrderPayments = jest.fn();
+    const { service } = buildService({
+      registration: { ...STUCK_REGISTRATION, provisionedAt: new Date() },
+      fetchOrderPayments,
+    });
+
+    await expect(service.retryProvisioning('reg-1', 'admin-1')).rejects.toThrow('already provisioned');
+    expect(fetchOrderPayments).not.toHaveBeenCalled();
+  });
+
+  it('rejects a registration that never had a payment order created', async () => {
+    const { service } = buildService({ registration: { ...STUCK_REGISTRATION, gatewayOrderId: null } });
+
+    await expect(service.retryProvisioning('reg-1', 'admin-1')).rejects.toThrow('no payment was ever initiated');
+  });
+
+  it('rejects when Razorpay has no captured payment for this order', async () => {
+    const { service } = buildService({
+      registration: STUCK_REGISTRATION,
+      fetchOrderPayments: jest.fn().mockResolvedValue([{ id: 'pay_1', status: 'failed', amount: 100, method: 'card', createdAt: 0 }]),
+    });
+
+    await expect(service.retryProvisioning('reg-1', 'admin-1')).rejects.toThrow('No captured payment found');
+  });
+
+  it('provisions using the real captured Razorpay payment id and records who retried it', async () => {
+    const provision = jest.fn().mockResolvedValue({
+      organisationId: 'org-1',
+      userId: 'user-1',
+      email: 'admin@acme.test',
+      firstName: 'A',
+      lastName: 'Dmin',
+      role: 'ORG_ADMIN',
+    });
+    const record = jest.fn().mockResolvedValue({});
+    const { service } = buildService({
+      registration: STUCK_REGISTRATION,
+      fetchOrderPayments: jest.fn().mockResolvedValue([
+        { id: 'pay_failed', status: 'failed', amount: 100, method: 'card', createdAt: 0 },
+        { id: 'pay_1', status: 'captured', amount: 100, method: 'card', createdAt: 1 },
+      ]),
+      provision,
+      record,
+    });
+
+    const result = await service.retryProvisioning('reg-1', 'admin-1');
+
+    expect(provision).toHaveBeenCalledWith('reg-1', { paymentId: 'pay_1' });
+    expect(result.organisationId).toBe('org-1');
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'REGISTRATION_PROVISIONING_RETRIED',
+        userId: 'admin-1',
+        organisationId: 'org-1',
+        metadata: expect.objectContaining({ registrationId: 'reg-1', razorpayPaymentId: 'pay_1' }),
+      }),
+    );
+  });
+
+  it('propagates provision()\'s own "Already provisioned" guard as a real defense against a concurrent webhook retry', async () => {
+    const provision = jest.fn().mockRejectedValue(new BadRequestException('Already provisioned'));
+    const { service } = buildService({
+      registration: STUCK_REGISTRATION,
+      fetchOrderPayments: jest.fn().mockResolvedValue([{ id: 'pay_1', status: 'captured', amount: 100, method: 'card', createdAt: 1 }]),
+      provision,
+    });
+
+    await expect(service.retryProvisioning('reg-1', 'admin-1')).rejects.toThrow('Already provisioned');
   });
 });

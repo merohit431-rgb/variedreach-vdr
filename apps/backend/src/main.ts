@@ -32,6 +32,13 @@ async function bootstrap() {
   // alongside the normal parsed req.body -- needed by the Resend webhook
   // handler, which must verify a signature over the exact raw payload.
   const app = await NestFactory.create(AppModule, { rawBody: true });
+  // So Nest's module-destroy lifecycle actually runs on SIGTERM/SIGINT --
+  // without this, PrismaService's OnModuleDestroy ($disconnect()) never
+  // fires and every deploy/restart ends the DB connection with a hard kill
+  // instead of a clean disconnect. Queue/Worker in document-analysis.module.ts
+  // are plain bullmq objects, not Nest DI lifecycle participants, so this
+  // doesn't close those -- see the comment there for that narrower scope.
+  app.enableShutdownHooks();
 
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 4000);

@@ -25,16 +25,26 @@ import { ClaudeSynthesisService } from './synthesis/claude-synthesis.service';
 // build) is unsafe to rely on against this backend's plain `node dist/main.js`
 // CommonJS entrypoint on the pinned node:20-alpine production image.
 //
-// Known limitation, deliberately not fixed here: neither instance is closed
-// on shutdown. This app does not call `app.enableShutdownHooks()` anywhere
-// today (confirmed -- PrismaService already has an OnModuleDestroy that
-// never fires for the same reason), so wiring a graceful close for just
-// these two would be inconsistent with how every other external connection
-// in this app already behaves, and enabling shutdown hooks globally as a
-// side effect of this feature is out of this phase's scope. The practical
-// effect is the same as today's Postgres connection handling: the process
-// exit (not a clean disconnect) ends the TCP connection, which Redis treats
-// the same as any other client disappearing.
+// Reconnection: BullMQ's own RedisConnection already applies a default
+// retryStrategy (exponential, capped 1-20s, retries forever) and forces
+// maxRetriesPerRequest=null on the Worker's blocking connection -- no
+// hand-rolled ioredis options are needed for ordinary Redis blips.
+//
+// The real gap this used to leave open: both Queue and Worker re-emit the
+// underlying connection's 'error' event as their OWN EventEmitter 'error'.
+// Node throws and crashes the whole process if an 'error' event has zero
+// listeners -- so a harder failure (auth/DNS, not just a blip the retry
+// strategy already rides out) could take down the entire backend, not just
+// pause analysis jobs. Both factories below now attach a listener purely to
+// prevent that crash; BullMQ's own retry logic still does the reconnecting.
+//
+// Shutdown: Queue/Worker are plain bullmq objects, not Nest DI lifecycle
+// participants, so enabling app.enableShutdownHooks() (see main.ts) does not
+// close either of these -- only PrismaService's OnModuleDestroy benefits
+// from that. The process exit (not a clean Queue/Worker disconnect) ends
+// the Redis TCP connection, which Redis treats the same as any other client
+// disappearing -- unchanged, and consistent with the narrow scope of the
+// shutdown-hooks fix.
 @Module({
   imports: [FilesModule],
   controllers: [DocumentAnalysisController],
@@ -68,8 +78,8 @@ import { ClaudeSynthesisService } from './synthesis/claude-synthesis.service';
     ClaudeSynthesisService,
     {
       provide: ANALYSIS_QUEUE,
-      useFactory: (config: ConfigService) =>
-        new Queue<AnalysisJobData>(ANALYSIS_QUEUE_NAME, {
+      useFactory: (config: ConfigService) => {
+        const queue = new Queue<AnalysisJobData>(ANALYSIS_QUEUE_NAME, {
           connection: { url: config.get<string>('queue.redisUrl') },
           defaultJobOptions: {
             // A worker-process crash (not a caught application error -- see
@@ -79,7 +89,11 @@ import { ClaudeSynthesisService } from './synthesis/claude-synthesis.service';
             attempts: 2,
             backoff: { type: 'exponential', delay: 10_000 },
           },
-        }),
+        });
+        const logger = new Logger(DocumentAnalysisProcessor.name);
+        queue.on('error', (error: Error) => logger.error(`Analysis queue connection error: ${error.message}`));
+        return queue;
+      },
       inject: [ConfigService],
     },
     {
@@ -103,6 +117,7 @@ import { ClaudeSynthesisService } from './synthesis/claude-synthesis.service';
             logger.error(`onJobFailed itself failed for job ${job?.id}: ${error.message}`);
           });
         });
+        worker.on('error', (error: Error) => logger.error(`Analysis worker connection error: ${error.message}`));
         return worker;
       },
       inject: [ConfigService, DocumentAnalysisProcessor],

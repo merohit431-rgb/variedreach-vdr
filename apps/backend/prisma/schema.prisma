@@ -122,6 +122,13 @@ enum AuditAction {
   PAYMENT_FAILED
   PAYMENT_REFUND_INITIATED
   PAYMENT_REFUNDED
+  // A Super Admin manually recovered a registration whose provisioning
+  // never completed (payment captured, webhook retry also exhausted) --
+  // distinct from PAYMENT_CAPTURED itself, which provision() already
+  // records once for the underlying payment regardless of which path
+  // completed it; this is the separate, forensically-relevant fact that a
+  // human intervened, and who.
+  REGISTRATION_PROVISIONING_RETRIED
   ORGANISATION_UPDATED
   COUPON_CREATED
   COUPON_UPDATED

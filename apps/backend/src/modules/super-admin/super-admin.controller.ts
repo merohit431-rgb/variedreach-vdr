@@ -85,6 +85,17 @@ export class SuperAdminController {
     return this.service.getRegistrations(+page, +limit);
   }
 
+  // Recovers a registration whose payment succeeded but provisioning never
+  // completed (including when the webhook's own auto-retry also exhausted)
+  // -- looks up the real captured payment on Razorpay itself rather than
+  // trusting any client-supplied payment id, then reuses the exact same
+  // provisioning path the normal checkout redirect and the webhook already
+  // go through.
+  @Post('registrations/:id/retry-provisioning')
+  retryProvisioning(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.service.retryProvisioning(id, user.id);
+  }
+
   @Get('payments')
   getPayments(@Query('page') page = '1', @Query('limit') limit = '20') {
     return this.service.getPayments(+page, +limit);

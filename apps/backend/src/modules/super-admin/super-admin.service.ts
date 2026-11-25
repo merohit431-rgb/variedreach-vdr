@@ -6,6 +6,7 @@ import { computeStoragePercent } from '../../common/org-storage.util';
 import { countOrgMembers } from '../../common/utils/org-member-count.util';
 import { IPaymentProvider, PAYMENT_PROVIDER } from '../payment/payment-provider.interface';
 import { RazorpayPaymentProvider } from '../payment/providers/razorpay-payment.provider';
+import { ProvisioningService } from '../registration/provisioning.service';
 import { UpdateOrgDto } from './dto/update-org.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
 
@@ -44,6 +45,7 @@ export class SuperAdminService {
     // which provider PAYMENT_PROVIDER currently selects -- "compare against
     // the gateway" is meaningless for the mock provider.
     private readonly razorpayProvider: RazorpayPaymentProvider,
+    private readonly provisioningService: ProvisioningService,
   ) {}
 
   async getDashboard() {
@@ -722,6 +724,59 @@ export class SuperAdminService {
       discrepancy: corrected ? `Corrected: was ${payment.status}, Razorpay shows ${relevant.status}` : inSync ? null : 'Statuses differ but were not auto-corrected -- needs manual review',
       corrected,
     };
+  }
+
+  // Closes a confirmed gap: a registration whose payment succeeded but
+  // provisioning never completed -- including the case where the
+  // webhook-triggered auto-retry (razorpay-webhook.service.ts,
+  // handlePaymentCaptured) also exhausted -- has gatewayOrderId set,
+  // provisionedAt null, and NO Payment row at all, since
+  // runProvisioningTransaction only ever creates one on success. That means
+  // reconcilePayment above has nothing to act on (it requires an existing
+  // Payment row); there was previously no recovery path at all. Mirrors
+  // reconcilePayment's own trust model exactly: look up the real captured
+  // payment on Razorpay (never trust an operator-typed payment id), then
+  // reuse the identical, already-tested provisioning path the webhook and
+  // the normal checkout redirect both already go through.
+  async retryProvisioning(registrationId: string, actorUserId: string) {
+    const registration = await this.prisma.registration.findUnique({ where: { id: registrationId } });
+    if (!registration) throw new NotFoundException('Registration not found');
+    if (registration.provisionedAt) {
+      throw new BadRequestException('Registration is already provisioned -- nothing to retry');
+    }
+    if (!registration.gatewayOrderId) {
+      throw new BadRequestException('Registration has no gateway order id -- no payment was ever initiated for it');
+    }
+
+    const razorpayPayments = await this.razorpayProvider.fetchOrderPayments(registration.gatewayOrderId);
+    const captured = razorpayPayments.find((p) => p.status === 'captured');
+    if (!captured) {
+      throw new BadRequestException(
+        'No captured payment found on Razorpay for this registration -- provisioning cannot be retried without a confirmed payment',
+      );
+    }
+
+    // provisioningService.provision() itself re-checks provisionedAt inside
+    // its own transaction and throws 'Already provisioned' -- a real
+    // defense against a race with a concurrent webhook retry landing between
+    // the check above and this call, not just a duplicate of it.
+    // provision() already writes its own PAYMENT_CAPTURED entry for the
+    // payment itself (shared with the webhook/client-redirect paths, by
+    // design exactly one such entry per successful payment) -- the entry
+    // below is a deliberately distinct fact (a human intervened, and who),
+    // not a second record of the same payment event.
+    const result = await this.provisioningService.provision(registration.id, { paymentId: captured.id });
+
+    await this.auditLogService.record({
+      action: 'REGISTRATION_PROVISIONING_RETRIED',
+      userId: actorUserId,
+      organisationId: result.organisationId,
+      resourceType: 'Organisation',
+      resourceId: result.organisationId,
+      metadata: { registrationId, razorpayPaymentId: captured.id },
+    });
+
+    return result;
   }
 
   private async stashReconciliationResult(paymentId: string, result: { checkedAt: string; inSync: boolean; razorpayStatus: string }): Promise<void> {
